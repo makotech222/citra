@@ -14,6 +14,7 @@
 #include <QtGui>
 #include <QtWidgets>
 #include "citra_qt/bootmanager.h"
+#include "citra_qt/cheat_gui.h"
 #include "citra_qt/config.h"
 #include "citra_qt/configure_dialog.h"
 #include "citra_qt/debugger/callstack.h"
@@ -237,6 +238,7 @@ void GMainWindow::RestoreUIState() {
     microProfileDialog->restoreGeometry(UISettings::values.microprofile_geometry);
     microProfileDialog->setVisible(UISettings::values.microprofile_visible);
 #endif
+    ui.action_Cheats->setEnabled(false);
 
     game_list->LoadInterfaceLayout();
 
@@ -253,13 +255,13 @@ void GMainWindow::RestoreUIState() {
 void GMainWindow::ConnectWidgetEvents() {
     connect(game_list, SIGNAL(GameChosen(QString)), this, SLOT(OnGameListLoadFile(QString)));
     connect(game_list, SIGNAL(OpenSaveFolderRequested(u64)), this,
-            SLOT(OnGameListOpenSaveFolder(u64)));
+		SLOT(OnGameListOpenSaveFolder(u64)));
 
-    connect(this, SIGNAL(EmulationStarting(EmuThread*)), render_window,
-            SLOT(OnEmulationStarting(EmuThread*)));
-    connect(this, SIGNAL(EmulationStopping()), render_window, SLOT(OnEmulationStopping()));
+	connect(this, SIGNAL(EmulationStarting(EmuThread*)), render_window,
+		SLOT(OnEmulationStarting(EmuThread*)));
+	connect(this, SIGNAL(EmulationStopping()), render_window, SLOT(OnEmulationStopping()));
 
-    connect(&status_bar_update_timer, &QTimer::timeout, this, &GMainWindow::UpdateStatusBar);
+	connect(&status_bar_update_timer, &QTimer::timeout, this, &GMainWindow::UpdateStatusBar);
 }
 
 void GMainWindow::ConnectMenuEvents() {
@@ -276,6 +278,7 @@ void GMainWindow::ConnectMenuEvents() {
     connect(ui.action_Pause, &QAction::triggered, this, &GMainWindow::OnPauseGame);
     connect(ui.action_Stop, &QAction::triggered, this, &GMainWindow::OnStopGame);
     connect(ui.action_Configure, &QAction::triggered, this, &GMainWindow::OnConfigure);
+	connect(ui.action_Cheats, SIGNAL(triggered()), this, SLOT(OnCheats()));
 
     // View
     connect(ui.action_Single_Window_Mode, &QAction::triggered, this,
@@ -441,6 +444,7 @@ void GMainWindow::ShutdownGame() {
     ui.action_Start->setText(tr("Start"));
     ui.action_Pause->setEnabled(false);
     ui.action_Stop->setEnabled(false);
+    ui.action_Cheats->setEnabled(false);
     render_window->hide();
     game_list->show();
 
@@ -565,6 +569,7 @@ void GMainWindow::OnStartGame() {
 
     ui.action_Start->setEnabled(false);
     ui.action_Start->setText(tr("Continue"));
+    ui.action_Cheats->setEnabled(true);
 
     ui.action_Pause->setEnabled(true);
     ui.action_Stop->setEnabled(true);
@@ -620,6 +625,11 @@ void GMainWindow::OnConfigure() {
 void GMainWindow::OnSwapScreens() {
     Settings::values.swap_screen = !Settings::values.swap_screen;
     Settings::Apply();
+}
+
+void GMainWindow::OnCheats() {
+    CheatDialog cheat_dialog(this);
+    cheat_dialog.exec();
 }
 
 void GMainWindow::OnCreateGraphicsSurfaceViewer() {
