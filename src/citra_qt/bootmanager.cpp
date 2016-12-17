@@ -13,7 +13,11 @@
 #include "common/scm_rev.h"
 #include "common/string_util.h"
 #include "core/core.h"
-#include "core/frontend/key_map.h"
+#include "core/settings.h"
+
+#include "input_core/devices/keyboard.h"
+#include "input_core/input_core.h"
+
 #include "video_core/debug_utils/debug_utils.h"
 #include "video_core/video_core.h"
 
@@ -104,9 +108,6 @@ GRenderWindow::GRenderWindow(QWidget* parent, EmuThread* emu_thread)
     std::string window_title =
         Common::StringFromFormat("Citra | %s-%s", Common::g_scm_branch, Common::g_scm_desc);
     setWindowTitle(QString::fromStdString(window_title));
-
-    keyboard_id = KeyMap::NewDeviceId();
-    ReloadSetKeymaps();
 }
 
 void GRenderWindow::moveContext() {
@@ -197,11 +198,17 @@ void GRenderWindow::closeEvent(QCloseEvent* event) {
 }
 
 void GRenderWindow::keyPressEvent(QKeyEvent* event) {
-    KeyMap::PressKey(*this, {event->key(), keyboard_id});
+    auto keyboard = InputCore::GetKeyboard();
+    KeyboardKey param =
+        KeyboardKey(event->key(), QKeySequence(event->key()).toString().toStdString());
+    keyboard->KeyPressed(param);
 }
 
 void GRenderWindow::keyReleaseEvent(QKeyEvent* event) {
-    KeyMap::ReleaseKey(*this, {event->key(), keyboard_id});
+    auto keyboard = InputCore::GetKeyboard();
+    KeyboardKey param =
+        KeyboardKey(event->key(), QKeySequence(event->key()).toString().toStdString());
+    keyboard->KeyReleased(param);
 }
 
 void GRenderWindow::mousePressEvent(QMouseEvent* event) {
@@ -228,15 +235,6 @@ void GRenderWindow::mouseReleaseEvent(QMouseEvent* event) {
         this->TouchReleased();
     else if (event->button() == Qt::RightButton)
         motion_emu->EndTilt();
-}
-
-void GRenderWindow::ReloadSetKeymaps() {
-    KeyMap::ClearKeyMapping(keyboard_id);
-    for (int i = 0; i < Settings::NativeInput::NUM_INPUTS; ++i) {
-        KeyMap::SetKeyMapping(
-            {Settings::values.input_mappings[Settings::NativeInput::All[i]], keyboard_id},
-            KeyMap::mapping_targets[i]);
-    }
 }
 
 void GRenderWindow::OnClientAreaResized(unsigned width, unsigned height) {

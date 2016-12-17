@@ -1,4 +1,4 @@
-﻿// Copyright 2014 Citra Emulator Project
+// Copyright 2014 Citra Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
@@ -24,4 +24,5 @@ public:
     void Reload();
     void Save();
     static const std::array<QVariant, Settings::NativeInput::NUM_INPUTS> defaults;
+    static const QVariant default_circle_pad_modifier;
 };

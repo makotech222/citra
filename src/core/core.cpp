@@ -19,6 +19,7 @@
 #include "core/hw/hw.h"
 #include "core/loader/loader.h"
 #include "core/settings.h"
+#include "input_core/input_core.h"
 #include "video_core/video_core.h"
 
 namespace Core {
@@ -140,6 +141,7 @@ System::ResultStatus System::Init(EmuWindow* emu_window, u32 system_mode) {
     Kernel::Init(system_mode);
     Service::Init();
     AudioCore::Init();
+    InputCore::Init();
     GDBStub::Init();
 
     if (!VideoCore::Init(emu_window)) {
@@ -153,6 +155,7 @@ System::ResultStatus System::Init(EmuWindow* emu_window, u32 system_mode) {
 
 void System::Shutdown() {
     GDBStub::Shutdown();
+    InputCore::Shutdown();
     AudioCore::Shutdown();
     VideoCore::Shutdown();
     Service::Shutdown();

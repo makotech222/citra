@@ -317,6 +317,9 @@ static_assert(sizeof(Regs) == 0x1000 * sizeof(u32), "Invalid total size of regis
 
 extern Regs g_regs;
 
+/// 268MHz CPU clocks / 60Hz frames per second
+static constexpr u64 frame_ticks = 268123480ull / 60;
+
 template <typename T>
 void Read(T& var, const u32 addr);
 

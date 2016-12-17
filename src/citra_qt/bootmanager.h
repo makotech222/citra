@@ -127,8 +127,6 @@ public:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
 
-    void ReloadSetKeymaps() override;
-
     void OnClientAreaResized(unsigned width, unsigned height);
 
     void InitRenderTarget();

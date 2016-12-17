@@ -37,6 +37,10 @@ pad_circle_modifier =
 # Must be in range of 0.0-1.0. Defaults to 0.5
 pad_circle_modifier_scale =
 
+# Deadzone applied to the circle pad.
+# Must be in range of 0.0 - 1.0. Defaults to 0.3
+pad_circle_deadzone =
+
 [Core]
 # Whether to use the Just-In-Time (JIT) compiler for CPU emulation
 # 0: Interpreter (slow), 1 (default): JIT (fast)

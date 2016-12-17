@@ -30,7 +30,6 @@ set(SRCS
             file_sys/path_parser.cpp
             file_sys/savedata_archive.cpp
             frontend/emu_window.cpp
-            frontend/key_map.cpp
             frontend/motion_emu.cpp
             gdbstub/gdbstub.cpp
             hle/config_mem.cpp
@@ -204,7 +203,6 @@ set(HEADERS
             file_sys/path_parser.h
             file_sys/savedata_archive.h
             frontend/emu_window.h
-            frontend/key_map.h
             frontend/motion_emu.h
             gdbstub/gdbstub.h
             hle/config_mem.h

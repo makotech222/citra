@@ -5,8 +5,12 @@
 #pragma once
 
 #include <array>
+#include <memory>
 #include <string>
+#include <tuple>
+
 #include "common/common_types.h"
+#include "common/string_util.h"
 
 namespace Settings {
 
@@ -46,35 +50,94 @@ enum Values {
     CIRCLE_DOWN,
     CIRCLE_LEFT,
     CIRCLE_RIGHT,
-    CIRCLE_MODIFIER,
 
     NUM_INPUTS
 };
+static const std::array<const char*, NUM_INPUTS> Mapping = {
+    {// directly mapped keys
+     "pad_a", "pad_b", "pad_x", "pad_y", "pad_l", "pad_r", "pad_zl", "pad_zr", "pad_start",
+     "pad_select", "pad_home", "pad_dup", "pad_ddown", "pad_dleft", "pad_dright", "pad_cup",
+     "pad_cdown", "pad_cleft", "pad_cright",
 
-static const std::array<const char*, NUM_INPUTS> Mapping = {{
-    // directly mapped keys
-    "pad_a", "pad_b", "pad_x", "pad_y", "pad_l", "pad_r", "pad_zl", "pad_zr", "pad_start",
-    "pad_select", "pad_home", "pad_dup", "pad_ddown", "pad_dleft", "pad_dright", "pad_cup",
-    "pad_cdown", "pad_cleft", "pad_cright",
-
-    // indirectly mapped keys
-    "pad_circle_up", "pad_circle_down", "pad_circle_left", "pad_circle_right",
-    "pad_circle_modifier",
-}};
-static const std::array<Values, NUM_INPUTS> All = {{
-    A,     B,      X,      Y,         L,           R,           ZL,           ZR,
-    START, SELECT, HOME,   DUP,       DDOWN,       DLEFT,       DRIGHT,       CUP,
-    CDOWN, CLEFT,  CRIGHT, CIRCLE_UP, CIRCLE_DOWN, CIRCLE_LEFT, CIRCLE_RIGHT, CIRCLE_MODIFIER,
-}};
+     // indirectly mapped keys
+     "pad_circle_up", "pad_circle_down", "pad_circle_left", "pad_circle_right"}};
+static const std::array<Values, NUM_INPUTS> All = {
+    {A,     B,      X,      Y,         L,           R,           ZL,          ZR,
+     START, SELECT, HOME,   DUP,       DDOWN,       DLEFT,       DRIGHT,      CUP,
+     CDOWN, CLEFT,  CRIGHT, CIRCLE_UP, CIRCLE_DOWN, CIRCLE_LEFT, CIRCLE_RIGHT}};
 }
+
+enum class DeviceFramework { SDL };
+enum class Device { Keyboard, Gamepad };
+struct InputDeviceMapping {
+    DeviceFramework framework = DeviceFramework::SDL;
+    int number = 0;
+    Device device = Device::Keyboard;
+    int key = -1;
+
+    InputDeviceMapping() = default;
+    explicit InputDeviceMapping(int key_) {
+        key = key_;
+    }
+    explicit InputDeviceMapping(const std::string& input) {
+        std::vector<std::string> parts;
+        Common::SplitString(input, '/', parts);
+        if (parts.size() != 4)
+            return;
+        if (parts[0] == "SDL")
+            framework = DeviceFramework::SDL;
+
+        number = std::stoi(parts[1]);
+
+        if (parts[2] == "Keyboard")
+            device = Device::Keyboard;
+        else if (parts[2] == "Gamepad")
+            device = Device::Gamepad;
+        Common::TryParse(parts[3], &key);
+    }
+
+    bool operator==(const InputDeviceMapping& rhs) const {
+        return std::tie(device, framework, number) ==
+               std::tie(rhs.device, rhs.framework, rhs.number);
+    }
+    bool operator==(const std::string& rhs) const {
+        return ToString() == rhs;
+    }
+    bool operator<(const InputDeviceMapping& rhs) const {
+        return ToString() < rhs.ToString();
+    }
+
+    void InitKey() {}
+
+    std::string ToString() const {
+        std::string result;
+        if (framework == DeviceFramework::SDL)
+            result = "SDL";
+
+        result += "/";
+        result += std::to_string(this->number);
+        result += "/";
+
+        if (device == Device::Keyboard)
+            result += "Keyboard";
+        else if (device == Device::Gamepad)
+            result += "Gamepad";
+
+        result += "/";
+        result += std::to_string(key);
+        return result;
+    }
+};
 
 struct Values {
     // CheckNew3DS
     bool is_new_3ds;
 
     // Controls
-    std::array<int, NativeInput::NUM_INPUTS> input_mappings;
+    std::array<InputDeviceMapping, NativeInput::NUM_INPUTS> input_mappings;
+    InputDeviceMapping pad_circle_modifier;
     float pad_circle_modifier_scale;
+    float pad_circle_deadzone;
 
     // Core
     bool use_cpu_jit;
@@ -108,7 +171,8 @@ struct Values {
     // Debugging
     bool use_gdbstub;
     u16 gdbstub_port;
-} extern values;
+};
+extern Values values;
 
 // a special value for Values::region_value indicating that citra will automatically select a region
 // value to fit the region lockout info of the game

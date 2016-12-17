@@ -23,6 +23,7 @@ namespace HID {
  * Structure of a Pad controller state.
  */
 struct PadState {
+    PadState() = default;
     union {
         u32 hex;
 
@@ -53,6 +54,16 @@ struct PadState {
         BitField<30, 1, u32> circle_up;
         BitField<31, 1, u32> circle_down;
     };
+    bool operator==(const PadState& other) const {
+        return hex == other.hex;
+    }
+    bool operator<(const PadState& other) const {
+        return hex < other.hex;
+    }
+    PadState& operator=(const PadState& other) {
+        hex = other.hex;
+        return *this;
+    }
 };
 
 /**
