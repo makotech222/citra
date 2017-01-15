@@ -100,11 +100,11 @@ void ConfigureInput::loadConfiguration() {
     updateButtonLabels();
 }
 
-void ConfigureInput::setKey(Settings::InputDeviceMapping keyPressed) {
-    if (keyPressed.key == -1 || keyPressed.key == Qt::Key_Escape) {
+void ConfigureInput::setKey(Settings::InputDeviceMapping key_pressed) {
+    if (key_pressed.key == -1 || key_pressed.key == Qt::Key_Escape) {
     } else {
-        key_map[changing_button] = keyPressed;
-        removeDuplicates(keyPressed);
+        key_map[changing_button] = key_pressed;
+        removeDuplicates(key_pressed);
     }
     updateButtonLabels();
     releaseKeyboard();
@@ -136,10 +136,10 @@ QString ConfigureInput::getKeyName(Settings::InputDeviceMapping mapping) {
     return QKeySequence(mapping.key).toString();
 }
 
-void ConfigureInput::removeDuplicates(const Settings::InputDeviceMapping newValue) {
+void ConfigureInput::removeDuplicates(const Settings::InputDeviceMapping new_value) {
     for (auto& entry : key_map) {
         if (changing_button != entry.first) {
-            if (newValue == entry.second && newValue.key == entry.second.key) {
+            if (new_value == entry.second && new_value.key == entry.second.key) {
                 entry.second = Settings::InputDeviceMapping();
             }
         }

@@ -1,4 +1,4 @@
-// Copyright 2016 Citra Emulator Project
+// Copyright 2017 Citra Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
@@ -92,6 +92,7 @@ private:
     static u16 touch_x;        ///< Touchpad X-position in native 3DS pixel coordinates (0-320)
     static u16 touch_y;        ///< Touchpad Y-position in native 3DS pixel coordinates (0-240)
     static bool touch_pressed; ///< True if touchpad area is currently pressed, otherwise false
+    static const float input_detect_threshold;
 
     /**
      * Loops through all unique input devices, and all bound inputs to update the emulator's input

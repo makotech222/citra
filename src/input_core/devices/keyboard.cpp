@@ -1,4 +1,4 @@
-// Copyright 2016 Citra Emulator Project
+// Copyright 2017 Citra Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
@@ -7,9 +7,9 @@
 
 #include "input_core/devices/keyboard.h"
 
-Keyboard::Keyboard() {}
+Keyboard::Keyboard() = default;
 
-Keyboard::~Keyboard() {}
+Keyboard::~Keyboard() = default;
 
 bool Keyboard::InitDevice(int number, Settings::InputDeviceMapping device_mapping) {
     input_device_mapping = device_mapping;
@@ -17,14 +17,13 @@ bool Keyboard::InitDevice(int number, Settings::InputDeviceMapping device_mappin
 }
 
 std::map<Settings::InputDeviceMapping, float> Keyboard::ProcessInput() {
-    std::map<KeyboardKey, bool> keysPressedCopy;
+    std::map<KeyboardKey, bool> keys_pressed_copy;
     {
         std::lock_guard<std::mutex> lock(m);
-        keysPressedCopy = keys_pressed;
+        keys_pressed_copy = keys_pressed;
     }
     std::map<Settings::InputDeviceMapping, float> button_status;
-    bool circlePadModPressed = keysPressedCopy[circle_pad_modifier];
-    for (const auto& key : keysPressedCopy) {
+    for (const auto& key : keys_pressed_copy) {
         input_device_mapping.key = key.first.key;
         button_status.emplace(input_device_mapping, key.second ? 1.0 : 0.0);
     }

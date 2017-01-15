@@ -1,4 +1,4 @@
-// Copyright 2016 Citra Emulator Project
+// Copyright 2017 Citra Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
@@ -52,33 +52,7 @@ public:
 private:
     /// Maps the friendly name shown on GUI with the string name for getting the SDL button
     /// instance.
-    std::map<GamepadInputs, std::string> gamepadinput_to_sdlname_mapping = {
-        {GamepadInputs::ButtonA, "a"},
-        {GamepadInputs::ButtonB, "b"},
-        {GamepadInputs::ButtonX, "x"},
-        {GamepadInputs::ButtonY, "y"},
-        {GamepadInputs::LeftShoulder, "leftshoulder"},
-        {GamepadInputs::RightShoulder, "rightshoulder"},
-        {GamepadInputs::Start, "start"},
-        {GamepadInputs::Back, "back"},
-        {GamepadInputs::DPadUp, "dpup"},
-        {GamepadInputs::DpadDown, "dpdown"},
-        {GamepadInputs::DpadLeft, "dpleft"},
-        {GamepadInputs::DpadRight, "dpright"},
-        {GamepadInputs::L3, "leftstick"},
-        {GamepadInputs::R3, "rightstick"},
-        {GamepadInputs::LeftTrigger, "lefttrigger"},
-        {GamepadInputs::RightTrigger, "righttrigger"},
-        {GamepadInputs::LeftYPlus, "lefty"},
-        {GamepadInputs::LeftYMinus, "lefty"},
-        {GamepadInputs::LeftXPlus, "leftx"},
-        {GamepadInputs::LeftXMinus, "leftx"},
-        {GamepadInputs::RightYPlus, "righty"},
-        {GamepadInputs::RightYMinus, "righty"},
-        {GamepadInputs::RightXPlus, "rightx"},
-        {GamepadInputs::RightXMinus, "rightx"},
-    };
-    std::map<std::string, GamepadInputs> gamepadinput_to_sdlname_mapping2 = {
+    std::map<std::string, GamepadInputs> gamepadinput_to_sdlname_mapping = {
         {"a", GamepadInputs::ButtonA},
         {"b", GamepadInputs::ButtonB},
         {"x", GamepadInputs::ButtonX},

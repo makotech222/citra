@@ -8,18 +8,17 @@
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
 #include <glad/glad.h>
+
 #include "common/logging/log.h"
 #include "common/scm_rev.h"
 #include "common/string_util.h"
 #include "core/hle/service/hid/hid.h"
 #include "core/settings.h"
-
 #include "input_core/devices/keyboard.h"
 #include "input_core/input_core.h"
+#include "video_core/video_core.h"
 
 #include "citra/emu_window/emu_window_sdl2.h"
-
-#include "video_core/video_core.h"
 
 void EmuWindow_SDL2::OnMouseMotion(s32 x, s32 y) {
     TouchMoved((unsigned)std::max(x, 0), (unsigned)std::max(y, 0));

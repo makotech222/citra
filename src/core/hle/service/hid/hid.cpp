@@ -10,15 +10,14 @@
 #include "core/hle/service/hid/hid_user.h"
 #include "core/hle/service/service.h"
 
-#include "input_core/input_core.h"
-
 #include "core/core_timing.h"
 #include "core/hle/kernel/event.h"
 #include "core/hle/kernel/shared_memory.h"
-#include "core/hle/service/hid/hid.h"
 #include "core/hle/service/hid/hid_spvr.h"
 #include "core/hle/service/hid/hid_user.h"
 #include "core/hle/service/service.h"
+
+#include "input_core/input_core.h"
 #include "video_core/video_core.h"
 
 namespace Service {

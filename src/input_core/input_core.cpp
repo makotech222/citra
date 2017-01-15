@@ -1,4 +1,4 @@
-// Copyright 2016 Citra Emulator Project
+// Copyright 2017 Citra Emulator Project
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
@@ -28,7 +28,7 @@ std::mutex InputCore::touch_mutex;
 u16 InputCore::touch_x;        ///< Touchpad X-position in native 3DS pixel coordinates (0-320)
 u16 InputCore::touch_y;        ///< Touchpad Y-position in native 3DS pixel coordinates (0-240)
 bool InputCore::touch_pressed; ///< True if touchpad area is currently pressed, otherwise false
-const float input_detect_threshold =
+const float InputCore::input_detect_threshold =
     0.45; ///< Applies to analog controls being used for digital 3ds inputs.
 
 void InputCore::Init() {
@@ -60,7 +60,7 @@ void InputCore::UpdateEmulatorInputs(
     std::lock_guard<std::mutex> lock(pad_state_mutex);
 
     // Apply deadzone for circle pad
-    float leftx = 0, lefty = 0;
+    float left_x = 0, left_y = 0;
     float circle_pad_modifier = 1.0;
     auto circle_pad_modifier_mapping = Settings::values.pad_circle_modifier;
     for (auto& input_device : inputs) {
@@ -69,13 +69,13 @@ void InputCore::UpdateEmulatorInputs(
             auto emulator_inputs = key_mappings[button_states.first];
             for (auto& emulator_input : emulator_inputs) {
                 if (emulator_input == Service::HID::PAD_CIRCLE_UP && abs(strength) > 0) {
-                    lefty = -strength;
+                    left_y = -strength;
                 } else if (emulator_input == Service::HID::PAD_CIRCLE_DOWN && abs(strength) > 0) {
-                    lefty = strength;
+                    left_y = strength;
                 } else if (emulator_input == Service::HID::PAD_CIRCLE_LEFT && abs(strength) > 0) {
-                    leftx = -strength;
+                    left_x = -strength;
                 } else if (emulator_input == Service::HID::PAD_CIRCLE_RIGHT && abs(strength) > 0) {
-                    leftx = strength;
+                    left_x = strength;
                 }
             }
             if (button_states.first == circle_pad_modifier_mapping)
@@ -85,7 +85,7 @@ void InputCore::UpdateEmulatorInputs(
         }
     }
     float deadzone = Settings::values.pad_circle_deadzone;
-    std::tuple<float, float> left_stick = ApplyDeadzone(leftx, lefty, deadzone);
+    std::tuple<float, float> left_stick = ApplyDeadzone(left_x, left_y, deadzone);
 
     // Set emulator circlepad values
     std::get<0>(circle_pad) =
@@ -149,24 +149,26 @@ void InputCore::SetTouchState(std::tuple<u16, u16, bool> value) {
     std::tie(touch_x, touch_y, touch_pressed) = value;
 }
 
-bool InputCore::CheckIfMappingExists(const std::vector<Settings::InputDeviceMapping>& uniqueMapping,
-                                     Settings::InputDeviceMapping mappingToCheck) {
-    return std::any_of(uniqueMapping.begin(), uniqueMapping.end(),
-                       [mappingToCheck](const auto& mapping) { return mapping == mappingToCheck; });
+bool InputCore::CheckIfMappingExists(
+    const std::vector<Settings::InputDeviceMapping>& unique_mapping,
+    Settings::InputDeviceMapping mapping_to_check) {
+    return std::any_of(
+        unique_mapping.begin(), unique_mapping.end(),
+        [mapping_to_check](const auto& mapping) { return mapping == mapping_to_check; });
 }
 
 std::vector<Settings::InputDeviceMapping> InputCore::GatherUniqueMappings() {
-    std::vector<Settings::InputDeviceMapping> uniqueMappings;
+    std::vector<Settings::InputDeviceMapping> unique_mappings;
 
     for (const auto& mapping : Settings::values.input_mappings) {
-        if (!CheckIfMappingExists(uniqueMappings, mapping)) {
-            uniqueMappings.push_back(mapping);
+        if (!CheckIfMappingExists(unique_mappings, mapping)) {
+            unique_mappings.push_back(mapping);
         }
     }
-    if (!CheckIfMappingExists(uniqueMappings, Settings::values.pad_circle_modifier)) {
-        uniqueMappings.push_back(Settings::values.pad_circle_modifier);
+    if (!CheckIfMappingExists(unique_mappings, Settings::values.pad_circle_modifier)) {
+        unique_mappings.push_back(Settings::values.pad_circle_modifier);
     }
-    return uniqueMappings;
+    return unique_mappings;
 }
 
 void InputCore::BuildKeyMapping() {
@@ -237,7 +239,7 @@ std::vector<std::shared_ptr<IDevice>> InputCore::GetAllDevices() {
 }
 
 Settings::InputDeviceMapping InputCore::DetectInput(int max_time,
-                                                    std::function<void(void)> update_GUI) {
+                                                    std::function<void(void)> update_gui) {
     auto devices = GetAllDevices();
     for (auto& device : devices) {
         device->Clear();
@@ -245,7 +247,7 @@ Settings::InputDeviceMapping InputCore::DetectInput(int max_time,
     Settings::InputDeviceMapping input_device;
     auto start = std::chrono::high_resolution_clock::now();
     while (input_device.key == -1) {
-        update_GUI();
+        update_gui();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::high_resolution_clock::now() - start)
                             .count();

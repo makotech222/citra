@@ -40,7 +40,7 @@ private:
 
     /// Check all inputs for duplicate keys. Clears out any other button with the same value as this
     /// button's new value.
-    void removeDuplicates(const Settings::InputDeviceMapping newValue);
+    void removeDuplicates(const Settings::InputDeviceMapping new_value);
 
     /// Handle keykoard key press event for input tab when a button is 'waiting'.
     void keyPressEvent(QKeyEvent* event) override;
@@ -49,7 +49,7 @@ private:
     static QString getKeyName(Settings::InputDeviceMapping mapping);
 
     /// Set button text to name of key pressed.
-    void setKey(Settings::InputDeviceMapping keyPressed);
+    void setKey(Settings::InputDeviceMapping key_pressed);
 
     /// Event handler for all button released() event.
     void handleClick(QPushButton* sender);
