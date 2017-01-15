@@ -27,7 +27,7 @@ struct KeyboardKey {
         return key < other.key;
     }
 };
-class Keyboard : public IDevice {
+class Keyboard : public InputDeviceInterface {
 public:
     Keyboard();
     ~Keyboard();

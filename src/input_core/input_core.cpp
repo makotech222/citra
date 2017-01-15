@@ -9,54 +9,49 @@
 
 #include "core/core_timing.h"
 #include "core/hw/gpu.h"
-
 #include "input_core/devices/keyboard.h"
 #include "input_core/devices/sdl_gamepad.h"
 #include "input_core/input_core.h"
 
-int InputCore::tick_event;
-Service::HID::PadState InputCore::pad_state;
-std::tuple<s16, s16> InputCore::circle_pad;
-std::shared_ptr<Keyboard> InputCore::main_keyboard;
-std::vector<std::shared_ptr<IDevice>>
-    InputCore::devices; ///< Devices that are handling input for the game
-std::map<Settings::InputDeviceMapping, std::vector<Service::HID::PadState>> InputCore::key_mappings;
-std::map<Service::HID::PadState, bool>
-    InputCore::keys_pressed; ///< keys that were pressed on previous frame.
-std::mutex InputCore::pad_state_mutex;
-std::mutex InputCore::touch_mutex;
-u16 InputCore::touch_x;        ///< Touchpad X-position in native 3DS pixel coordinates (0-320)
-u16 InputCore::touch_y;        ///< Touchpad Y-position in native 3DS pixel coordinates (0-240)
-bool InputCore::touch_pressed; ///< True if touchpad area is currently pressed, otherwise false
-const float InputCore::input_detect_threshold =
+int tick_event;
+Service::HID::PadState pad_state;
+std::tuple<s16, s16> circle_pad;
+std::shared_ptr<Keyboard> main_keyboard;
+std::vector<std::shared_ptr<InputDeviceInterface>>
+    devices; ///< Devices that are handling input for the game
+std::map<Settings::InputDeviceMapping, std::vector<Service::HID::PadState>> key_mappings;
+std::map<Service::HID::PadState, bool> keys_pressed; ///< keys that were pressed on previous frame.
+std::mutex pad_state_mutex;
+std::mutex touch_mutex;
+u16 touch_x;        ///< Touchpad X-position in native 3DS pixel coordinates (0-320)
+u16 touch_y;        ///< Touchpad Y-position in native 3DS pixel coordinates (0-240)
+bool touch_pressed; ///< True if touchpad area is currently pressed, otherwise false
+const float input_detect_threshold =
     0.45; ///< Applies to analog controls being used for digital 3ds inputs.
 
-void InputCore::Init() {
-    ParseSettings();
-    tick_event = CoreTiming::RegisterEvent("InputCore::tick_event", InputTickCallback);
-    CoreTiming::ScheduleEvent(GPU::frame_ticks, tick_event);
-}
-
-void InputCore::Shutdown() {
-    CoreTiming::UnscheduleEvent(tick_event, 0);
-    devices.clear();
-}
-
-void InputCore::InputTickCallback(u64, int cycles_late) {
-    std::vector<std::map<Settings::InputDeviceMapping, float>> inputs;
-    for (auto& device : devices) {
-        inputs.push_back(device->ProcessInput());
+/**
+* Takes two floats and the deadzone and applies formula to
+* correct the stick position.
+*/
+std::tuple<float, float> ApplyDeadzone(float x, float y, float dead_zone) {
+    float magnitude = std::sqrt((x * x) + (y * y));
+    if (magnitude < dead_zone) {
+        x = 0;
+        y = 0;
+    } else {
+        float normalized_x = x / magnitude;
+        float normalized_y = y / magnitude;
+        x = normalized_x * ((magnitude - dead_zone) / (1 - dead_zone));
+        y = normalized_y * ((magnitude - dead_zone) / (1 - dead_zone));
     }
-    UpdateEmulatorInputs(inputs);
-
-    Service::HID::Update();
-
-    // Reschedule recurrent event
-    CoreTiming::ScheduleEvent(GPU::frame_ticks - cycles_late, tick_event);
+    return std::tuple<float, float>(x, y);
 }
 
-void InputCore::UpdateEmulatorInputs(
-    std::vector<std::map<Settings::InputDeviceMapping, float>> inputs) {
+/**
+* Loops through all unique input devices, and all bound inputs to update the emulator's input
+* status.
+*/
+void UpdateEmulatorInputs(std::vector<std::map<Settings::InputDeviceMapping, float>> inputs) {
     std::lock_guard<std::mutex> lock(pad_state_mutex);
 
     // Apply deadzone for circle pad
@@ -149,14 +144,16 @@ void InputCore::SetTouchState(std::tuple<u16, u16, bool> value) {
     std::tie(touch_x, touch_y, touch_pressed) = value;
 }
 
-bool InputCore::CheckIfMappingExists(const std::set<Settings::InputDeviceMapping>& unique_mapping,
-                                     Settings::InputDeviceMapping mapping_to_check) {
+/// Helper method to check if device was already initialized
+bool CheckIfMappingExists(const std::set<Settings::InputDeviceMapping>& unique_mapping,
+                          Settings::InputDeviceMapping mapping_to_check) {
     return std::any_of(
         unique_mapping.begin(), unique_mapping.end(),
         [mapping_to_check](const auto& mapping) { return mapping == mapping_to_check; });
 }
 
-std::set<Settings::InputDeviceMapping> InputCore::GatherUniqueMappings() {
+/// Get unique input mappings from settings
+std::set<Settings::InputDeviceMapping> GatherUniqueMappings() {
     std::set<Settings::InputDeviceMapping> unique_mappings;
 
     for (const auto& mapping : Settings::values.input_mappings) {
@@ -170,7 +167,8 @@ std::set<Settings::InputDeviceMapping> InputCore::GatherUniqueMappings() {
     return unique_mappings;
 }
 
-void InputCore::BuildKeyMapping() {
+/// Builds map of input keys to 3ds buttons for unique device
+void BuildKeyMapping() {
     key_mappings.clear();
     for (size_t i = 0; i < Settings::values.input_mappings.size(); i++) {
         auto key = Settings::values.input_mappings[i];
@@ -180,10 +178,11 @@ void InputCore::BuildKeyMapping() {
     }
 }
 
-void InputCore::GenerateUniqueDevices() {
+/// Generate a device for each unique mapping
+void GenerateUniqueDevices() {
     auto uniqueMappings = GatherUniqueMappings();
     devices.clear();
-    std::shared_ptr<IDevice> input;
+    std::shared_ptr<InputDeviceInterface> input;
     for (const auto& mapping : uniqueMappings) {
         switch (mapping.framework) {
         case Settings::DeviceFramework::SDL: {
@@ -202,23 +201,10 @@ void InputCore::GenerateUniqueDevices() {
     }
 }
 
-void InputCore::ParseSettings() {
+/// Read settings to initialize devices
+void ParseSettings() {
     GenerateUniqueDevices();
     BuildKeyMapping();
-}
-
-std::tuple<float, float> InputCore::ApplyDeadzone(float x, float y, float dead_zone) {
-    float magnitude = std::sqrt((x * x) + (y * y));
-    if (magnitude < dead_zone) {
-        x = 0;
-        y = 0;
-    } else {
-        float normalized_x = x / magnitude;
-        float normalized_y = y / magnitude;
-        x = normalized_x * ((magnitude - dead_zone) / (1 - dead_zone));
-        y = normalized_y * ((magnitude - dead_zone) / (1 - dead_zone));
-    }
-    return std::tuple<float, float>(x, y);
 }
 
 void InputCore::ReloadSettings() {
@@ -229,7 +215,7 @@ void InputCore::ReloadSettings() {
     ParseSettings();
 }
 
-std::vector<std::shared_ptr<IDevice>> InputCore::GetAllDevices() {
+std::vector<std::shared_ptr<InputDeviceInterface>> InputCore::GetAllDevices() {
     auto all_devices = SDLGamepad::GetAllDevices();
     auto keyboard = InputCore::GetKeyboard();
     all_devices.push_back(keyboard);
@@ -260,4 +246,28 @@ Settings::InputDeviceMapping InputCore::DetectInput(int max_time,
         }
     };
     return input_device;
+}
+
+void InputTickCallback(u64, int cycles_late) {
+    std::vector<std::map<Settings::InputDeviceMapping, float>> inputs;
+    for (auto& device : devices) {
+        inputs.push_back(device->ProcessInput());
+    }
+    UpdateEmulatorInputs(inputs);
+
+    Service::HID::Update();
+
+    // Reschedule recurrent event
+    CoreTiming::ScheduleEvent(GPU::frame_ticks - cycles_late, tick_event);
+}
+
+void InputCore::Init() {
+    ParseSettings();
+    tick_event = CoreTiming::RegisterEvent("InputCore::tick_event", InputTickCallback);
+    CoreTiming::ScheduleEvent(GPU::frame_ticks, tick_event);
+}
+
+void InputCore::Shutdown() {
+    CoreTiming::UnscheduleEvent(tick_event, 0);
+    devices.clear();
 }

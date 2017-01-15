@@ -45,7 +45,8 @@ static const std::array<int, Settings::NativeInput::NUM_INPUTS> defaults = {
     SDL_SCANCODE_L,
 
     // indirectly mapped keys
-    SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT};
+    SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT,
+};
 
 void Config::ReadValues() {
     // Controls

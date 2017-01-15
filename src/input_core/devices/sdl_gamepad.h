@@ -7,7 +7,7 @@
 #include "input_core/devices/device.h"
 
 struct _SDL_GameController;
-class SDLGamepad : public IDevice {
+class SDLGamepad : public InputDeviceInterface {
 public:
     SDLGamepad();
     SDLGamepad(int number_, _SDL_GameController* gamepad_);
@@ -20,7 +20,7 @@ public:
     void Clear() override;
 
     /// Returns vector of all gamepads connected to computer. Used for keybinding setup
-    static std::vector<std::shared_ptr<IDevice>> GetAllDevices();
+    static std::vector<std::shared_ptr<InputDeviceInterface>> GetAllDevices();
     enum class GamepadInputs {
         ButtonA,
         ButtonB,

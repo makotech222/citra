@@ -4,4 +4,4 @@
 
 #include "input_core/devices/device.h"
 
-IDevice::~IDevice() = default;
+InputDeviceInterface::~InputDeviceInterface() = default;

@@ -8,7 +8,6 @@
 #include "citra_qt/configure_input.h"
 #include "citra_qt/keybinding_names.h"
 #include "common/string_util.h"
-
 #include "input_core/devices/keyboard.h"
 #include "input_core/input_core.h"
 
@@ -19,29 +18,30 @@ ConfigureInput::ConfigureInput(QWidget* parent)
 
     // Initialize mapping of input enum to UI button.
     button_map = {
-        {std::make_pair(Settings::NativeInput::Values::A, ui->buttonA)},
-        {std::make_pair(Settings::NativeInput::Values::B, ui->buttonB)},
-        {std::make_pair(Settings::NativeInput::Values::X, ui->buttonX)},
-        {std::make_pair(Settings::NativeInput::Values::Y, ui->buttonY)},
-        {std::make_pair(Settings::NativeInput::Values::L, ui->buttonL)},
-        {std::make_pair(Settings::NativeInput::Values::R, ui->buttonR)},
-        {std::make_pair(Settings::NativeInput::Values::ZL, ui->buttonZL)},
-        {std::make_pair(Settings::NativeInput::Values::ZR, ui->buttonZR)},
-        {std::make_pair(Settings::NativeInput::Values::START, ui->buttonStart)},
-        {std::make_pair(Settings::NativeInput::Values::SELECT, ui->buttonSelect)},
-        {std::make_pair(Settings::NativeInput::Values::HOME, ui->buttonHome)},
-        {std::make_pair(Settings::NativeInput::Values::DUP, ui->buttonDpadUp)},
-        {std::make_pair(Settings::NativeInput::Values::DDOWN, ui->buttonDpadDown)},
-        {std::make_pair(Settings::NativeInput::Values::DLEFT, ui->buttonDpadLeft)},
-        {std::make_pair(Settings::NativeInput::Values::DRIGHT, ui->buttonDpadRight)},
-        {std::make_pair(Settings::NativeInput::Values::CUP, ui->buttonCStickUp)},
-        {std::make_pair(Settings::NativeInput::Values::CDOWN, ui->buttonCStickDown)},
-        {std::make_pair(Settings::NativeInput::Values::CLEFT, ui->buttonCStickLeft)},
-        {std::make_pair(Settings::NativeInput::Values::CRIGHT, ui->buttonCStickRight)},
-        {std::make_pair(Settings::NativeInput::Values::CIRCLE_UP, ui->buttonCircleUp)},
-        {std::make_pair(Settings::NativeInput::Values::CIRCLE_DOWN, ui->buttonCircleDown)},
-        {std::make_pair(Settings::NativeInput::Values::CIRCLE_LEFT, ui->buttonCircleLeft)},
-        {std::make_pair(Settings::NativeInput::Values::CIRCLE_RIGHT, ui->buttonCircleRight)}};
+        {Settings::NativeInput::Values::A, ui->buttonA},
+        {Settings::NativeInput::Values::B, ui->buttonB},
+        {Settings::NativeInput::Values::X, ui->buttonX},
+        {Settings::NativeInput::Values::Y, ui->buttonY},
+        {Settings::NativeInput::Values::L, ui->buttonL},
+        {Settings::NativeInput::Values::R, ui->buttonR},
+        {Settings::NativeInput::Values::ZL, ui->buttonZL},
+        {Settings::NativeInput::Values::ZR, ui->buttonZR},
+        {Settings::NativeInput::Values::START, ui->buttonStart},
+        {Settings::NativeInput::Values::SELECT, ui->buttonSelect},
+        {Settings::NativeInput::Values::HOME, ui->buttonHome},
+        {Settings::NativeInput::Values::DUP, ui->buttonDpadUp},
+        {Settings::NativeInput::Values::DDOWN, ui->buttonDpadDown},
+        {Settings::NativeInput::Values::DLEFT, ui->buttonDpadLeft},
+        {Settings::NativeInput::Values::DRIGHT, ui->buttonDpadRight},
+        {Settings::NativeInput::Values::CUP, ui->buttonCStickUp},
+        {Settings::NativeInput::Values::CDOWN, ui->buttonCStickDown},
+        {Settings::NativeInput::Values::CLEFT, ui->buttonCStickLeft},
+        {Settings::NativeInput::Values::CRIGHT, ui->buttonCStickRight},
+        {Settings::NativeInput::Values::CIRCLE_UP, ui->buttonCircleUp},
+        {Settings::NativeInput::Values::CIRCLE_DOWN, ui->buttonCircleDown},
+        {Settings::NativeInput::Values::CIRCLE_LEFT, ui->buttonCircleLeft},
+        {Settings::NativeInput::Values::CIRCLE_RIGHT, ui->buttonCircleRight},
+    };
 
     // Attach handle click method to each button click.
     for (const auto& entry : button_map) {

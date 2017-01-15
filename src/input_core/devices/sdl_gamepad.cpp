@@ -10,7 +10,6 @@
 #include "common/assert.h"
 #include "common/logging/log.h"
 #include "common/string_util.h"
-
 #include "input_core/devices/gamecontrollerdb.h"
 #include "input_core/devices/sdl_gamepad.h"
 
@@ -82,8 +81,8 @@ bool SDLGamepad::CloseDevice() {
     return true;
 }
 
-std::vector<std::shared_ptr<IDevice>> SDLGamepad::GetAllDevices() {
-    std::vector<std::shared_ptr<IDevice>> devices;
+std::vector<std::shared_ptr<InputDeviceInterface>> SDLGamepad::GetAllDevices() {
+    std::vector<std::shared_ptr<InputDeviceInterface>> devices;
     for (int i = 0; i < 8; i++) {
         auto gamepad = std::make_shared<SDLGamepad>();
         bool success = gamepad->InitDevice(

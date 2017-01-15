@@ -10,12 +10,13 @@
 #include "core/settings.h"
 #include "input_core/key_map.h"
 
-class IDevice {
+class InputDeviceInterface {
 public:
-    virtual ~IDevice();
+    virtual ~InputDeviceInterface();
 
     /**
-     * Initialize IDevice object with device's index and the map of keys that it will listen to.
+     * Initialize InputDeviceInterface object with device's index and the map of keys that it will
+     * listen to.
      * @param number: device number as ordered connected to computer.
      * @param keymap: vector of PadStates for device to listen for
      * @return true if successful

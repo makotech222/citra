@@ -23,7 +23,8 @@ const std::array<QVariant, Settings::NativeInput::NUM_INPUTS> Config::defaults =
     Qt::Key_K, Qt::Key_J, Qt::Key_L,
 
     // indirectly mapped keys
-    Qt::Key_Up, Qt::Key_Down, Qt::Key_Left, Qt::Key_Right};
+    Qt::Key_Up, Qt::Key_Down, Qt::Key_Left, Qt::Key_Right,
+};
 
 const QVariant Config::default_circle_pad_modifier = Qt::Key_F;
 
