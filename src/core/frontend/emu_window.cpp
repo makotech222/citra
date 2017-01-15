@@ -4,13 +4,13 @@
 
 #include <algorithm>
 #include <cmath>
+
 #include "common/assert.h"
 #include "common/profiler_reporting.h"
-#include "core/frontend/emu_window.h"
 #include "input_core/input_core.h"
 #include "video_core/video_core.h"
 
-#include "emu_window.h"
+#include "core/frontend/emu_window.h"
 
 /**
  * Check if the given x/y coordinates are within the touchpad specified by the framebuffer layout

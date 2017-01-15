@@ -241,8 +241,6 @@ private:
 
     bool touch_pressed; ///< True if touchpad area is currently pressed, otherwise false
 
-   
-
     std::mutex accel_mutex;
     s16 accel_x; ///< Accelerometer X-axis value in native 3DS units
     s16 accel_y; ///< Accelerometer Y-axis value in native 3DS units
