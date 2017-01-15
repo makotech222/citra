@@ -90,7 +90,6 @@ public:
      */
     void GyroscopeChanged(float x, float y, float z);
 
-   
     /**
      * Gets the current accelerometer state (acceleration along each three axis).
      * Axis explained:
@@ -175,7 +174,6 @@ protected:
         // TODO: Find a better place to set this.
         config.min_client_area_size = std::make_pair(400u, 480u);
         active_config = config;
-        
         accel_x = 0;
         accel_y = -512;
         accel_z = 0;
