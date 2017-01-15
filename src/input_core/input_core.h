@@ -7,6 +7,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <tuple>
 
 #include "core/hle/service/hid/hid.h"
@@ -106,10 +107,10 @@ private:
     /**
      * Helper methodto check if device was already initialized
      */
-    static bool CheckIfMappingExists(const std::vector<Settings::InputDeviceMapping>& uniqueMapping,
+    static bool CheckIfMappingExists(const std::set<Settings::InputDeviceMapping>& uniqueMapping,
                                      Settings::InputDeviceMapping mappingToCheck);
 
-    static std::vector<Settings::InputDeviceMapping>
+    static std::set<Settings::InputDeviceMapping>
     GatherUniqueMappings(); /// Get unique input mappings from settings
 
     static void BuildKeyMapping(); /// Builds map of input keys to 3ds buttons for unique device

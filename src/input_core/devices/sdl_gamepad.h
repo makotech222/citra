@@ -82,6 +82,7 @@ private:
         keys_pressed; ///< Map of keys that were pressed on previous iteration
     _SDL_GameController* gamepad = nullptr;
     int number; ///< Index of gamepad connection
+    float input_detect_threshold = 0.8;
 
     static void LoadGameControllerDB();
 };

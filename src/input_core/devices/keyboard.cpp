@@ -52,7 +52,7 @@ void Keyboard::Clear() {
 Settings::InputDeviceMapping Keyboard::GetInput() {
     auto result = ProcessInput();
     for (const auto& entry : result) {
-        if (entry.second > 0.5)
+        if (entry.second > 0.0)
             return entry.first;
     }
     return Settings::InputDeviceMapping("");

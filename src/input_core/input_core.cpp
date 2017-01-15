@@ -149,24 +149,23 @@ void InputCore::SetTouchState(std::tuple<u16, u16, bool> value) {
     std::tie(touch_x, touch_y, touch_pressed) = value;
 }
 
-bool InputCore::CheckIfMappingExists(
-    const std::vector<Settings::InputDeviceMapping>& unique_mapping,
-    Settings::InputDeviceMapping mapping_to_check) {
+bool InputCore::CheckIfMappingExists(const std::set<Settings::InputDeviceMapping>& unique_mapping,
+                                     Settings::InputDeviceMapping mapping_to_check) {
     return std::any_of(
         unique_mapping.begin(), unique_mapping.end(),
         [mapping_to_check](const auto& mapping) { return mapping == mapping_to_check; });
 }
 
-std::vector<Settings::InputDeviceMapping> InputCore::GatherUniqueMappings() {
-    std::vector<Settings::InputDeviceMapping> unique_mappings;
+std::set<Settings::InputDeviceMapping> InputCore::GatherUniqueMappings() {
+    std::set<Settings::InputDeviceMapping> unique_mappings;
 
     for (const auto& mapping : Settings::values.input_mappings) {
         if (!CheckIfMappingExists(unique_mappings, mapping)) {
-            unique_mappings.push_back(mapping);
+            unique_mappings.insert(mapping);
         }
     }
     if (!CheckIfMappingExists(unique_mappings, Settings::values.pad_circle_modifier)) {
-        unique_mappings.push_back(Settings::values.pad_circle_modifier);
+        unique_mappings.insert(Settings::values.pad_circle_modifier);
     }
     return unique_mappings;
 }

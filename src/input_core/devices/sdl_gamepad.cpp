@@ -60,7 +60,7 @@ std::map<Settings::InputDeviceMapping, float> SDLGamepad::ProcessInput() {
             fmaxf(-1, static_cast<float>(SDL_GameControllerGetAxis(gamepad, axis) / 32767.0));
         input_device_mapping.key = static_cast<int>(
             gamepadinput_to_sdlname_mapping[SDL_GameControllerGetStringForAxis(axis)]);
-        if (strength < 0) {
+        if (strength < 0 && i < 4) {
             button_status.emplace(input_device_mapping, 0);
             input_device_mapping.key += 1; // minus axis value is always one greater
             button_status.emplace(input_device_mapping, abs(strength));
@@ -114,9 +114,9 @@ Settings::InputDeviceMapping SDLGamepad::GetInput() {
         return Settings::InputDeviceMapping("");
 
     auto results = ProcessInput();
-    for (const auto& input : results) {
-        if (input.second > 0.5)
-            return input.first;
+    for (const auto& entry : results) {
+        if (entry.second > input_detect_threshold)
+            return entry.first;
     }
     return Settings::InputDeviceMapping("");
 }
