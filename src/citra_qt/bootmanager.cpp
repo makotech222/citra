@@ -7,7 +7,6 @@
 #include <QScreen>
 #include <QWindow>
 #endif
-
 #include "citra_qt/bootmanager.h"
 #include "common/microprofile.h"
 #include "common/scm_rev.h"

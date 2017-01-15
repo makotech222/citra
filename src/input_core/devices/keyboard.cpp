@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <SDL_keyboard.h>
-
 #include "input_core/devices/keyboard.h"
 
 Keyboard::Keyboard() = default;

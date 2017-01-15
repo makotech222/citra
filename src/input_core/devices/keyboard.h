@@ -7,7 +7,6 @@
 #include <map>
 #include <memory>
 #include <mutex>
-
 #include "input_core/devices/device.h"
 
 struct KeyboardKey {

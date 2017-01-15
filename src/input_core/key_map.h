@@ -5,7 +5,6 @@
 #pragma once
 
 #include <array>
-
 #include "core/hle/service/hid/hid.h"
 
 namespace KeyMap {

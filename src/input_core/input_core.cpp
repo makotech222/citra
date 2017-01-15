@@ -6,7 +6,6 @@
 #include <chrono>
 #include <cmath>
 #include <map>
-
 #include "core/core_timing.h"
 #include "core/hw/gpu.h"
 #include "input_core/devices/keyboard.h"

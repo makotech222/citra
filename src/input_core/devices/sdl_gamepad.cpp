@@ -6,7 +6,6 @@
 #include <memory>
 #include <SDL.h>
 #include <SDL_gamecontroller.h>
-
 #include "common/assert.h"
 #include "common/logging/log.h"
 #include "common/string_util.h"

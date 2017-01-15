@@ -9,7 +9,6 @@
 #include <mutex>
 #include <set>
 #include <tuple>
-
 #include "core/hle/service/hid/hid.h"
 #include "core/settings.h"
 #include "input_core/devices/device.h"

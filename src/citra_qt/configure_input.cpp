@@ -3,7 +3,6 @@
 // Refer to the license.txt file included.
 
 #include <utility>
-
 #include "citra_qt/config.h"
 #include "citra_qt/configure_input.h"
 #include "citra_qt/keybinding_names.h"

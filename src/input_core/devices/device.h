@@ -5,7 +5,6 @@
 #pragma once
 
 #include <map>
-
 #include "core/hle/service/hid/hid.h"
 #include "core/settings.h"
 #include "input_core/key_map.h"
