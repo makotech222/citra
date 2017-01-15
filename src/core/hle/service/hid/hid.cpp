@@ -3,16 +3,13 @@
 // Refer to the license.txt file included.
 
 #include <cmath>
-#include "core/frontend/emu_window.h"
-
-#include "core/hle/service/hid/hid.h"
-#include "core/hle/service/hid/hid_spvr.h"
-#include "core/hle/service/hid/hid_user.h"
-#include "core/hle/service/service.h"
 
 #include "core/core_timing.h"
+#include "core/frontend/emu_window.h"
+
 #include "core/hle/kernel/event.h"
 #include "core/hle/kernel/shared_memory.h"
+#include "core/hle/service/hid/hid.h"
 #include "core/hle/service/hid/hid_spvr.h"
 #include "core/hle/service/hid/hid_user.h"
 #include "core/hle/service/service.h"
