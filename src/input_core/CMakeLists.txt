@@ -1,18 +1,17 @@
 set(SRCS
             input_core.cpp
+            key_map.cpp
             devices/device.cpp
             devices/keyboard.cpp
-            devices/sdl_gamepad.cpp
-            key_map.cpp
+            devices/sdl_joystick.cpp
             )
 
 set(HEADERS
             input_core.h
             key_map.h
             devices/device.h
-            devices/gamecontrollerdb.h
             devices/keyboard.h
-            devices/sdl_gamepad.h
+            devices/sdl_joystick.h
             )
 
 

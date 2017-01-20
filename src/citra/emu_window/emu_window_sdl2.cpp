@@ -9,10 +9,10 @@
 #include <SDL.h>
 #include <glad/glad.h>
 #include "citra/emu_window/emu_window_sdl2.h"
-
 #include "common/logging/log.h"
 #include "common/scm_rev.h"
 #include "common/string_util.h"
+#include "core/core.h"
 #include "core/hle/service/hid/hid.h"
 #include "core/settings.h"
 #include "input_core/devices/keyboard.h"
@@ -41,7 +41,7 @@ void EmuWindow_SDL2::OnMouseButton(u32 button, u8 state, s32 x, s32 y) {
 }
 
 void EmuWindow_SDL2::OnKeyEvent(SDL_Keysym key, u8 state) {
-    auto keyboard = InputCore::GetKeyboard();
+    auto keyboard = Core::System::GetInstance().GetInputCore()->GetKeyboard();
     KeyboardKey param = KeyboardKey(key.sym, SDL_GetKeyName(key.scancode));
 
     if (state == SDL_PRESSED) {

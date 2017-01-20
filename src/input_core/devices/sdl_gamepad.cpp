@@ -107,16 +107,11 @@ void SDLGamepad::LoadGameControllerDB() {
     }
 }
 
-Settings::InputDeviceMapping SDLGamepad::GetInput() {
+std::map<Settings::InputDeviceMapping, float> SDLGamepad::GetInput() {
     if (gamepad == nullptr)
-        return Settings::InputDeviceMapping("");
+        return std::map<Settings::InputDeviceMapping, float>();
 
-    auto results = ProcessInput();
-    for (const auto& entry : results) {
-        if (entry.second > input_detect_threshold)
-            return entry.first;
-    }
-    return Settings::InputDeviceMapping("");
+    return ProcessInput();
 }
 
 void SDLGamepad::Clear() {}

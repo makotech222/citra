@@ -4,13 +4,12 @@
 
 #include <algorithm>
 #include <cmath>
-
 #include "common/assert.h"
 #include "common/profiler_reporting.h"
+#include "core/core.h"
+#include "core/frontend/emu_window.h"
 #include "input_core/input_core.h"
 #include "video_core/video_core.h"
-
-#include "core/frontend/emu_window.h"
 
 /**
  * Check if the given x/y coordinates are within the touchpad specified by the framebuffer layout
@@ -47,18 +46,20 @@ void EmuWindow::TouchPressed(unsigned framebuffer_x, unsigned framebuffer_y) {
                   (framebuffer_y - framebuffer_layout.bottom_screen.top) /
                   (framebuffer_layout.bottom_screen.bottom - framebuffer_layout.bottom_screen.top);
     touch_pressed = true;
-    InputCore::SetTouchState(std::make_tuple(touch_x, touch_y, true));
-    auto pad_state = InputCore::GetPadState();
+    auto input_core = Core::System::GetInstance().GetInputCore();
+    input_core->SetTouchState(std::make_tuple(touch_x, touch_y, true));
+    auto pad_state = input_core->GetPadState();
     pad_state.touch.Assign(1);
-    InputCore::SetPadState(pad_state);
+    input_core->SetPadState(pad_state);
 }
 
 void EmuWindow::TouchReleased() {
     touch_pressed = false;
-    InputCore::SetTouchState(std::make_tuple(0, 0, false));
-    auto pad_state = InputCore::GetPadState();
+    auto input_core = Core::System::GetInstance().GetInputCore();
+    input_core->SetTouchState(std::make_tuple(0, 0, false));
+    auto pad_state = input_core->GetPadState();
     pad_state.touch.Assign(0);
-    InputCore::SetPadState(pad_state);
+    input_core->SetPadState(pad_state);
 }
 
 void EmuWindow::TouchMoved(unsigned framebuffer_x, unsigned framebuffer_y) {

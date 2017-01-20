@@ -16,7 +16,7 @@ public:
     bool InitDevice(int number, Settings::InputDeviceMapping device_mapping) override;
     std::map<Settings::InputDeviceMapping, float> ProcessInput() override;
     bool CloseDevice() override;
-    Settings::InputDeviceMapping GetInput() override;
+    std::map<Settings::InputDeviceMapping, float> GetInput() override;
     void Clear() override;
 
     /// Returns vector of all gamepads connected to computer. Used for keybinding setup
@@ -78,8 +78,6 @@ private:
         {"rightx", GamepadInputs::RightXPlus},
         {"rightx2", GamepadInputs::RightXMinus}};
     static bool SDLInitialized;
-    std::map<std::string, bool>
-        keys_pressed; ///< Map of keys that were pressed on previous iteration
     _SDL_GameController* gamepad = nullptr;
     int number; ///< Index of gamepad connection
     float input_detect_threshold = 0.8;

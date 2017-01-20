@@ -20,7 +20,7 @@ public:
      * @param keymap: vector of PadStates for device to listen for
      * @return true if successful
      */
-    virtual bool InitDevice(int number, Settings::InputDeviceMapping device_mapping) = 0;
+    virtual bool InitDevice(int number) = 0;
 
     /**
      * Process inputs that were pressed since last frame
@@ -34,16 +34,16 @@ public:
     virtual bool CloseDevice() = 0;
 
     /**
-     * Gets Input for a single frame. Used only in Qt gui for key binding.
-     * @return Settings::InputDeviceMapping instance that captures what button was pressed
-     */
-    virtual Settings::InputDeviceMapping GetInput() = 0;
-
-    /**
      * Clears info from last frame.
      */
     virtual void Clear() = 0;
 
+    class Input {
+    public:
+        virtual float GetState() = 0;
+        virtual std::string GetName() = 0;
+    };
+
 protected:
-    Settings::InputDeviceMapping input_device_mapping;
+    virtual std::string GetInputDeviceMapping() = 0;
 };

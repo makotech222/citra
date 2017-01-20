@@ -195,14 +195,14 @@ void GRenderWindow::closeEvent(QCloseEvent* event) {
 }
 
 void GRenderWindow::keyPressEvent(QKeyEvent* event) {
-    auto keyboard = InputCore::GetKeyboard();
+    auto keyboard = Core::System::GetInstance().GetInputCore()->GetKeyboard();
     KeyboardKey param =
         KeyboardKey(event->key(), QKeySequence(event->key()).toString().toStdString());
     keyboard->KeyPressed(param);
 }
 
 void GRenderWindow::keyReleaseEvent(QKeyEvent* event) {
-    auto keyboard = InputCore::GetKeyboard();
+    auto keyboard = Core::System::GetInstance().GetInputCore()->GetKeyboard();
     KeyboardKey param =
         KeyboardKey(event->key(), QKeySequence(event->key()).toString().toStdString());
     keyboard->KeyReleased(param);

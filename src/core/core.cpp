@@ -71,7 +71,6 @@ System::ResultStatus System::Load(EmuWindow* emu_window, const std::string& file
     if (app_loader) {
         app_loader.reset();
     }
-
     app_loader = Loader::GetLoader(filepath);
 
     if (!app_loader) {
@@ -123,6 +122,12 @@ void System::Reschedule() {
     Kernel::Reschedule();
 }
 
+std::shared_ptr<InputCore> System::GetInputCore() {
+    if (input_core == nullptr)
+        input_core = std::make_shared<InputCore>();
+    return input_core;
+}
+
 System::ResultStatus System::Init(EmuWindow* emu_window, u32 system_mode) {
     if (cpu_core) {
         cpu_core.reset();
@@ -141,7 +146,7 @@ System::ResultStatus System::Init(EmuWindow* emu_window, u32 system_mode) {
     Kernel::Init(system_mode);
     Service::Init();
     AudioCore::Init();
-    InputCore::Init();
+    input_core->Init();
     GDBStub::Init();
 
     if (!VideoCore::Init(emu_window)) {
@@ -155,7 +160,7 @@ System::ResultStatus System::Init(EmuWindow* emu_window, u32 system_mode) {
 
 void System::Shutdown() {
     GDBStub::Shutdown();
-    InputCore::Shutdown();
+    input_core->Shutdown();
     AudioCore::Shutdown();
     VideoCore::Shutdown();
     Service::Shutdown();

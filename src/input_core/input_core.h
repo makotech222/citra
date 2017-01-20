@@ -15,64 +15,116 @@
 
 class Keyboard;
 
-namespace InputCore {
-void Init();
-void Shutdown();
+class InputCore {
+public:
+    void Init();
+    void Shutdown();
 
-/**
- * Threadsafe getter to the current PadState
- * @return Service::HID::PadState instance
- */
-Service::HID::PadState GetPadState();
+    InputCore() = default;
 
-/**
- * Threadsafe setter for the current PadState
- * @param state New PadState to overwrite current PadState.
- */
-void SetPadState(const Service::HID::PadState& state);
+    /**
+     * Threadsafe getter to the current PadState
+     * @return Service::HID::PadState instance
+     */
+    Service::HID::PadState GetPadState();
 
-/**
- * Getter for current CirclePad
- * @return std::tuple<s16, s16> CirclePad state
- */
-std::tuple<s16, s16> GetCirclePad();
+    /**
+     * Threadsafe setter for the current PadState
+     * @param state New PadState to overwrite current PadState.
+     */
+    void SetPadState(const Service::HID::PadState& state);
 
-/**
- * Getter for Citra's main keyboard input handler
- * @return std::shared_ptr<Keyboard> Device Keyboard instance
- */
-std::shared_ptr<Keyboard> GetKeyboard();
+    /**
+     * Getter for current CirclePad
+     * @return std::tuple<s16, s16> CirclePad state
+     */
+    std::tuple<s16, s16> GetCirclePad();
 
-/**
- * Gets the current touch screen state (touch X/Y coordinates and whether or not it is pressed).
- * Threadsafe.
- * @note This should be called by the core emu thread to get a state set by the window thread.
- * @return std::tuple of (x, y, pressed) where `x` and `y` are the touch coordinates and
- *         `pressed` is true if the touch screen is currently being pressed
- */
-std::tuple<u16, u16, bool> GetTouchState();
+    /**
+     * Getter for Citra's main keyboard input handler
+     * @return std::shared_ptr<Keyboard> Device Keyboard instance
+     */
+    std::shared_ptr<Keyboard> GetKeyboard();
 
-/**
- * Threadsafe setter for the current touch screen state.
- * @param value New Touch State
- */
-void SetTouchState(std::tuple<u16, u16, bool> value);
+    /**
+     * Gets the current touch screen state (touch X/Y coordinates and whether or not it is pressed).
+     * Threadsafe.
+     * @note This should be called by the core emu thread to get a state set by the window thread.
+     * @return std::tuple of (x, y, pressed) where `x` and `y` are the touch coordinates and
+     *         `pressed` is true if the touch screen is currently being pressed
+     */
+    std::tuple<u16, u16, bool> GetTouchState();
 
-/**
- * Reload input key mapping settings during game-play
- */
-void ReloadSettings();
+    /**
+     * Threadsafe setter for the current touch screen state.
+     * @param value New Touch State
+     */
+    void SetTouchState(std::tuple<u16, u16, bool> value);
 
-/**
- * Returns vector of all available devices from user's system.
- */
-std::vector<std::shared_ptr<InputDeviceInterface>> GetAllDevices();
+    /**
+     * Reload input key mapping settings during game-play
+     */
+    void ReloadSettings();
 
-/**
- * Loops through all devices and detects the first device that produces an input
- * @param max_time: maximum amount of time to wait until input detected, in milliseconds.
- * @param update_GUI: function to run in while loop to process any gui events.
- * @return Settings::InputDeviceMapping of input device
- */
-Settings::InputDeviceMapping DetectInput(int max_time, std::function<void(void)> update_GUI);
+    /**
+     * Returns vector of all available devices from user's system.
+     */
+    std::vector<std::shared_ptr<InputDeviceInterface>> GetAllDevices();
+
+    /**
+     * Loops through all devices and detects the first device that produces an input
+     * @param max_time: maximum amount of time to wait until input detected, in milliseconds.
+     * @param update_GUI: function to run in while loop to process any gui events.
+     * @return Settings::InputDeviceMapping of input device
+     */
+    Settings::InputDeviceMapping DetectInput(int max_time, std::function<void(void)> update_GUI);
+
+private:
+    int tick_event;
+    Service::HID::PadState pad_state;
+    std::tuple<s16, s16> circle_pad;
+    std::shared_ptr<Keyboard> main_keyboard;
+    std::vector<std::shared_ptr<InputDeviceInterface>>
+        devices; ///< Devices that are handling input for the game
+    std::map<Settings::InputDeviceMapping, std::vector<Service::HID::PadState>>
+        key_mappings; ///< mapping of hardware inputs to citra inputs
+    std::map<Service::HID::PadState, bool>
+        keys_pressed; ///< keys that were pressed on previous frame.
+    std::mutex pad_state_mutex;
+    std::mutex touch_mutex;
+    u16 touch_x;        ///< Touchpad X-position in native 3DS pixel coordinates (0-320)
+    u16 touch_y;        ///< Touchpad Y-position in native 3DS pixel coordinates (0-240)
+    bool touch_pressed; ///< True if touchpad area is currently pressed, otherwise false
+    const float input_detect_threshold =
+        0.55f; ///< Minimum strength required for an analog input to be declared as enabled.
+
+    void InputTickCallback(u64, int cycles_late);
+
+    /// Read settings to initialize devices
+    void ParseSettings();
+
+    /// Generate a device for each unique mapping
+    void GenerateUniqueDevices();
+
+    /// Get unique input mappings from settings
+    std::set<Settings::InputDeviceMapping> GatherUniqueMappings();
+
+    /// Builds map of input keys to 3ds buttons for unique device
+    void BuildKeyMapping();
+
+    /// Helper method to check if device was already initialized
+    bool CheckIfMappingExists(const std::set<Settings::InputDeviceMapping>& unique_mapping,
+                              Settings::InputDeviceMapping mapping_to_check);
+
+    /**
+    * Loops through all unique input devices, and all bound inputs to update the emulator's input
+    * status.
+    */
+    void UpdateEmulatorInputs(std::vector<std::map<Settings::InputDeviceMapping, float>> inputs);
+
+    /**
+    * Takes x and y position of stick and the deadzone setting and
+    * corrects the stick position.
+    */
+    std::tuple<float, float> ApplyDeadzone(float x, float y, float dead_zone);
 };

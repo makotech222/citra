@@ -3,17 +3,15 @@
 // Refer to the license.txt file included.
 
 #include <cmath>
-
+#include "core/core.h"
 #include "core/core_timing.h"
 #include "core/frontend/emu_window.h"
-
 #include "core/hle/kernel/event.h"
 #include "core/hle/kernel/shared_memory.h"
 #include "core/hle/service/hid/hid.h"
 #include "core/hle/service/hid/hid_spvr.h"
 #include "core/hle/service/hid/hid_user.h"
 #include "core/hle/service/service.h"
-
 #include "input_core/input_core.h"
 #include "video_core/video_core.h"
 
@@ -76,10 +74,11 @@ void Update() {
         return;
     }
 
-    PadState state = InputCore::GetPadState();
+    auto input_core = Core::System::GetInstance().GetInputCore();
+    PadState state = input_core->GetPadState();
     // Get current circle pad position and update circle pad direction
     s16 circle_pad_x, circle_pad_y;
-    std::tie(circle_pad_x, circle_pad_y) = InputCore::GetCirclePad();
+    std::tie(circle_pad_x, circle_pad_y) = input_core->GetCirclePad();
     state.hex |= GetCirclePadDirectionState(circle_pad_x, circle_pad_y).hex;
 
     mem->pad.current_state.hex = state.hex;
@@ -116,7 +115,7 @@ void Update() {
     TouchDataEntry& touch_entry = mem->touch.entries[mem->touch.index];
     bool pressed = false;
 
-    std::tie(touch_entry.x, touch_entry.y, pressed) = InputCore::GetTouchState();
+    std::tie(touch_entry.x, touch_entry.y, pressed) = input_core->GetTouchState();
     touch_entry.valid.Assign(pressed ? 1 : 0);
 
     // TODO(bunnei): We're not doing anything with offset 0xA8 + 0x18 of HID SharedMemory, which

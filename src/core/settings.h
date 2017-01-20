@@ -5,6 +5,7 @@
 #pragma once
 
 #include <array>
+#include <map>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -69,31 +70,38 @@ static const std::array<Values, NUM_INPUTS> All = {
 
 enum class DeviceFramework { SDL };
 enum class Device { Keyboard, Gamepad };
+static const std::map<std::string, DeviceFramework> device_framework_mapping = {
+    {"SDL", DeviceFramework::SDL},
+};
+static const std::map<std::string, Device> device_mapping = {
+    {"Keyboard", Device::Keyboard}, {"Gamepad", Device::Gamepad},
+};
 struct InputDeviceMapping {
     DeviceFramework framework = DeviceFramework::SDL;
     int number = 0;
     Device device = Device::Keyboard;
-    int key = -1;
+    std::string key;
 
     InputDeviceMapping() = default;
-    explicit InputDeviceMapping(int key_) {
-        key = key_;
-    }
     explicit InputDeviceMapping(const std::string& input) {
         std::vector<std::string> parts;
         Common::SplitString(input, '/', parts);
         if (parts.size() != 4)
             return;
-        if (parts[0] == "SDL")
-            framework = DeviceFramework::SDL;
+
+        if (device_framework_mapping.find(parts[0]) == device_framework_mapping.end())
+            return;
+        else
+            framework = device_framework_mapping.at(parts[0]);
 
         number = std::stoi(parts[1]);
 
-        if (parts[2] == "Keyboard")
-            device = Device::Keyboard;
-        else if (parts[2] == "Gamepad")
-            device = Device::Gamepad;
-        Common::TryParse(parts[3], &key);
+        if (device_mapping.find(parts[2]) == device_mapping.end())
+            return;
+        else
+            device = device_mapping.at(parts[2]);
+
+        key = parts[3];
     }
 
     bool operator==(const InputDeviceMapping& rhs) const {
@@ -111,20 +119,23 @@ struct InputDeviceMapping {
 
     std::string ToString() const {
         std::string result;
-        if (framework == DeviceFramework::SDL)
-            result = "SDL";
+        result = (std::find_if(device_framework_mapping.begin(), device_framework_mapping.end(),
+                               [&](std::pair<std::string, DeviceFramework> x) {
+                                   return x.second == framework;
+                               }))
+                     ->first;
 
         result += "/";
-        result += std::to_string(this->number);
+        result += std::to_string(number);
         result += "/";
 
-        if (device == Device::Keyboard)
-            result += "Keyboard";
-        else if (device == Device::Gamepad)
-            result += "Gamepad";
+        result +=
+            (std::find_if(device_mapping.begin(), device_mapping.end(),
+                          [&](std::pair<std::string, Device> x) { return x.second == device; }))
+                ->first;
 
         result += "/";
-        result += std::to_string(key);
+        result += key;
         return result;
     }
 };

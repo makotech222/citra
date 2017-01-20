@@ -30,13 +30,17 @@ class Keyboard : public InputDeviceInterface {
 public:
     Keyboard();
     ~Keyboard();
-    bool InitDevice(int number, Settings::InputDeviceMapping device_mapping) override;
+    bool InitDevice(int number) override;
     std::map<Settings::InputDeviceMapping, float> ProcessInput() override;
     bool CloseDevice() override;
     void KeyPressed(KeyboardKey key);
     void KeyReleased(KeyboardKey key);
     void Clear() override;
-    Settings::InputDeviceMapping GetInput() override;
+
+protected:
+    std::string GetInputDeviceMapping() override {
+        return "SDL/0/Keyboard/";
+    }
 
 private:
     std::map<KeyboardKey, bool> keys_pressed;

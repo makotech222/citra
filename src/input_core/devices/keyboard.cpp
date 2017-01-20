@@ -10,8 +10,7 @@ Keyboard::Keyboard() = default;
 
 Keyboard::~Keyboard() = default;
 
-bool Keyboard::InitDevice(int number, Settings::InputDeviceMapping device_mapping) {
-    input_device_mapping = device_mapping;
+bool Keyboard::InitDevice(int number) {
     return true;
 }
 
@@ -23,7 +22,8 @@ std::map<Settings::InputDeviceMapping, float> Keyboard::ProcessInput() {
     }
     std::map<Settings::InputDeviceMapping, float> button_status;
     for (const auto& key : keys_pressed_copy) {
-        input_device_mapping.key = key.first.key;
+        auto input_device_mapping =
+            Settings::InputDeviceMapping(GetInputDeviceMapping() + std::to_string(key.first.key));
         button_status.emplace(input_device_mapping, key.second ? 1.0 : 0.0);
     }
     return button_status;
@@ -46,13 +46,4 @@ void Keyboard::KeyReleased(KeyboardKey key) {
 void Keyboard::Clear() {
     std::lock_guard<std::mutex> lock(m);
     keys_pressed.clear();
-}
-
-Settings::InputDeviceMapping Keyboard::GetInput() {
-    auto result = ProcessInput();
-    for (const auto& entry : result) {
-        if (entry.second > 0.0)
-            return entry.first;
-    }
-    return Settings::InputDeviceMapping("");
 }

@@ -12,7 +12,7 @@
 
 class EmuWindow;
 class ARM_Interface;
-
+class InputCore;
 namespace Loader {
 class AppLoader;
 }
@@ -91,6 +91,8 @@ public:
         return *cpu_core;
     }
 
+    std::shared_ptr<InputCore> GetInputCore();
+
 private:
     /**
      * Initialize the emulated system.
@@ -113,6 +115,8 @@ private:
     bool reschedule_pending{};
 
     static System s_instance;
+
+    std::shared_ptr<InputCore> input_core;
 };
 
 static ARM_Interface& CPU() {

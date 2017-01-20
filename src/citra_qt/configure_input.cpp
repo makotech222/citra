@@ -7,6 +7,7 @@
 #include "citra_qt/configure_input.h"
 #include "citra_qt/keybinding_names.h"
 #include "common/string_util.h"
+#include "core/core.h"
 #include "input_core/devices/keyboard.h"
 #include "input_core/input_core.h"
 
@@ -65,7 +66,7 @@ void ConfigureInput::handleClick(QPushButton* sender) {
     grabMouse();
     changing_button = sender;
     auto update = []() { QCoreApplication::processEvents(); };
-    auto input_device = InputCore::DetectInput(5000, update);
+    auto input_device = Core::System::GetInstance().GetInputCore()->DetectInput(5000, update);
 
     setKey(input_device);
 }
@@ -76,7 +77,7 @@ void ConfigureInput::keyPressEvent(QKeyEvent* event) {
     if (!event || event->key() == Qt::Key_unknown)
         return;
 
-    auto keyboard = InputCore::GetKeyboard();
+    auto keyboard = Core::System::GetInstance().GetInputCore()->GetKeyboard();
     KeyboardKey param =
         KeyboardKey(event->key(), QKeySequence(event->key()).toString().toStdString());
     keyboard->KeyPressed(param);
@@ -100,7 +101,7 @@ void ConfigureInput::loadConfiguration() {
 }
 
 void ConfigureInput::setKey(Settings::InputDeviceMapping key_pressed) {
-    if (key_pressed.key == -1 || key_pressed.key == Qt::Key_Escape) {
+    if (key_pressed.key.empty() || key_pressed.key == std::to_string(Qt::Key_Escape)) {
     } else {
         key_map[changing_button] = key_pressed;
         removeDuplicates(key_pressed);
@@ -113,26 +114,23 @@ void ConfigureInput::setKey(Settings::InputDeviceMapping key_pressed) {
 }
 
 QString ConfigureInput::getKeyName(Settings::InputDeviceMapping mapping) {
-    if (mapping.key == -1)
+    if (mapping.key.empty())
         return "";
     if (mapping.device == Settings::Device::Gamepad) {
-        if (KeyBindingNames::sdl_gamepad_names.size() > mapping.key && mapping.key >= 0)
-            return KeyBindingNames::sdl_gamepad_names[mapping.key];
-        else
-            return "";
+        return QString::fromStdString(mapping.key);
     }
-    if (mapping.key == Qt::Key_Shift)
+    if (mapping.key == std::to_string(Qt::Key_Shift))
         return tr("Shift");
-    if (mapping.key == Qt::Key_Control)
+    if (mapping.key == std::to_string(Qt::Key_Control))
         return tr("Ctrl");
-    if (mapping.key == Qt::Key_Alt)
+    if (mapping.key == std::to_string(Qt::Key_Alt))
         return tr("Alt");
-    if (mapping.key == Qt::Key_Meta)
+    if (mapping.key == std::to_string(Qt::Key_Meta))
         return "";
-    if (mapping.key < 0)
+    if (mapping.key == "-1")
         return "";
 
-    return QKeySequence(mapping.key).toString();
+    return QKeySequence(stoi(mapping.key)).toString();
 }
 
 void ConfigureInput::removeDuplicates(const Settings::InputDeviceMapping new_value) {
@@ -148,13 +146,13 @@ void ConfigureInput::removeDuplicates(const Settings::InputDeviceMapping new_val
 void ConfigureInput::restoreDefaults() {
     for (int i = 0; i < Settings::NativeInput::NUM_INPUTS; ++i) {
         Settings::InputDeviceMapping mapping =
-            Settings::InputDeviceMapping(Config::defaults[i].toInt());
+            Settings::InputDeviceMapping(Config::defaults[i].toString().toStdString());
         key_map[button_map[Settings::NativeInput::Values(i)]] = mapping;
         const QString keyValue =
-            getKeyName(Settings::InputDeviceMapping(Config::defaults[i].toInt()));
+            getKeyName(Settings::InputDeviceMapping(Config::defaults[i].toString().toStdString()));
     }
     key_map[ui->buttonCircleMod] =
-        Settings::InputDeviceMapping(Config::default_circle_pad_modifier.toInt());
+        Settings::InputDeviceMapping(Config::default_circle_pad_modifier.toString().toStdString());
     updateButtonLabels();
 }
 

@@ -3,11 +3,11 @@
 // Refer to the license.txt file included.
 
 #include "audio_core/audio_core.h"
+#include "core/core.h"
+#include "core/frontend/emu_window.h"
 #include "core/gdbstub/gdbstub.h"
 #include "input_core/input_core.h"
 #include "video_core/video_core.h"
-
-#include "core/frontend/emu_window.h"
 
 namespace Settings {
 
@@ -30,7 +30,7 @@ void Apply() {
     AudioCore::SelectSink(values.sink_id);
     AudioCore::EnableStretching(values.enable_audio_stretching);
 
-    InputCore::ReloadSettings();
+    Core::System::GetInstance().GetInputCore()->ReloadSettings();
 }
 
 } // namespace
