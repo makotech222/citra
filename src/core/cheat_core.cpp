@@ -238,11 +238,16 @@ void GatewayCheat::Execute() {
                                          // half[XXXXXXX])
             if (line.address == 0)
                 line.address = offset;
-            val = Memory::Read16(line.address);
-            if (line.value > val) {
+            int x = line.address & 0x0FFFFFFF;
+            int y = line.value & 0xFFFF;
+            int z = line.value >> 16;
+            val = Memory::Read16(x);
+            if (y > (u16)((~z) & val))
+            {
                 if (if_flag > 0)
                     if_flag--;
-            } else {
+            }
+            else {
                 if_flag++;
             }
             break;
@@ -251,11 +256,16 @@ void GatewayCheat::Execute() {
                                       // half[XXXXXXX])
             if (line.address == 0)
                 line.address = offset;
-            val = Memory::Read16(line.address);
-            if (static_cast<u16>(line.value) < val) {
+            int x = line.address & 0x0FFFFFFF;
+            int y = line.value & 0xFFFF;
+            int z = line.value >> 16;
+            val = Memory::Read16(x);
+            if (y < (u16)((~z) & val))
+            {
                 if (if_flag > 0)
                     if_flag--;
-            } else {
+            }
+            else {
                 if_flag++;
             }
             break;
@@ -263,11 +273,16 @@ void GatewayCheat::Execute() {
         case CheatType::EqualTo16: { // 9XXXXXXX ZZZZYYYY   IF YYYY = ((not ZZZZ) AND half[XXXXXXX])
             if (line.address == 0)
                 line.address = offset;
-            val = Memory::Read16(line.address);
-            if (static_cast<u16>(line.value) == (!static_cast<u16>(line.value >> 16) & val)) {
+            int x = line.address & 0x0FFFFFFF;
+            int y = line.value & 0xFFFF;
+            int z = line.value >> 16;
+            val = Memory::Read16(x);
+            if (y == (u16)((~z) & val))
+            {
                 if (if_flag > 0)
                     if_flag--;
-            } else {
+            }
+            else {
                 if_flag++;
             }
             break;
@@ -276,11 +291,16 @@ void GatewayCheat::Execute() {
                                         // half[XXXXXXX])
             if (line.address == 0)
                 line.address = offset;
-            val = Memory::Read16(line.address);
-            if (static_cast<u16>(line.value) != val) {
+            int x = line.address & 0x0FFFFFFF;
+            int y = line.value & 0xFFFF;
+            int z = line.value >> 16;
+            val = Memory::Read16(x);
+            if (y != (u16)((~z) & val))
+            {
                 if (if_flag > 0)
                     if_flag--;
-            } else {
+            }
+            else {
                 if_flag++;
             }
             break;
