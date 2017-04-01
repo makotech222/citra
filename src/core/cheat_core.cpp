@@ -8,6 +8,7 @@
 #include "core/cheat_core.h"
 #include "core/hle/kernel/process.h"
 #include "core/memory.h"
+#include "core/hle/service/hid/hid.h"
 
 namespace CheatCore {
 constexpr u64 frame_ticks = 268123480ull / 60;
@@ -390,9 +391,15 @@ void GatewayCheat::Execute() {
             break;
         }
         case CheatType::Joker: {
-            bool pressed = false; // TODO replace after input overhaul
-            if (!pressed)
+            auto state = Service::HID::GetInputsThisFrame();
+            auto result = (state.hex & line.value) == line.value;
+            if (result) {
+                if (if_flag > 0)
+                    if_flag--;
+            }
+            else {
                 if_flag++;
+            }
             break;
         }
         case CheatType::Patch: {
