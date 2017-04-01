@@ -617,7 +617,6 @@ void GMainWindow::OnConfigure() {
     auto result = configureDialog.exec();
     if (result == QDialog::Accepted) {
         configureDialog.applyConfiguration();
-        render_window->ReloadSetKeymaps();
         config->Save();
     }
 }
