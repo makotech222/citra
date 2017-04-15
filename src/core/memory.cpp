@@ -171,7 +171,7 @@ template <typename T>
 T ReadMMIO(MMIORegionPointer mmio_handler, VAddr addr);
 
 template <typename T>
-T Read(const VAddr vaddr) {
+T Memory::Read(const VAddr vaddr) {
     const u8* page_pointer = current_page_table->pointers[vaddr >> PAGE_BITS];
     if (page_pointer) {
         // NOTE: Avoid adding any extra logic to this fast-path block
@@ -383,6 +383,28 @@ u32 Read32(const VAddr addr) {
 
 u64 Read64(const VAddr addr) {
     return Read<u64_le>(addr);
+}
+
+float ReadFloat(VAddr vaddr)
+{
+    const u8* page_pointer = current_page_table->pointers[vaddr >> PAGE_BITS];
+    if (page_pointer) {
+        float value;
+        std::memcpy(&value, &page_pointer[vaddr & PAGE_MASK], sizeof(float));
+        return value;
+    }
+    return 0;
+}
+
+double ReadDouble(VAddr vaddr)
+{
+    const u8* page_pointer = current_page_table->pointers[vaddr >> PAGE_BITS];
+    if (page_pointer) {
+        double value;
+        std::memcpy(&value, &page_pointer[vaddr & PAGE_MASK], sizeof(double));
+        return value;
+    }
+    return 0;
 }
 
 void ReadBlock(const VAddr src_addr, void* dest_buffer, const size_t size) {

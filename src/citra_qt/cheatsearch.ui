@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>904</width>
+    <width>773</width>
     <height>876</height>
    </rect>
   </property>
@@ -17,7 +17,7 @@
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>20</y>
+     <y>70</y>
      <width>351</width>
      <height>501</height>
     </rect>
@@ -29,10 +29,13 @@
     <bool>true</bool>
    </attribute>
    <attribute name="horizontalHeaderDefaultSectionSize">
-    <number>175</number>
+    <number>150</number>
    </attribute>
    <attribute name="horizontalHeaderStretchLastSection">
     <bool>true</bool>
+   </attribute>
+   <attribute name="verticalHeaderVisible">
+    <bool>false</bool>
    </attribute>
    <column>
     <property name="text">
@@ -48,18 +51,18 @@
   <widget class="QLineEdit" name="txtSearch">
    <property name="geometry">
     <rect>
-     <x>430</x>
+     <x>450</x>
      <y>80</y>
-     <width>301</width>
+     <width>101</width>
      <height>31</height>
     </rect>
    </property>
   </widget>
-  <widget class="QComboBox" name="cbTypes">
+  <widget class="QComboBox" name="cbValueType">
    <property name="geometry">
     <rect>
-     <x>430</x>
-     <y>120</y>
+     <x>450</x>
+     <y>180</y>
      <width>161</width>
      <height>31</height>
     </rect>
@@ -93,7 +96,7 @@
   <widget class="QPushButton" name="btnFirstScan">
    <property name="geometry">
     <rect>
-     <x>430</x>
+     <x>450</x>
      <y>40</y>
      <width>93</width>
      <height>31</height>
@@ -106,7 +109,7 @@
   <widget class="QPushButton" name="btnNextScan">
    <property name="geometry">
     <rect>
-     <x>540</x>
+     <x>560</x>
      <y>40</y>
      <width>93</width>
      <height>31</height>
@@ -114,6 +117,124 @@
    </property>
    <property name="text">
     <string>Next Scan</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="lblCount">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>50</y>
+     <width>241</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Count: 0</string>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="chkHex">
+   <property name="geometry">
+    <rect>
+     <x>390</x>
+     <y>90</y>
+     <width>51</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Hex</string>
+   </property>
+  </widget>
+  <widget class="QCheckBox" name="chkNot">
+   <property name="geometry">
+    <rect>
+     <x>700</x>
+     <y>90</y>
+     <width>51</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>NOT</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>380</x>
+     <y>190</y>
+     <width>71</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Value Type</string>
+   </property>
+  </widget>
+  <widget class="QComboBox" name="cbScanType">
+   <property name="geometry">
+    <rect>
+     <x>450</x>
+     <y>140</y>
+     <width>161</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <item>
+    <property name="text">
+     <string>Exact</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Bigger Than</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Smaller Than</string>
+    </property>
+   </item>
+   <item>
+    <property name="text">
+     <string>Value Between</string>
+    </property>
+   </item>
+  </widget>
+  <widget class="QLabel" name="label_2">
+   <property name="geometry">
+    <rect>
+     <x>380</x>
+     <y>150</y>
+     <width>71</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Scan Type</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="txtSearchTo">
+   <property name="geometry">
+    <rect>
+     <x>580</x>
+     <y>80</y>
+     <width>101</width>
+     <height>31</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLabel" name="lblTo">
+   <property name="geometry">
+    <rect>
+     <x>560</x>
+     <y>90</y>
+     <width>16</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>To</string>
    </property>
   </widget>
  </widget>
