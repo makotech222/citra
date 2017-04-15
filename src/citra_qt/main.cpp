@@ -633,8 +633,11 @@ void GMainWindow::OnSwapScreens() {
 }
 
 void GMainWindow::OnCheats() {
-    CheatDialog cheat_dialog(this);
-    cheat_dialog.exec();
+    if (cheatWindow == nullptr)
+    {
+        cheatWindow = std::make_shared<CheatDialog>(this);
+    }
+    cheatWindow->show();
 }
 
 void GMainWindow::OnCheatsSearch() {

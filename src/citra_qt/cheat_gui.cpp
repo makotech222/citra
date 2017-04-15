@@ -10,8 +10,10 @@
 CheatDialog::CheatDialog(QWidget* parent)
     : QDialog(parent), ui(std::make_unique<Ui::CheatDialog>()) {
     // Setup gui control settings
+    setWindowFlags(windowFlags() | Qt::WindowMinimizeButtonHint);
+    setSizeGripEnabled(false);
     ui->setupUi(this);
-    setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint);
+    setFixedSize(size());
     ui->tableCheats->setEditTriggers(QAbstractItemView::NoEditTriggers);
     ui->tableCheats->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui->tableCheats->setColumnWidth(0, 30);

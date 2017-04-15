@@ -17,7 +17,9 @@ CheatSearch::CheatSearch(QWidget *parent) :
     ui(new Ui::CheatSearch)
 {
     setWindowFlags(windowFlags() | Qt::WindowMinimizeButtonHint);
+    setSizeGripEnabled(false);
     ui->setupUi(this);
+    setFixedSize(size());
     ui->btnNextScan->setEnabled(false);
     ui->lblTo->setVisible(false);
     ui->txtSearchTo->setVisible(false);
