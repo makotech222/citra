@@ -10,8 +10,10 @@
 CheatDialog::CheatDialog(QWidget* parent)
     : QDialog(parent), ui(std::make_unique<Ui::CheatDialog>()) {
     // Setup gui control settings
+    setWindowFlags(windowFlags() | Qt::WindowMinimizeButtonHint);
+    setSizeGripEnabled(false);
     ui->setupUi(this);
-    setWindowFlags(Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint);
+    setFixedSize(size());
     ui->tableCheats->setEditTriggers(QAbstractItemView::NoEditTriggers);
     ui->tableCheats->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui->tableCheats->setColumnWidth(0, 30);
@@ -55,6 +57,7 @@ void CheatDialog::LoadCheats() {
             i, 2, new QTableWidgetItem(QString::fromStdString(cheats[i]->GetType())));
         enabled->setProperty("row", static_cast<int>(i));
 
+        ui->tableCheats->setRowHeight(i, 23);
         connect(enabled, &QCheckBox::stateChanged, this, &CheatDialog::OnCheckChanged);
     }
 }
@@ -161,11 +164,13 @@ void CheatDialog::OnAddCheat() {
                                                      cheats[new_cheat_index]->GetName())));
     ui->tableCheats->setItem(new_cheat_index, 2, new QTableWidgetItem(QString::fromStdString(
                                                      cheats[new_cheat_index]->GetType())));
+    ui->tableCheats->setRowHeight(new_cheat_index, 23);
     enabled->setProperty("row", new_cheat_index);
     connect(enabled, &QCheckBox::stateChanged, this, &CheatDialog::OnCheckChanged);
     ui->tableCheats->selectRow(new_cheat_index);
     OnRowSelected(new_cheat_index, 0);
 }
+
 NewCheatDialog::NewCheatDialog(QWidget* parent) : QDialog(parent) {
     resize(250, 150);
     setSizeGripEnabled(false);
@@ -202,4 +207,5 @@ NewCheatDialog::NewCheatDialog(QWidget* parent) : QDialog(parent) {
     mainLayout->addLayout(typePanel);
     mainLayout->addLayout(confirmationPanel);
 }
+
 NewCheatDialog::~NewCheatDialog() {}

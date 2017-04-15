@@ -123,6 +123,7 @@ private slots:
     void OnSwapScreens();
     void OnConfigure();
     void OnCheats();
+    void OnCheatsSearch();
     void OnDisplayTitleBars(bool);
     void ToggleWindowMode();
     void OnCreateGraphicsSurfaceViewer();
@@ -159,6 +160,8 @@ private:
     GraphicsVertexShaderWidget* graphicsVertexShaderWidget;
     GraphicsTracingWidget* graphicsTracingWidget;
     WaitTreeWidget* waitTreeWidget;
+    std::shared_ptr<CheatDialog> cheatWindow;
+    std::shared_ptr<CheatSearch> cheatSearchWindow;
 
     QAction* actions_recent_files[max_recent_files_item];
 
