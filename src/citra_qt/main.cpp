@@ -650,14 +650,6 @@ void GMainWindow::OnCheatsSearch() {
     cheatSearchWindow->show();
 }
 
-void GMainWindow::OnCheatsSearch() {
-    if (cheatSearchWindow == nullptr)
-    {
-        cheatSearchWindow = std::make_shared<CheatSearch>(this);
-    }
-    cheatSearchWindow->show();
-}
-
 void GMainWindow::OnCreateGraphicsSurfaceViewer() {
     auto graphicsSurfaceViewerWidget = new GraphicsSurfaceWidget(Pica::g_debug_context, this);
     addDockWidget(Qt::RightDockWidgetArea, graphicsSurfaceViewerWidget);
