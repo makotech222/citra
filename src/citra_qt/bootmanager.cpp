@@ -15,6 +15,7 @@
 #include "core/3ds.h"
 #include "core/core.h"
 #include "core/settings.h"
+#include "core/perf_stats.h"
 #include "input_common/keyboard.h"
 #include "input_common/main.h"
 
@@ -205,6 +206,12 @@ void GRenderWindow::closeEvent(QCloseEvent* event) {
 
 void GRenderWindow::keyPressEvent(QKeyEvent* event) {
     InputCommon::GetKeyboard()->PressKey(event->key());
+    if (event->key() == Qt::Key_Plus) {
+        Core::FrameLimiter::ChangeFrameLimit(true);
+    }
+    if (event->key() == Qt::Key_Minus) {
+        Core::FrameLimiter::ChangeFrameLimit(false);
+    }
 }
 
 void GRenderWindow::keyReleaseEvent(QKeyEvent* event) {
