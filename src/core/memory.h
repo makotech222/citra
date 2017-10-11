@@ -195,10 +195,14 @@ bool IsValidVirtualAddress(const VAddr addr);
 
 bool IsValidPhysicalAddress(const PAddr addr);
 
+template <typename T>
+T Read(const VAddr vaddr);
 u8 Read8(VAddr addr);
 u16 Read16(VAddr addr);
 u32 Read32(VAddr addr);
 u64 Read64(VAddr addr);
+float ReadFloat(VAddr addr);
+double ReadDouble(VAddr addr);
 
 void Write8(VAddr addr, u8 data);
 void Write16(VAddr addr, u16 data);
