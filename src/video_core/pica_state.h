@@ -145,8 +145,8 @@ struct State {
 
     // the geometry shader needs to be kept in the global state because some shaders relie on
     // preserved register value across shader invocation.
-    // TODO: also bring the three vertex shader units here and implement the shader scheduler.
     Shader::GSUnitState gs_unit;
+    Shader::UnitState vs_unit[3];
 
     GeometryPipeline geometry_pipeline;
 
