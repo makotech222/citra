@@ -73,6 +73,8 @@
     <addaction name="action_Stop"/>
     <addaction name="separator"/>
     <addaction name="action_Configure"/>
+    <addaction name="action_Cheats"/>
+     <addaction name="action_CheatSearch"/>
    </widget>
    <widget class="QMenu" name="menu_View">
     <property name="title">
@@ -159,7 +161,17 @@
     <string>Configure...</string>
    </property>
   </action>
-  <action name="action_Display_Dock_Widget_Headers">
+   <action name="action_Cheats">
+     <property name="text">
+       <string>Cheats ...</string>
+     </property>
+   </action>
+   <action name="action_CheatSearch">
+     <property name="text">
+       <string>Cheat Search ...</string>
+     </property>
+   </action>
+   <action name="action_Display_Dock_Widget_Headers">
    <property name="checkable">
     <bool>true</bool>
    </property>
