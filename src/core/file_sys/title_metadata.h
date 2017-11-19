@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <array>
 #include <string>
 #include <vector>
 #include "common/common_types.h"
@@ -34,6 +35,8 @@ enum TMDContentTypeFlag : u16 {
     Optional = 1 << 14,
     Shared = 1 << 15
 };
+
+enum TMDContentIndex { Main = 0, Manual = 1, DLP = 2 };
 
 /**
  * Helper which implements an interface to read and write Title Metadata (TMD) files.
@@ -90,9 +93,9 @@ public:
 
 #pragma pack(pop)
 
-    explicit TitleMetadata(std::string& path) : filepath(std::move(path)) {}
-    Loader::ResultStatus Load();
-    Loader::ResultStatus Save();
+    Loader::ResultStatus Load(const std::string& file_path);
+    Loader::ResultStatus Load(const std::vector<u8> file_data, size_t offset = 0);
+    Loader::ResultStatus Save(const std::string& file_path);
 
     u64 GetTitleID() const;
     u32 GetTitleType() const;
@@ -102,6 +105,9 @@ public:
     u32 GetBootContentID() const;
     u32 GetManualContentID() const;
     u32 GetDLPContentID() const;
+    u32 GetContentIDByIndex(u16 index) const;
+    u16 GetContentTypeByIndex(u16 index) const;
+    u64 GetContentSizeByIndex(u16 index) const;
 
     void SetTitleID(u64 title_id);
     void SetTitleType(u32 type);
@@ -112,14 +118,10 @@ public:
     void Print() const;
 
 private:
-    enum TMDContentIndex { Main = 0, Manual = 1, DLP = 2 };
-
     Body tmd_body;
     u32_be signature_type;
     std::vector<u8> tmd_signature;
     std::vector<ContentChunk> tmd_chunks;
-
-    std::string filepath;
 };
 
 } // namespace FileSys

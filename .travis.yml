@@ -2,6 +2,14 @@ language: cpp
 matrix:
   include:
     - os: linux
+      env: NAME="clang-format"
+      dist: trusty
+      addons:
+        apt:
+          packages:
+            - clang-format-3.9
+      script: "./.travis/clang-format/script.sh"
+    - os: linux
       env: NAME="linux build"
       sudo: required
       dist: trusty
@@ -21,13 +29,11 @@ matrix:
       script: "./.travis/macos/build.sh"
       after_success: "./.travis/macos/upload.sh"
     - os: linux
-      env: NAME="clang-format"
+      env: NAME="linux build (frozen versions of dependencies)"
+      sudo: required
       dist: trusty
-      addons:
-        apt:
-          packages:
-            - clang-format-3.9
-      script: "./.travis/clang-format/script.sh"
+      services: docker
+      script: "./.travis/linux-frozen/build.sh"
 
 deploy:
   provider: releases
@@ -38,3 +44,8 @@ deploy:
   skip_cleanup: true
   on:
     tags: true
+
+notifications:
+  webhooks:
+    urls:
+      - https://api.citra-emu.org/code/travis/notify

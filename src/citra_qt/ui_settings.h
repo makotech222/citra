@@ -31,12 +31,17 @@ struct Values {
     bool microprofile_visible;
 
     bool single_window_mode;
+    bool fullscreen;
     bool display_titlebar;
     bool show_filter_bar;
     bool show_status_bar;
 
     bool confirm_before_closing;
     bool first_start;
+
+    bool updater_found;
+    bool update_on_close;
+    bool check_for_update_on_start;
 
     QString roms_path;
     QString symbols_path;
@@ -53,4 +58,5 @@ struct Values {
 };
 
 extern Values values;
-}
+
+} // namespace UISettings

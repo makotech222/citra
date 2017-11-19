@@ -29,8 +29,6 @@
 #define ENOSR 124
 #define ENOSTR 125
 #define ETIME 137
-#define EIDRM 2001
-#define ENOLINK 2002
 #endif // _MSC_VER
 #else
 #include <cerrno>
@@ -781,11 +779,7 @@ static void Connect(Interface* self) {
 }
 
 static void InitializeSockets(Interface* self) {
-// TODO(Subv): Implement
-#ifdef _WIN32
-    WSADATA data;
-    WSAStartup(MAKEWORD(2, 2), &data);
-#endif
+    // TODO(Subv): Implement
 
     u32* cmd_buffer = Kernel::GetCommandBuffer();
     cmd_buffer[0] = IPC::MakeHeader(1, 1, 0);
@@ -795,10 +789,6 @@ static void InitializeSockets(Interface* self) {
 static void ShutdownSockets(Interface* self) {
     // TODO(Subv): Implement
     CleanupSockets();
-
-#ifdef _WIN32
-    WSACleanup();
-#endif
 
     u32* cmd_buffer = Kernel::GetCommandBuffer();
     cmd_buffer[1] = 0;
@@ -906,6 +896,11 @@ const Interface::FunctionInfo FunctionTable[] = {
 
 SOC_U::SOC_U() {
     Register(FunctionTable);
+
+#ifdef _WIN32
+    WSADATA data;
+    WSAStartup(MAKEWORD(2, 2), &data);
+#endif
 }
 
 SOC_U::~SOC_U() {

@@ -47,8 +47,13 @@ bool ServerSession::ShouldWait(Thread* thread) const {
 
 void ServerSession::Acquire(Thread* thread) {
     ASSERT_MSG(!ShouldWait(thread), "object unavailable!");
+
+    // If the client endpoint was closed, don't do anything. This ServerSession is now useless and
+    // will linger until its last handle is closed by the running application.
+    if (parent->client == nullptr)
+        return;
+
     // We are now handling a request, pop it from the stack.
-    // TODO(Subv): What happens if the client endpoint is closed before any requests are made?
     ASSERT(!pending_requesting_threads.empty());
     currently_handling = pending_requesting_threads.back();
     pending_requesting_threads.pop_back();
@@ -61,13 +66,11 @@ ResultCode ServerSession::HandleSyncRequest(SharedPtr<Thread> thread) {
 
     // If this ServerSession has an associated HLE handler, forward the request to it.
     if (hle_handler != nullptr) {
-        // Attempt to translate the incoming request's command buffer.
-        ResultCode result = TranslateHLERequest(this);
-        if (result.IsError())
-            return result;
         hle_handler->HandleSyncRequest(SharedPtr<ServerSession>(this));
-        // TODO(Subv): Translate the response command buffer.
     } else {
+        // Put the thread to sleep until the server replies, it will be awoken in
+        // svcReplyAndReceive.
+        thread->status = THREADSTATUS_WAIT_IPC;
         // Add the thread to the list of threads that have issued a sync request with this
         // server.
         pending_requesting_threads.push_back(std::move(thread));
@@ -96,8 +99,4 @@ ServerSession::SessionPair ServerSession::CreateSessionPair(const std::string& n
     return std::make_tuple(std::move(server_session), std::move(client_session));
 }
 
-ResultCode TranslateHLERequest(ServerSession* server_session) {
-    // TODO(Subv): Implement this function once multiple concurrent processes are supported.
-    return RESULT_SUCCESS;
-}
 } // namespace Kernel

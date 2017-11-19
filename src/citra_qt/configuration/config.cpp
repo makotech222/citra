@@ -157,6 +157,12 @@ void Config::ReadValues() {
     qt_config->beginGroup("UI");
     UISettings::values.theme = qt_config->value("theme", UISettings::themes[0].second).toString();
 
+    qt_config->beginGroup("Updater");
+    UISettings::values.check_for_update_on_start =
+        qt_config->value("check_for_update_on_start", true).toBool();
+    UISettings::values.update_on_close = qt_config->value("update_on_close", false).toBool();
+    qt_config->endGroup();
+
     qt_config->beginGroup("UILayout");
     UISettings::values.geometry = qt_config->value("geometry").toByteArray();
     UISettings::values.state = qt_config->value("state").toByteArray();
@@ -198,6 +204,7 @@ void Config::ReadValues() {
     qt_config->endGroup();
 
     UISettings::values.single_window_mode = qt_config->value("singleWindowMode", true).toBool();
+    UISettings::values.fullscreen = qt_config->value("fullscreen", false).toBool();
     UISettings::values.display_titlebar = qt_config->value("displayTitleBars", true).toBool();
     UISettings::values.show_filter_bar = qt_config->value("showFilterBar", true).toBool();
     UISettings::values.show_status_bar = qt_config->value("showStatusBar", true).toBool();
@@ -306,6 +313,11 @@ void Config::SaveValues() {
     qt_config->beginGroup("UI");
     qt_config->setValue("theme", UISettings::values.theme);
 
+    qt_config->beginGroup("Updater");
+    qt_config->setValue("check_for_update_on_start", UISettings::values.check_for_update_on_start);
+    qt_config->setValue("update_on_close", UISettings::values.update_on_close);
+    qt_config->endGroup();
+
     qt_config->beginGroup("UILayout");
     qt_config->setValue("geometry", UISettings::values.geometry);
     qt_config->setValue("state", UISettings::values.state);
@@ -331,6 +343,7 @@ void Config::SaveValues() {
     qt_config->endGroup();
 
     qt_config->setValue("singleWindowMode", UISettings::values.single_window_mode);
+    qt_config->setValue("fullscreen", UISettings::values.fullscreen);
     qt_config->setValue("displayTitleBars", UISettings::values.display_titlebar);
     qt_config->setValue("showFilterBar", UISettings::values.show_filter_bar);
     qt_config->setValue("showStatusBar", UISettings::values.show_status_bar);

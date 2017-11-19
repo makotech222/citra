@@ -67,16 +67,6 @@ Thread* GetCurrentThread() {
     return current_thread.get();
 }
 
-/**
- * Check if the specified thread is waiting on the specified address to be arbitrated
- * @param thread The thread to test
- * @param wait_address The address to test against
- * @return True if the thread is waiting, false otherwise
- */
-static bool CheckWait_AddressArbiter(const Thread* thread, VAddr wait_address) {
-    return thread->status == THREADSTATUS_WAIT_ARB && wait_address == thread->wait_address;
-}
-
 void Thread::Stop() {
     // Cancel any outstanding wakeup events for this thread
     CoreTiming::UnscheduleEvent(ThreadWakeupEventType, callback_handle);
@@ -107,40 +97,6 @@ void Thread::Stop() {
     u32 tls_slot =
         ((tls_address - Memory::TLS_AREA_VADDR) % Memory::PAGE_SIZE) / Memory::TLS_ENTRY_SIZE;
     Kernel::g_current_process->tls_slots[tls_page].reset(tls_slot);
-}
-
-Thread* ArbitrateHighestPriorityThread(u32 address) {
-    Thread* highest_priority_thread = nullptr;
-    u32 priority = THREADPRIO_LOWEST;
-
-    // Iterate through threads, find highest priority thread that is waiting to be arbitrated...
-    for (auto& thread : thread_list) {
-        if (!CheckWait_AddressArbiter(thread.get(), address))
-            continue;
-
-        if (thread == nullptr)
-            continue;
-
-        if (thread->current_priority <= priority) {
-            highest_priority_thread = thread.get();
-            priority = thread->current_priority;
-        }
-    }
-
-    // If a thread was arbitrated, resume it
-    if (nullptr != highest_priority_thread) {
-        highest_priority_thread->ResumeFromWait();
-    }
-
-    return highest_priority_thread;
-}
-
-void ArbitrateAllThreads(u32 address) {
-    // Resume all threads found to be waiting on the address
-    for (auto& thread : thread_list) {
-        if (CheckWait_AddressArbiter(thread.get(), address))
-            thread->ResumeFromWait();
-    }
 }
 
 /**
@@ -220,12 +176,6 @@ void WaitCurrentThread_Sleep() {
     thread->status = THREADSTATUS_WAIT_SLEEP;
 }
 
-void WaitCurrentThread_ArbitrateAddress(VAddr wait_address) {
-    Thread* thread = GetCurrentThread();
-    thread->wait_address = wait_address;
-    thread->status = THREADSTATUS_WAIT_ARB;
-}
-
 void ExitCurrentThread() {
     Thread* thread = GetCurrentThread();
     thread->Stop();
@@ -278,6 +228,7 @@ void Thread::ResumeFromWait() {
     case THREADSTATUS_WAIT_SYNCH_ANY:
     case THREADSTATUS_WAIT_ARB:
     case THREADSTATUS_WAIT_SLEEP:
+    case THREADSTATUS_WAIT_IPC:
         break;
 
     case THREADSTATUS_READY:
@@ -496,8 +447,9 @@ void Thread::BoostPriority(u32 priority) {
 
 SharedPtr<Thread> SetupMainThread(u32 entry_point, u32 priority, SharedPtr<Process> owner_process) {
     // Initialize new "main" thread
-    auto thread_res = Thread::Create("main", entry_point, priority, 0, THREADPROCESSORID_0,
-                                     Memory::HEAP_VADDR_END, owner_process);
+    auto thread_res =
+        Thread::Create("main", entry_point, priority, 0, owner_process->ideal_processor,
+                       Memory::HEAP_VADDR_END, owner_process);
 
     SharedPtr<Thread> thread = std::move(thread_res).Unwrap();
 
@@ -570,4 +522,4 @@ const std::vector<SharedPtr<Thread>>& GetThreadList() {
     return thread_list;
 }
 
-} // namespace
+} // namespace Kernel

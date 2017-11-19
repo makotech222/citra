@@ -13,6 +13,7 @@
 #include <QMessageBox>
 #include <QtGui>
 #include <QtWidgets>
+#include "citra_qt/aboutdialog.h"
 #include "citra_qt/bootmanager.h"
 #include "citra_qt/configuration/config.h"
 #include "citra_qt/configuration/configure_dialog.h"
@@ -29,6 +30,7 @@
 #include "citra_qt/hotkeys.h"
 #include "citra_qt/main.h"
 #include "citra_qt/ui_settings.h"
+#include "citra_qt/updater/updater.h"
 #include "common/logging/backend.h"
 #include "common/logging/filter.h"
 #include "common/logging/log.h"
@@ -99,6 +101,7 @@ GMainWindow::GMainWindow() : config(new Config()), emu_thread(nullptr) {
     InitializeDebugWidgets();
     InitializeRecentFileMenuActions();
     InitializeHotkeys();
+    ShowUpdaterWidgets();
 
     SetDefaultUIGeometry();
     RestoreUIState();
@@ -116,6 +119,10 @@ GMainWindow::GMainWindow() : config(new Config()), emu_thread(nullptr) {
 
     // Show one-time "callout" messages to the user
     ShowCallouts();
+
+    if (UISettings::values.check_for_update_on_start) {
+        CheckForUpdates();
+    }
 
     QStringList args = QApplication::arguments();
     if (args.length() >= 2) {
@@ -137,6 +144,10 @@ void GMainWindow::InitializeWidgets() {
 
     game_list = new GameList(this);
     ui.horizontalLayout->addWidget(game_list);
+
+    // Setup updater
+    updater = new Updater(this);
+    UISettings::values.updater_found = updater->HasUpdater();
 
     // Create status bar
     message_label = new QLabel();
@@ -244,6 +255,9 @@ void GMainWindow::InitializeHotkeys() {
     RegisterHotkey("Main Window", "Load File", QKeySequence::Open);
     RegisterHotkey("Main Window", "Swap Screens", QKeySequence::NextChild);
     RegisterHotkey("Main Window", "Start Emulation");
+    RegisterHotkey("Main Window", "Fullscreen", QKeySequence::FullScreen);
+    RegisterHotkey("Main Window", "Exit Fullscreen", QKeySequence(Qt::Key_Escape),
+                   Qt::ApplicationShortcut);
     LoadHotkeys();
 
     connect(GetHotkey("Main Window", "Load File", this), SIGNAL(activated()), this,
@@ -252,6 +266,23 @@ void GMainWindow::InitializeHotkeys() {
             SLOT(OnStartGame()));
     connect(GetHotkey("Main Window", "Swap Screens", render_window), SIGNAL(activated()), this,
             SLOT(OnSwapScreens()));
+    connect(GetHotkey("Main Window", "Fullscreen", render_window), &QShortcut::activated,
+            ui.action_Fullscreen, &QAction::trigger);
+    connect(GetHotkey("Main Window", "Fullscreen", render_window), &QShortcut::activatedAmbiguously,
+            ui.action_Fullscreen, &QAction::trigger);
+    connect(GetHotkey("Main Window", "Exit Fullscreen", this), &QShortcut::activated, this, [&] {
+        if (emulation_running) {
+            ui.action_Fullscreen->setChecked(false);
+            ToggleFullscreen();
+        }
+    });
+}
+
+void GMainWindow::ShowUpdaterWidgets() {
+    ui.action_Check_For_Updates->setVisible(UISettings::values.updater_found);
+    ui.action_Open_Maintenance_Tool->setVisible(UISettings::values.updater_found);
+
+    connect(updater, &Updater::CheckUpdatesDone, this, &GMainWindow::OnUpdateFound);
 }
 
 void GMainWindow::SetDefaultUIGeometry() {
@@ -279,6 +310,8 @@ void GMainWindow::RestoreUIState() {
 
     ui.action_Single_Window_Mode->setChecked(UISettings::values.single_window_mode);
     ToggleWindowMode();
+
+    ui.action_Fullscreen->setChecked(UISettings::values.fullscreen);
 
     ui.action_Display_Dock_Widget_Headers->setChecked(UISettings::values.display_titlebar);
     OnDisplayTitleBars(ui.action_Display_Dock_Widget_Headers->isChecked());
@@ -323,6 +356,17 @@ void GMainWindow::ConnectMenuEvents() {
     ui.action_Show_Filter_Bar->setShortcut(tr("CTRL+F"));
     connect(ui.action_Show_Filter_Bar, &QAction::triggered, this, &GMainWindow::OnToggleFilterBar);
     connect(ui.action_Show_Status_Bar, &QAction::triggered, statusBar(), &QStatusBar::setVisible);
+    ui.action_Fullscreen->setShortcut(GetHotkey("Main Window", "Fullscreen", this)->key());
+    connect(ui.action_Fullscreen, &QAction::triggered, this, &GMainWindow::ToggleFullscreen);
+
+    // Help
+    connect(ui.action_FAQ, &QAction::triggered,
+            []() { QDesktopServices::openUrl(QUrl("https://citra-emu.org/wiki/faq/")); });
+    connect(ui.action_About, &QAction::triggered, this, &GMainWindow::OnMenuAboutCitra);
+    connect(ui.action_Check_For_Updates, &QAction::triggered, this,
+            &GMainWindow::OnCheckForUpdates);
+    connect(ui.action_Open_Maintenance_Tool, &QAction::triggered, this,
+            &GMainWindow::OnOpenUpdater);
 }
 
 void GMainWindow::OnDisplayTitleBars(bool show) {
@@ -343,6 +387,73 @@ void GMainWindow::OnDisplayTitleBars(bool show) {
                 delete old;
         }
     }
+}
+
+void GMainWindow::OnCheckForUpdates() {
+    explicit_update_check = true;
+    CheckForUpdates();
+}
+
+void GMainWindow::CheckForUpdates() {
+    if (updater->CheckForUpdates()) {
+        LOG_INFO(Frontend, "Update check started");
+    } else {
+        LOG_WARNING(Frontend, "Unable to start check for updates");
+    }
+}
+
+void GMainWindow::OnUpdateFound(bool found, bool error) {
+    if (error) {
+        LOG_WARNING(Frontend, "Update check failed");
+        return;
+    }
+
+    if (!found) {
+        LOG_INFO(Frontend, "No updates found");
+
+        // If the user explicitly clicked the "Check for Updates" button, we are
+        //  going to want to show them a prompt anyway.
+        if (explicit_update_check) {
+            explicit_update_check = false;
+            ShowNoUpdatePrompt();
+        }
+        return;
+    }
+
+    if (emulation_running && !explicit_update_check) {
+        LOG_INFO(Frontend, "Update found, deferring as game is running");
+        defer_update_prompt = true;
+        return;
+    }
+
+    LOG_INFO(Frontend, "Update found!");
+    explicit_update_check = false;
+
+    ShowUpdatePrompt();
+}
+
+void GMainWindow::ShowUpdatePrompt() {
+    defer_update_prompt = false;
+
+    auto result = QMessageBox::question(
+        this, tr("Update available!"),
+        tr("An update for Citra is available. Do you wish to install it now?<br /><br />"
+           "This <b>will</b> terminate emulation, if it is running."),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+
+    if (result == QMessageBox::Yes) {
+        updater->LaunchUIOnExit();
+        close();
+    }
+}
+
+void GMainWindow::ShowNoUpdatePrompt() {
+    QMessageBox::information(this, tr("No update found"), tr("No update has been found for Citra."),
+                             QMessageBox::Ok, QMessageBox::Ok);
+}
+
+void GMainWindow::OnOpenUpdater() {
+    updater->LaunchUI();
 }
 
 bool GMainWindow::LoadROM(const QString& filename) {
@@ -460,6 +571,7 @@ void GMainWindow::BootGame(const QString& filename) {
     render_window->setFocus();
 
     emulation_running = true;
+    ToggleFullscreen();
     OnStartGame();
 }
 
@@ -499,6 +611,10 @@ void GMainWindow::ShutdownGame() {
     emu_frametime_label->setVisible(false);
 
     emulation_running = false;
+
+    if (defer_update_prompt) {
+        ShowUpdatePrompt();
+    }
 }
 
 void GMainWindow::StoreRecentFile(const QString& filename) {
@@ -622,6 +738,29 @@ void GMainWindow::OnPauseGame() {
 
 void GMainWindow::OnStopGame() {
     ShutdownGame();
+}
+
+void GMainWindow::ToggleFullscreen() {
+    if (!emulation_running) {
+        return;
+    }
+    if (ui.action_Fullscreen->isChecked()) {
+        if (ui.action_Single_Window_Mode->isChecked()) {
+            ui.menubar->hide();
+            statusBar()->hide();
+            showFullScreen();
+        } else {
+            render_window->showFullScreen();
+        }
+    } else {
+        if (ui.action_Single_Window_Mode->isChecked()) {
+            statusBar()->setVisible(ui.action_Show_Status_Bar->isChecked());
+            ui.menubar->show();
+            showNormal();
+        } else {
+            render_window->showNormal();
+        }
+    }
 }
 
 void GMainWindow::ToggleWindowMode() {
@@ -760,6 +899,11 @@ void GMainWindow::OnCoreError(Core::System::ResultStatus result, std::string det
     }
 }
 
+void GMainWindow::OnMenuAboutCitra() {
+    AboutDialog about{this};
+    about.exec();
+}
+
 bool GMainWindow::ConfirmClose() {
     if (emu_thread == nullptr || !UISettings::values.confirm_before_closing)
         return true;
@@ -784,6 +928,7 @@ void GMainWindow::closeEvent(QCloseEvent* event) {
     UISettings::values.microprofile_visible = microProfileDialog->isVisible();
 #endif
     UISettings::values.single_window_mode = ui.action_Single_Window_Mode->isChecked();
+    UISettings::values.fullscreen = ui.action_Fullscreen->isChecked();
     UISettings::values.display_titlebar = ui.action_Display_Dock_Widget_Headers->isChecked();
     UISettings::values.show_filter_bar = ui.action_Show_Filter_Bar->isChecked();
     UISettings::values.show_status_bar = ui.action_Show_Status_Bar->isChecked();
