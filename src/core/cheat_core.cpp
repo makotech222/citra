@@ -12,7 +12,7 @@
 
 namespace CheatCore {
     constexpr u64 frame_ticks = 268123480ull / 60;
-    static int tick_event;
+    static const CoreTiming::EventType* tick_event;
     static std::unique_ptr<CheatEngine::CheatEngine> cheat_engine;
 
     static void CheatTickCallback(u64, int cycles_late) {
@@ -34,6 +34,7 @@ namespace CheatCore {
     void RefreshCheats() {
         cheat_engine->RefreshCheats();
     }
+
 } // namespace CheatCore
 
 namespace CheatEngine {
