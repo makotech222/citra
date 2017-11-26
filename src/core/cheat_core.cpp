@@ -11,7 +11,7 @@
 #include "core/hle/service/hid/hid.h"
 
 namespace CheatCore {
-    constexpr u64 frame_ticks = 268123480ull / 60;
+    constexpr u64 frame_ticks = 268111856;
     static const CoreTiming::EventType* tick_event;
     static std::unique_ptr<CheatEngine::CheatEngine> cheat_engine;
 
