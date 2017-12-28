@@ -6,15 +6,18 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 #include "common/common_types.h"
 #include "core/file_sys/archive_backend.h"
 #include "core/hle/kernel/hle_ipc.h"
+#include "core/hle/kernel/kernel.h"
 #include "core/hle/result.h"
+#include "core/hle/service/service.h"
 
 namespace FileSys {
 class DirectoryBackend;
 class FileBackend;
-}
+} // namespace FileSys
 
 /// The unique system identifier hash, also known as ID0
 static constexpr char SYSTEM_ID[]{"00000000000000000000000000000000"};
@@ -47,21 +50,41 @@ enum class MediaType : u32 { NAND = 0, SDMC = 1, GameCard = 2 };
 
 typedef u64 ArchiveHandle;
 
-class File final : public Kernel::SessionRequestHandler {
+struct FileSessionSlot : public Kernel::SessionRequestHandler::SessionDataBase {
+    u32 priority; ///< Priority of the file. TODO(Subv): Find out what this means
+    u64 offset;   ///< Offset that this session will start reading from.
+    u64 size;     ///< Max size of the file that this session is allowed to access
+    bool subfile; ///< Whether this file was opened via OpenSubFile or not.
+};
+
+// TODO: File is not a real service, but it can still utilize ServiceFramework::RegisterHandlers.
+// Consider splitting ServiceFramework interface.
+class File final : public ServiceFramework<File, FileSessionSlot> {
 public:
     File(std::unique_ptr<FileSys::FileBackend>&& backend, const FileSys::Path& path);
-    ~File();
+    ~File() = default;
 
     std::string GetName() const {
         return "Path: " + path.DebugStr();
     }
 
-    FileSys::Path path; ///< Path of the file
-    u32 priority;       ///< Priority of the file. TODO(Subv): Find out what this means
+    FileSys::Path path;                            ///< Path of the file
     std::unique_ptr<FileSys::FileBackend> backend; ///< File backend interface
 
-protected:
-    void HandleSyncRequest(Kernel::SharedPtr<Kernel::ServerSession> server_session) override;
+    /// Creates a new session to this File and returns the ClientSession part of the connection.
+    Kernel::SharedPtr<Kernel::ClientSession> Connect();
+
+private:
+    void Read(Kernel::HLERequestContext& ctx);
+    void Write(Kernel::HLERequestContext& ctx);
+    void GetSize(Kernel::HLERequestContext& ctx);
+    void SetSize(Kernel::HLERequestContext& ctx);
+    void Close(Kernel::HLERequestContext& ctx);
+    void Flush(Kernel::HLERequestContext& ctx);
+    void SetPriority(Kernel::HLERequestContext& ctx);
+    void GetPriority(Kernel::HLERequestContext& ctx);
+    void OpenLinkFile(Kernel::HLERequestContext& ctx);
+    void OpenSubFile(Kernel::HLERequestContext& ctx);
 };
 
 class Directory final : public Kernel::SessionRequestHandler {
@@ -78,6 +101,10 @@ public:
 
 protected:
     void HandleSyncRequest(Kernel::SharedPtr<Kernel::ServerSession> server_session) override;
+
+    std::unique_ptr<SessionDataBase> MakeSessionData() const override {
+        return nullptr;
+    }
 };
 
 /**

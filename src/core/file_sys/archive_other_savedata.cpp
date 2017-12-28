@@ -3,6 +3,7 @@
 // Refer to the license.txt file included.
 
 #include <tuple>
+#include <utility>
 #include "core/file_sys/archive_other_savedata.h"
 #include "core/file_sys/errors.h"
 #include "core/hle/kernel/process.h"
@@ -21,7 +22,7 @@ namespace {
 
 template <typename T>
 ResultVal<std::tuple<MediaType, u64>> ParsePath(const Path& path, T program_id_reader) {
-    if (path.GetType() != Binary) {
+    if (path.GetType() != LowPathType::Binary) {
         LOG_ERROR(Service_FS, "Wrong path type %d", static_cast<int>(path.GetType()));
         return ERROR_INVALID_PATH;
     }
@@ -60,7 +61,7 @@ ResultVal<std::tuple<MediaType, u64>> ParsePathGeneral(const Path& path) {
 
 ArchiveFactory_OtherSaveDataPermitted::ArchiveFactory_OtherSaveDataPermitted(
     std::shared_ptr<ArchiveSource_SDSaveData> sd_savedata)
-    : sd_savedata_source(sd_savedata) {}
+    : sd_savedata_source(std::move(sd_savedata)) {}
 
 ResultVal<std::unique_ptr<ArchiveBackend>> ArchiveFactory_OtherSaveDataPermitted::Open(
     const Path& path) {
@@ -98,7 +99,7 @@ ResultVal<ArchiveFormatInfo> ArchiveFactory_OtherSaveDataPermitted::GetFormatInf
 
 ArchiveFactory_OtherSaveDataGeneral::ArchiveFactory_OtherSaveDataGeneral(
     std::shared_ptr<ArchiveSource_SDSaveData> sd_savedata)
-    : sd_savedata_source(sd_savedata) {}
+    : sd_savedata_source(std::move(sd_savedata)) {}
 
 ResultVal<std::unique_ptr<ArchiveBackend>> ArchiveFactory_OtherSaveDataGeneral::Open(
     const Path& path) {

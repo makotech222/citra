@@ -2,26 +2,32 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <algorithm>
 #include <vector>
-#include <boost/range/algorithm_ext/erase.hpp>
 #include "common/assert.h"
 #include "common/common_types.h"
 #include "core/hle/kernel/handle_table.h"
 #include "core/hle/kernel/hle_ipc.h"
 #include "core/hle/kernel/kernel.h"
 #include "core/hle/kernel/process.h"
-#include "core/hle/kernel/server_session.h"
 
 namespace Kernel {
 
+SessionRequestHandler::SessionInfo::SessionInfo(SharedPtr<ServerSession> session,
+                                                std::unique_ptr<SessionDataBase> data)
+    : session(std::move(session)), data(std::move(data)) {}
+
 void SessionRequestHandler::ClientConnected(SharedPtr<ServerSession> server_session) {
     server_session->SetHleHandler(shared_from_this());
-    connected_sessions.push_back(server_session);
+    connected_sessions.emplace_back(std::move(server_session), MakeSessionData());
 }
 
 void SessionRequestHandler::ClientDisconnected(SharedPtr<ServerSession> server_session) {
     server_session->SetHleHandler(nullptr);
-    boost::range::remove_erase(connected_sessions, server_session);
+    connected_sessions.erase(
+        std::remove_if(connected_sessions.begin(), connected_sessions.end(),
+                       [&](const SessionInfo& info) { return info.session == server_session; }),
+        connected_sessions.end());
 }
 
 HLERequestContext::HLERequestContext(SharedPtr<ServerSession> session)
@@ -51,7 +57,6 @@ const std::vector<u8>& HLERequestContext::GetStaticBuffer(u8 buffer_id) const {
 }
 
 void HLERequestContext::AddStaticBuffer(u8 buffer_id, std::vector<u8> data) {
-    ASSERT(static_buffers[buffer_id].empty() && !data.empty());
     static_buffers[buffer_id] = std::move(data);
 }
 
@@ -105,6 +110,12 @@ ResultCode HLERequestContext::PopulateFromIncomingCommandBuffer(const u32_le* sr
 
             AddStaticBuffer(buffer_info.buffer_id, std::move(data));
             cmd_buf[i++] = source_address;
+            break;
+        }
+        case IPC::DescriptorType::MappedBuffer: {
+            u32 next_id = static_cast<u32>(request_mapped_buffers.size());
+            request_mapped_buffers.emplace_back(src_process, descriptor, src_cmdbuf[i], next_id);
+            cmd_buf[i++] = next_id;
             break;
         }
         default:
@@ -166,12 +177,41 @@ ResultCode HLERequestContext::WriteToOutgoingCommandBuffer(u32_le* dst_cmdbuf, P
             dst_cmdbuf[i++] = target_address;
             break;
         }
+        case IPC::DescriptorType::MappedBuffer: {
+            VAddr addr = request_mapped_buffers[cmd_buf[i]].address;
+            dst_cmdbuf[i++] = addr;
+            break;
+        }
         default:
             UNIMPLEMENTED_MSG("Unsupported handle translation: 0x%08X", descriptor);
         }
     }
 
     return RESULT_SUCCESS;
+}
+
+MappedBuffer& HLERequestContext::GetMappedBuffer(u32 id_from_cmdbuf) {
+    ASSERT_MSG(id_from_cmdbuf < request_mapped_buffers.size(), "Mapped Buffer ID out of range!");
+    return request_mapped_buffers[id_from_cmdbuf];
+}
+
+MappedBuffer::MappedBuffer(const Process& process, u32 descriptor, VAddr address, u32 id)
+    : id(id), address(address), process(&process) {
+    IPC::MappedBufferDescInfo desc{descriptor};
+    size = desc.size;
+    perms = desc.perms;
+}
+
+void MappedBuffer::Read(void* dest_buffer, size_t offset, size_t size) {
+    ASSERT(perms & IPC::R);
+    ASSERT(offset + size <= this->size);
+    Memory::ReadBlock(*process, address + offset, dest_buffer, size);
+}
+
+void MappedBuffer::Write(const void* src_buffer, size_t offset, size_t size) {
+    ASSERT(perms & IPC::W);
+    ASSERT(offset + size <= this->size);
+    Memory::WriteBlock(*process, address + offset, src_buffer, size);
 }
 
 } // namespace Kernel

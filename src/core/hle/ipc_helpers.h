@@ -98,6 +98,15 @@ public:
     template <typename First, typename... Other>
     void Push(const First& first_value, const Other&... other_values);
 
+    template <typename T>
+    void PushEnum(T value) {
+        static_assert(std::is_enum<T>(), "T must be an enum type within a PushEnum call.");
+        static_assert(!std::is_convertible<T, int>(),
+                      "enum type in PushEnum must be a strongly typed enum.");
+        static_assert(sizeof(value) < sizeof(u64), "64-bit enums may not be pushed.");
+        Push(static_cast<std::underlying_type_t<T>>(value));
+    }
+
     /**
      * @brief Copies the content of the given trivially copyable class to the buffer as a normal
      * param
@@ -114,14 +123,21 @@ public:
     void PushMoveHandles(H... handles);
 
     template <typename... O>
-    void PushObjects(Kernel::SharedPtr<O>... pointers);
+    void PushCopyObjects(Kernel::SharedPtr<O>... pointers);
+
+    template <typename... O>
+    void PushMoveObjects(Kernel::SharedPtr<O>... pointers);
 
     void PushCurrentPIDHandle();
 
     [[deprecated]] void PushStaticBuffer(VAddr buffer_vaddr, size_t size, u8 buffer_id);
     void PushStaticBuffer(const std::vector<u8>& buffer, u8 buffer_id);
 
-    void PushMappedBuffer(VAddr buffer_vaddr, size_t size, MappedBufferPermissions perms);
+    [[deprecated]] void PushMappedBuffer(VAddr buffer_vaddr, size_t size,
+                                         MappedBufferPermissions perms);
+
+    /// Pushes an HLE MappedBuffer interface back to unmapped the buffer.
+    void PushMappedBuffer(const Kernel::MappedBuffer& mapped_buffer);
 };
 
 /// Push ///
@@ -183,7 +199,12 @@ inline void RequestBuilder::PushMoveHandles(H... handles) {
 }
 
 template <typename... O>
-inline void RequestBuilder::PushObjects(Kernel::SharedPtr<O>... pointers) {
+inline void RequestBuilder::PushCopyObjects(Kernel::SharedPtr<O>... pointers) {
+    PushCopyHandles(context->AddOutgoingHandle(std::move(pointers))...);
+}
+
+template <typename... O>
+inline void RequestBuilder::PushMoveObjects(Kernel::SharedPtr<O>... pointers) {
     PushMoveHandles(context->AddOutgoingHandle(std::move(pointers))...);
 }
 
@@ -211,6 +232,11 @@ inline void RequestBuilder::PushMappedBuffer(VAddr buffer_vaddr, size_t size,
                                              MappedBufferPermissions perms) {
     Push(MappedBufferDesc(size, perms));
     Push(buffer_vaddr);
+}
+
+inline void RequestBuilder::PushMappedBuffer(const Kernel::MappedBuffer& mapped_buffer) {
+    Push(mapped_buffer.GenerateDescriptor());
+    Push(mapped_buffer.GetId());
 }
 
 class RequestParser : public RequestHelperBase {
@@ -255,6 +281,15 @@ public:
 
     template <typename First, typename... Other>
     void Pop(First& first_value, Other&... other_values);
+
+    template <typename T>
+    T PopEnum() {
+        static_assert(std::is_enum<T>(), "T must be an enum type within a PopEnum call.");
+        static_assert(!std::is_convertible<T, int>(),
+                      "enum type in PopEnum must be a strongly typed enum.");
+        static_assert(sizeof(T) < sizeof(u64), "64-bit enums cannot be popped.");
+        return static_cast<T>(Pop<std::underlying_type_t<T>>());
+    }
 
     /// Equivalent to calling `PopHandles<1>()[0]`.
     Kernel::Handle PopHandle();
@@ -333,8 +368,11 @@ public:
      * @param[out] buffer_perms If non-null, the pointed value will be set to the permissions of the
      * buffer
      */
-    VAddr PopMappedBuffer(size_t* data_size = nullptr,
-                          MappedBufferPermissions* buffer_perms = nullptr);
+    [[deprecated]] VAddr PopMappedBuffer(size_t* data_size,
+                                         MappedBufferPermissions* buffer_perms = nullptr);
+
+    /// Pops a mapped buffer descriptor with its vaddr and resolves it to an HLE interface
+    Kernel::MappedBuffer& PopMappedBuffer();
 
     /**
      * @brief Reads the next normal parameters as a struct, by copying it
@@ -495,6 +533,13 @@ inline VAddr RequestParser::PopMappedBuffer(size_t* data_size,
     if (buffer_perms != nullptr)
         *buffer_perms = bufferInfo.perms;
     return Pop<VAddr>();
+}
+
+inline Kernel::MappedBuffer& RequestParser::PopMappedBuffer() {
+    u32 mapped_buffer_descriptor = Pop<u32>();
+    ASSERT_MSG(GetDescriptorType(mapped_buffer_descriptor) == MappedBuffer,
+               "Tried to pop mapped buffer but the descriptor is not a mapped buffer descriptor");
+    return context->GetMappedBuffer(Pop<u32>());
 }
 
 } // namespace IPC

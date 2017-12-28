@@ -10,7 +10,9 @@
 #define QT_NO_OPENGL
 #include <QDesktopWidget>
 #include <QFileDialog>
+#include <QFutureWatcher>
 #include <QMessageBox>
+#include <QtConcurrent/QtConcurrentRun>
 #include <QtGui>
 #include <QtWidgets>
 #include "citra_qt/aboutdialog.h"
@@ -92,6 +94,9 @@ void GMainWindow::ShowCallouts() {
 }
 
 GMainWindow::GMainWindow() : config(new Config()), emu_thread(nullptr) {
+    // register size_t to use in slots and signals
+    qRegisterMetaType<size_t>("size_t");
+
     Pica::g_debug_context = Pica::DebugContext::Construct();
     setAcceptDrops(true);
     ui.setupUi(this);
@@ -157,6 +162,10 @@ void GMainWindow::InitializeWidgets() {
     message_label->setContentsMargins(4, 0, 4, 0);
     message_label->setAlignment(Qt::AlignLeft);
     statusBar()->addPermanentWidget(message_label, 1);
+
+    progress_bar = new QProgressBar();
+    progress_bar->hide();
+    statusBar()->addPermanentWidget(progress_bar);
 
     emu_speed_label = new QLabel();
     emu_speed_label->setToolTip(tr("Current emulation speed. Values higher or lower than 100% "
@@ -243,7 +252,7 @@ void GMainWindow::InitializeRecentFileMenuActions() {
     for (int i = 0; i < max_recent_files_item; ++i) {
         actions_recent_files[i] = new QAction(this);
         actions_recent_files[i]->setVisible(false);
-        connect(actions_recent_files[i], SIGNAL(triggered()), this, SLOT(OnMenuRecentFile()));
+        connect(actions_recent_files[i], &QAction::triggered, this, &GMainWindow::OnMenuRecentFile);
 
         ui.menu_recent_files->addAction(actions_recent_files[i]);
     }
@@ -260,12 +269,12 @@ void GMainWindow::InitializeHotkeys() {
                    Qt::ApplicationShortcut);
     LoadHotkeys();
 
-    connect(GetHotkey("Main Window", "Load File", this), SIGNAL(activated()), this,
-            SLOT(OnMenuLoadFile()));
-    connect(GetHotkey("Main Window", "Start Emulation", this), SIGNAL(activated()), this,
-            SLOT(OnStartGame()));
-    connect(GetHotkey("Main Window", "Swap Screens", render_window), SIGNAL(activated()), this,
-            SLOT(OnSwapScreens()));
+    connect(GetHotkey("Main Window", "Load File", this), &QShortcut::activated, this,
+            &GMainWindow::OnMenuLoadFile);
+    connect(GetHotkey("Main Window", "Start Emulation", this), &QShortcut::activated, this,
+            &GMainWindow::OnStartGame);
+    connect(GetHotkey("Main Window", "Swap Screens", render_window), &QShortcut::activated, this,
+            &GMainWindow::OnSwapScreens);
     connect(GetHotkey("Main Window", "Fullscreen", render_window), &QShortcut::activated,
             ui.action_Fullscreen, &QAction::trigger);
     connect(GetHotkey("Main Window", "Fullscreen", render_window), &QShortcut::activatedAmbiguously,
@@ -324,20 +333,24 @@ void GMainWindow::RestoreUIState() {
 }
 
 void GMainWindow::ConnectWidgetEvents() {
-    connect(game_list, SIGNAL(GameChosen(QString)), this, SLOT(OnGameListLoadFile(QString)));
-    connect(game_list, SIGNAL(OpenSaveFolderRequested(u64)), this,
-            SLOT(OnGameListOpenSaveFolder(u64)));
+    connect(game_list, &GameList::GameChosen, this, &GMainWindow::OnGameListLoadFile);
+    connect(game_list, &GameList::OpenSaveFolderRequested, this,
+            &GMainWindow::OnGameListOpenSaveFolder);
 
-    connect(this, SIGNAL(EmulationStarting(EmuThread*)), render_window,
-            SLOT(OnEmulationStarting(EmuThread*)));
-    connect(this, SIGNAL(EmulationStopping()), render_window, SLOT(OnEmulationStopping()));
+    connect(this, &GMainWindow::EmulationStarting, render_window,
+            &GRenderWindow::OnEmulationStarting);
+    connect(this, &GMainWindow::EmulationStopping, render_window,
+            &GRenderWindow::OnEmulationStopping);
 
     connect(&status_bar_update_timer, &QTimer::timeout, this, &GMainWindow::UpdateStatusBar);
+
+    connect(this, &GMainWindow::UpdateProgress, this, &GMainWindow::OnUpdateProgress);
 }
 
 void GMainWindow::ConnectMenuEvents() {
     // File
     connect(ui.action_Load_File, &QAction::triggered, this, &GMainWindow::OnMenuLoadFile);
+    connect(ui.action_Install_CIA, &QAction::triggered, this, &GMainWindow::OnMenuInstallCIA);
     connect(ui.action_Select_Game_List_Root, &QAction::triggered, this,
             &GMainWindow::OnMenuSelectGameListRoot);
     connect(ui.action_Exit, &QAction::triggered, this, &QMainWindow::close);
@@ -475,8 +488,6 @@ bool GMainWindow::LoadROM(const QString& filename) {
 
     const Core::System::ResultStatus result{system.Load(render_window, filename.toStdString())};
 
-    Core::Telemetry().AddField(Telemetry::FieldType::App, "Frontend", "Qt");
-
     if (result != Core::System::ResultStatus::Success) {
         switch (result) {
         case Core::System::ResultStatus::ErrorGetLoader:
@@ -532,6 +543,8 @@ bool GMainWindow::LoadROM(const QString& filename) {
         }
         return false;
     }
+
+    Core::Telemetry().AddField(Telemetry::FieldType::App, "Frontend", "Qt");
     return true;
 }
 
@@ -548,17 +561,17 @@ void GMainWindow::BootGame(const QString& filename) {
     render_window->moveContext();
     emu_thread->start();
 
-    connect(render_window, SIGNAL(Closed()), this, SLOT(OnStopGame()));
+    connect(render_window, &GRenderWindow::Closed, this, &GMainWindow::OnStopGame);
     // BlockingQueuedConnection is important here, it makes sure we've finished refreshing our views
     // before the CPU continues
-    connect(emu_thread.get(), SIGNAL(DebugModeEntered()), registersWidget,
-            SLOT(OnDebugModeEntered()), Qt::BlockingQueuedConnection);
-    connect(emu_thread.get(), SIGNAL(DebugModeEntered()), waitTreeWidget,
-            SLOT(OnDebugModeEntered()), Qt::BlockingQueuedConnection);
-    connect(emu_thread.get(), SIGNAL(DebugModeLeft()), registersWidget, SLOT(OnDebugModeLeft()),
-            Qt::BlockingQueuedConnection);
-    connect(emu_thread.get(), SIGNAL(DebugModeLeft()), waitTreeWidget, SLOT(OnDebugModeLeft()),
-            Qt::BlockingQueuedConnection);
+    connect(emu_thread.get(), &EmuThread::DebugModeEntered, registersWidget,
+            &RegistersWidget::OnDebugModeEntered, Qt::BlockingQueuedConnection);
+    connect(emu_thread.get(), &EmuThread::DebugModeEntered, waitTreeWidget,
+            &WaitTreeWidget::OnDebugModeEntered, Qt::BlockingQueuedConnection);
+    connect(emu_thread.get(), &EmuThread::DebugModeLeft, registersWidget,
+            &RegistersWidget::OnDebugModeLeft, Qt::BlockingQueuedConnection);
+    connect(emu_thread.get(), &EmuThread::DebugModeLeft, waitTreeWidget,
+            &WaitTreeWidget::OnDebugModeLeft, Qt::BlockingQueuedConnection);
 
     // Update the GUI
     registersWidget->OnDebugModeEntered();
@@ -571,7 +584,9 @@ void GMainWindow::BootGame(const QString& filename) {
     render_window->setFocus();
 
     emulation_running = true;
-    ToggleFullscreen();
+    if (ui.action_Fullscreen->isChecked()) {
+        ShowFullscreen();
+    }
     OnStartGame();
 }
 
@@ -592,7 +607,7 @@ void GMainWindow::ShutdownGame() {
     emu_thread = nullptr;
 
     // The emulation is stopped, so closing the window or not does not matter anymore
-    disconnect(render_window, SIGNAL(Closed()), this, SLOT(OnStopGame()));
+    disconnect(render_window, &GRenderWindow::Closed, this, &GMainWindow::OnStopGame);
 
     // Update the GUI
     ui.action_Start->setEnabled(false);
@@ -696,6 +711,61 @@ void GMainWindow::OnMenuSelectGameListRoot() {
     }
 }
 
+void GMainWindow::OnMenuInstallCIA() {
+    QString filepath = QFileDialog::getOpenFileName(
+        this, tr("Load File"), UISettings::values.roms_path,
+        tr("3DS Installation File (*.CIA*)") + ";;" + tr("All Files (*.*)"));
+    if (filepath.isEmpty())
+        return;
+
+    ui.action_Install_CIA->setEnabled(false);
+    progress_bar->show();
+    watcher = new QFutureWatcher<Service::AM::InstallStatus>;
+    QFuture<Service::AM::InstallStatus> f = QtConcurrent::run([&, filepath] {
+        const auto cia_progress = [&](size_t written, size_t total) {
+            emit UpdateProgress(written, total);
+        };
+        return Service::AM::InstallCIA(filepath.toStdString(), cia_progress);
+    });
+    connect(watcher, &QFutureWatcher<Service::AM::InstallStatus>::finished, this,
+            &GMainWindow::OnCIAInstallFinished);
+    watcher->setFuture(f);
+}
+
+void GMainWindow::OnUpdateProgress(size_t written, size_t total) {
+    progress_bar->setMaximum(total);
+    progress_bar->setValue(written);
+}
+
+void GMainWindow::OnCIAInstallFinished() {
+    progress_bar->hide();
+    progress_bar->setValue(0);
+    switch (watcher->future()) {
+    case Service::AM::InstallStatus::Success:
+        this->statusBar()->showMessage(tr("The file has been installed successfully."));
+        break;
+    case Service::AM::InstallStatus::ErrorFailedToOpenFile:
+        QMessageBox::critical(this, tr("Unable to open File"),
+                              tr("Could not open the selected file"));
+        break;
+    case Service::AM::InstallStatus::ErrorAborted:
+        QMessageBox::critical(
+            this, tr("Installation aborted"),
+            tr("The installation was aborted. Please see the log for more details"));
+        break;
+    case Service::AM::InstallStatus::ErrorInvalid:
+        QMessageBox::critical(this, tr("Invalid File"), tr("The selected file is not a valid CIA"));
+        break;
+    case Service::AM::InstallStatus::ErrorEncrypted:
+        QMessageBox::critical(this, tr("Encrypted File"),
+                              tr("The file that you are trying to install must be decrypted "
+                                 "before being used with Citra. A real 3DS is required."));
+        break;
+    }
+    delete watcher;
+    ui.action_Install_CIA->setEnabled(true);
+}
+
 void GMainWindow::OnMenuRecentFile() {
     QAction* action = qobject_cast<QAction*>(sender());
     assert(action);
@@ -718,8 +788,7 @@ void GMainWindow::OnStartGame() {
     emu_thread->SetRunning(true);
     qRegisterMetaType<Core::System::ResultStatus>("Core::System::ResultStatus");
     qRegisterMetaType<std::string>("std::string");
-    connect(emu_thread.get(), SIGNAL(ErrorThrown(Core::System::ResultStatus, std::string)), this,
-            SLOT(OnCoreError(Core::System::ResultStatus, std::string)));
+    connect(emu_thread.get(), &EmuThread::ErrorThrown, this, &GMainWindow::OnCoreError);
 
     ui.action_Start->setEnabled(false);
     ui.action_Start->setText(tr("Continue"));
@@ -745,21 +814,33 @@ void GMainWindow::ToggleFullscreen() {
         return;
     }
     if (ui.action_Fullscreen->isChecked()) {
-        if (ui.action_Single_Window_Mode->isChecked()) {
-            ui.menubar->hide();
-            statusBar()->hide();
-            showFullScreen();
-        } else {
-            render_window->showFullScreen();
-        }
+        ShowFullscreen();
     } else {
-        if (ui.action_Single_Window_Mode->isChecked()) {
-            statusBar()->setVisible(ui.action_Show_Status_Bar->isChecked());
-            ui.menubar->show();
-            showNormal();
-        } else {
-            render_window->showNormal();
-        }
+        HideFullscreen();
+    }
+}
+
+void GMainWindow::ShowFullscreen() {
+    if (ui.action_Single_Window_Mode->isChecked()) {
+        UISettings::values.geometry = saveGeometry();
+        ui.menubar->hide();
+        statusBar()->hide();
+        showFullScreen();
+    } else {
+        UISettings::values.renderwindow_geometry = render_window->saveGeometry();
+        render_window->showFullScreen();
+    }
+}
+
+void GMainWindow::HideFullscreen() {
+    if (ui.action_Single_Window_Mode->isChecked()) {
+        statusBar()->setVisible(ui.action_Show_Status_Bar->isChecked());
+        ui.menubar->show();
+        showNormal();
+        restoreGeometry(UISettings::values.geometry);
+    } else {
+        render_window->showNormal();
+        render_window->restoreGeometry(UISettings::values.renderwindow_geometry);
     }
 }
 

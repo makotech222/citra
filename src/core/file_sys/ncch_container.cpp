@@ -95,12 +95,14 @@ static bool LZSS_Decompress(const u8* compressed, u32 compressed_size, u8* decom
     return true;
 }
 
-NCCHContainer::NCCHContainer(const std::string& filepath) : filepath(filepath) {
+NCCHContainer::NCCHContainer(const std::string& filepath, u32 ncch_offset)
+    : ncch_offset(ncch_offset), filepath(filepath) {
     file = FileUtil::IOFile(filepath, "rb");
 }
 
-Loader::ResultStatus NCCHContainer::OpenFile(const std::string& filepath) {
+Loader::ResultStatus NCCHContainer::OpenFile(const std::string& filepath, u32 ncch_offset) {
     this->filepath = filepath;
+    this->ncch_offset = ncch_offset;
     file = FileUtil::IOFile(filepath, "rb");
 
     if (!file.IsOpen()) {
@@ -118,7 +120,7 @@ Loader::ResultStatus NCCHContainer::Load() {
 
     if (file.IsOpen()) {
         // Reset read pointer in case this file has been read before.
-        file.Seek(0, SEEK_SET);
+        file.Seek(ncch_offset, SEEK_SET);
 
         if (file.ReadBytes(&ncch_header, sizeof(NCCH_Header)) != sizeof(NCCH_Header))
             return Loader::ResultStatus::Error;
@@ -126,7 +128,7 @@ Loader::ResultStatus NCCHContainer::Load() {
         // Skip NCSD header and load first NCCH (NCSD is just a container of NCCH files)...
         if (Loader::MakeMagic('N', 'C', 'S', 'D') == ncch_header.magic) {
             LOG_DEBUG(Service_FS, "Only loading the first (bootable) NCCH within the NCSD file!");
-            ncch_offset = 0x4000;
+            ncch_offset += 0x4000;
             file.Seek(ncch_offset, SEEK_SET);
             file.ReadBytes(&ncch_header, sizeof(NCCH_Header));
         }
@@ -249,6 +251,26 @@ Loader::ResultStatus NCCHContainer::LoadSectionExeFS(const char* name, std::vect
     result = LoadOverrideExeFSSection(name, buffer);
     if (result == Loader::ResultStatus::Success || !has_exefs)
         return result;
+
+    // As of firmware 5.0.0-11 the logo is stored between the access descriptor and the plain region
+    // instead of the ExeFS.
+    if (std::strcmp(name, "logo") == 0) {
+        if (ncch_header.logo_region_offset && ncch_header.logo_region_size) {
+            size_t logo_offset = ncch_header.logo_region_offset * kBlockSize;
+            size_t logo_size = ncch_header.logo_region_size * kBlockSize;
+
+            buffer.resize(logo_size);
+            file.Seek(ncch_offset + logo_offset, SEEK_SET);
+
+            if (file.ReadBytes(buffer.data(), logo_size) != logo_size) {
+                LOG_ERROR(Service_FS, "Could not read NCCH logo");
+                return Loader::ResultStatus::Error;
+            }
+            return Loader::ResultStatus::Success;
+        } else {
+            LOG_INFO(Service_FS, "Attempting to load logo from the ExeFS");
+        }
+    }
 
     // If we don't have any separate files, we'll need a full ExeFS
     if (!exefs_file.IsOpen())

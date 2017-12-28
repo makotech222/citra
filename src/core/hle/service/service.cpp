@@ -9,6 +9,7 @@
 #include "common/string_util.h"
 #include "core/hle/ipc.h"
 #include "core/hle/kernel/client_port.h"
+#include "core/hle/kernel/event.h"
 #include "core/hle/kernel/process.h"
 #include "core/hle/kernel/server_port.h"
 #include "core/hle/kernel/server_session.h"
@@ -26,7 +27,7 @@
 #include "core/hle/service/err_f.h"
 #include "core/hle/service/frd/frd.h"
 #include "core/hle/service/fs/archive.h"
-#include "core/hle/service/gsp_gpu.h"
+#include "core/hle/service/gsp/gsp.h"
 #include "core/hle/service/gsp_lcd.h"
 #include "core/hle/service/hid/hid.h"
 #include "core/hle/service/http_c.h"
@@ -42,6 +43,7 @@
 #include "core/hle/service/nwm/nwm.h"
 #include "core/hle/service/pm_app.h"
 #include "core/hle/service/ptm/ptm.h"
+#include "core/hle/service/pxi/pxi.h"
 #include "core/hle/service/qtm/qtm.h"
 #include "core/hle/service/service.h"
 #include "core/hle/service/sm/sm.h"
@@ -210,28 +212,73 @@ void AddService(Interface* interface_) {
     server_port->SetHleHandler(std::shared_ptr<Interface>(interface_));
 }
 
+bool ThreadContinuationToken::IsValid() {
+    return thread != nullptr && event != nullptr;
+}
+
+ThreadContinuationToken SleepClientThread(const std::string& reason,
+                                          ThreadContinuationToken::Callback callback) {
+    auto thread = Kernel::GetCurrentThread();
+
+    ASSERT(thread->status == THREADSTATUS_RUNNING);
+
+    ThreadContinuationToken token;
+
+    token.event = Kernel::Event::Create(Kernel::ResetType::OneShot, "HLE Pause Event: " + reason);
+    token.thread = thread;
+    token.callback = std::move(callback);
+    token.pause_reason = std::move(reason);
+
+    // Make the thread wait on our newly created event, it will be signaled when
+    // ContinueClientThread is called.
+    thread->status = THREADSTATUS_WAIT_HLE_EVENT;
+    thread->wait_objects = {token.event};
+    token.event->AddWaitingThread(thread);
+
+    return token;
+}
+
+void ContinueClientThread(ThreadContinuationToken& token) {
+    ASSERT_MSG(token.IsValid(), "Invalid continuation token");
+    ASSERT(token.thread->status == THREADSTATUS_WAIT_HLE_EVENT);
+
+    // Signal the event to wake up the thread
+    token.event->Signal();
+    ASSERT(token.thread->status == THREADSTATUS_READY);
+
+    token.callback(token.thread);
+
+    token.event = nullptr;
+    token.thread = nullptr;
+    token.callback = nullptr;
+}
+
 /// Initialize ServiceManager
 void Init() {
     SM::g_service_manager = std::make_shared<SM::ServiceManager>();
     SM::ServiceManager::InstallInterfaces(SM::g_service_manager);
 
+    ERR::InstallInterfaces();
+
+    PXI::InstallInterfaces(*SM::g_service_manager);
     NS::InstallInterfaces(*SM::g_service_manager);
     AC::InstallInterfaces(*SM::g_service_manager);
-
-    AddNamedPort(new ERR::ERR_F);
+    LDR::InstallInterfaces(*SM::g_service_manager);
+    MIC::InstallInterfaces(*SM::g_service_manager);
 
     FS::ArchiveInit();
     ACT::Init();
     AM::Init();
     APT::Init();
     BOSS::Init();
-    CAM::Init();
+    CAM::InstallInterfaces(*SM::g_service_manager);
     CECD::Init();
     CFG::Init();
     DLP::Init();
     FRD::Init();
+    GSP::InstallInterfaces(*SM::g_service_manager);
     HID::Init();
-    IR::Init();
+    IR::InstallInterfaces(*SM::g_service_manager);
     MVD::Init();
     NDM::Init();
     NEWS::Init();
@@ -243,11 +290,8 @@ void Init() {
 
     AddService(new CSND::CSND_SND);
     AddService(new DSP_DSP::Interface);
-    AddService(new GSP::GSP_GPU);
     AddService(new GSP::GSP_LCD);
     AddService(new HTTP::HTTP_C);
-    AddService(new LDR::LDR_RO);
-    AddService(new MIC::MIC_U);
     AddService(new PM::PM_APP);
     AddService(new SOC::SOC_U);
     AddService(new SSL::SSL_C);
@@ -263,13 +307,11 @@ void Shutdown() {
     NIM::Shutdown();
     NEWS::Shutdown();
     NDM::Shutdown();
-    IR::Shutdown();
     HID::Shutdown();
     FRD::Shutdown();
     DLP::Shutdown();
     CFG::Shutdown();
     CECD::Shutdown();
-    CAM::Shutdown();
     BOSS::Shutdown();
     APT::Shutdown();
     AM::Shutdown();
@@ -279,4 +321,4 @@ void Shutdown() {
     g_kernel_named_ports.clear();
     LOG_DEBUG(Service, "shutdown OK");
 }
-}
+} // namespace Service

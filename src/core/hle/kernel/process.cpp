@@ -2,6 +2,7 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <algorithm>
 #include <memory>
 #include "common/assert.h"
 #include "common/common_funcs.h"
@@ -15,6 +16,9 @@
 #include "core/memory.h"
 
 namespace Kernel {
+
+// Lists all processes that exist in the current session.
+static std::vector<SharedPtr<Process>> process_list;
 
 SharedPtr<CodeSet> CodeSet::Create(std::string name, u64 program_id) {
     SharedPtr<CodeSet> codeset(new CodeSet);
@@ -36,7 +40,9 @@ SharedPtr<Process> Process::Create(SharedPtr<CodeSet> code_set) {
     process->codeset = std::move(code_set);
     process->flags.raw = 0;
     process->flags.memory_region.Assign(MemoryRegion::APPLICATION);
+    process->status = ProcessStatus::Created;
 
+    process_list.push_back(process);
     return process;
 }
 
@@ -145,6 +151,8 @@ void Process::Run(s32 main_thread_priority, u32 stack_size) {
     for (const auto& mapping : address_mappings) {
         HandleSpecialMapping(vm_manager, mapping);
     }
+
+    status = ProcessStatus::Running;
 
     vm_manager.LogLayout(Log::Level::Debug);
     Kernel::SetupMainThread(codeset->entrypoint, main_thread_priority, this);
@@ -299,5 +307,20 @@ ResultCode Process::LinearFree(VAddr target, u32 size) {
 Kernel::Process::Process() {}
 Kernel::Process::~Process() {}
 
-SharedPtr<Process> g_current_process;
+void ClearProcessList() {
+    process_list.clear();
 }
+
+SharedPtr<Process> GetProcessById(u32 process_id) {
+    auto itr = std::find_if(
+        process_list.begin(), process_list.end(),
+        [&](const SharedPtr<Process>& process) { return process->process_id == process_id; });
+
+    if (itr == process_list.end())
+        return nullptr;
+
+    return *itr;
+}
+
+SharedPtr<Process> g_current_process;
+} // namespace Kernel

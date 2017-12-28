@@ -2,6 +2,7 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstddef>
 #include <memory>
@@ -27,6 +28,7 @@
 #include "core/file_sys/errors.h"
 #include "core/file_sys/file_backend.h"
 #include "core/hle/ipc.h"
+#include "core/hle/ipc_helpers.h"
 #include "core/hle/kernel/client_port.h"
 #include "core/hle/kernel/client_session.h"
 #include "core/hle/kernel/handle_table.h"
@@ -57,24 +59,6 @@ static constexpr Kernel::Handle INVALID_HANDLE{};
 namespace Service {
 namespace FS {
 
-// Command to access archive file
-enum class FileCommand : u32 {
-    Dummy1 = 0x000100C6,
-    Control = 0x040100C4,
-    OpenSubFile = 0x08010100,
-    Read = 0x080200C2,
-    Write = 0x08030102,
-    GetSize = 0x08040000,
-    SetSize = 0x08050080,
-    GetAttributes = 0x08060000,
-    SetAttributes = 0x08070040,
-    Close = 0x08080000,
-    Flush = 0x08090000,
-    SetPriority = 0x080A0040,
-    GetPriority = 0x080B0000,
-    OpenLinkFile = 0x080C0000,
-};
-
 // Command to access directory
 enum class DirectoryCommand : u32 {
     Dummy1 = 0x000100C6,
@@ -84,120 +68,254 @@ enum class DirectoryCommand : u32 {
 };
 
 File::File(std::unique_ptr<FileSys::FileBackend>&& backend, const FileSys::Path& path)
-    : path(path), priority(0), backend(std::move(backend)) {}
+    : ServiceFramework("", 1), path(path), backend(std::move(backend)) {
+    static const FunctionInfo functions[] = {
+        {0x08010100, &File::OpenSubFile, "OpenSubFile"},
+        {0x080200C2, &File::Read, "Read"},
+        {0x08030102, &File::Write, "Write"},
+        {0x08040000, &File::GetSize, "GetSize"},
+        {0x08050080, &File::SetSize, "SetSize"},
+        {0x08080000, &File::Close, "Close"},
+        {0x08090000, &File::Flush, "Flush"},
+        {0x080A0040, &File::SetPriority, "SetPriority"},
+        {0x080B0000, &File::GetPriority, "GetPriority"},
+        {0x080C0000, &File::OpenLinkFile, "OpenLinkFile"},
+    };
+    RegisterHandlers(functions);
+}
 
-File::~File() {}
+void File::Read(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x0802, 3, 2);
+    u64 offset = rp.Pop<u64>();
+    u32 length = rp.Pop<u32>();
+    auto& buffer = rp.PopMappedBuffer();
+    LOG_TRACE(Service_FS, "Read %s: offset=0x%" PRIx64 " length=0x%08X", GetName().c_str(), offset,
+              length);
 
-void File::HandleSyncRequest(Kernel::SharedPtr<Kernel::ServerSession> server_session) {
+    const FileSessionSlot* file = GetSessionData(ctx.Session());
+
+    if (file->subfile && length > file->size) {
+        LOG_WARNING(Service_FS, "Trying to read beyond the subfile size, truncating");
+        length = file->size;
+    }
+
+    // This file session might have a specific offset from where to start reading, apply it.
+    offset += file->offset;
+
+    if (offset + length > backend->GetSize()) {
+        LOG_ERROR(Service_FS, "Reading from out of bounds offset=0x%" PRIx64
+                              " length=0x%08X file_size=0x%" PRIx64,
+                  offset, length, backend->GetSize());
+    }
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(2, 2);
+
+    std::vector<u8> data(length);
+    ResultVal<size_t> read = backend->Read(offset, data.size(), data.data());
+    if (read.Failed()) {
+        rb.Push(read.Code());
+        rb.Push<u32>(0);
+    } else {
+        buffer.Write(data.data(), 0, *read);
+        rb.Push(RESULT_SUCCESS);
+        rb.Push<u32>(*read);
+    }
+    rb.PushMappedBuffer(buffer);
+}
+
+void File::Write(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x0803, 4, 2);
+    u64 offset = rp.Pop<u64>();
+    u32 length = rp.Pop<u32>();
+    u32 flush = rp.Pop<u32>();
+    auto& buffer = rp.PopMappedBuffer();
+    LOG_TRACE(Service_FS, "Write %s: offset=0x%" PRIx64 " length=%d, flush=0x%x", GetName().c_str(),
+              offset, length, flush);
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(2, 2);
+
+    const FileSessionSlot* file = GetSessionData(ctx.Session());
+
+    // Subfiles can not be written to
+    if (file->subfile) {
+        rb.Push(FileSys::ERROR_UNSUPPORTED_OPEN_FLAGS);
+        rb.Push<u32>(0);
+        rb.PushMappedBuffer(buffer);
+        return;
+    }
+
+    std::vector<u8> data(length);
+    buffer.Read(data.data(), 0, data.size());
+    ResultVal<size_t> written = backend->Write(offset, data.size(), flush != 0, data.data());
+    if (written.Failed()) {
+        rb.Push(written.Code());
+        rb.Push<u32>(0);
+    } else {
+        rb.Push(RESULT_SUCCESS);
+        rb.Push<u32>(*written);
+    }
+    rb.PushMappedBuffer(buffer);
+}
+
+void File::GetSize(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x0804, 0, 0);
+
+    const FileSessionSlot* file = GetSessionData(ctx.Session());
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(3, 0);
+    rb.Push(RESULT_SUCCESS);
+    rb.Push<u64>(file->size);
+}
+
+void File::SetSize(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x0805, 2, 0);
+    u64 size = rp.Pop<u64>();
+
+    FileSessionSlot* file = GetSessionData(ctx.Session());
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
+
+    // SetSize can not be called on subfiles.
+    if (file->subfile) {
+        rb.Push(FileSys::ERROR_UNSUPPORTED_OPEN_FLAGS);
+        return;
+    }
+
+    file->size = size;
+    backend->SetSize(size);
+    rb.Push(RESULT_SUCCESS);
+}
+
+void File::Close(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x0808, 0, 0);
+
+    // TODO(Subv): Only close the backend if this client is the only one left.
+    if (connected_sessions.size() > 1)
+        LOG_WARNING(Service_FS, "Closing File backend but %zu clients still connected",
+                    connected_sessions.size());
+
+    backend->Close();
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
+    rb.Push(RESULT_SUCCESS);
+}
+
+void File::Flush(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x0809, 0, 0);
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
+
+    const FileSessionSlot* file = GetSessionData(ctx.Session());
+
+    // Subfiles can not be flushed.
+    if (file->subfile) {
+        rb.Push(FileSys::ERROR_UNSUPPORTED_OPEN_FLAGS);
+        return;
+    }
+
+    backend->Flush();
+    rb.Push(RESULT_SUCCESS);
+}
+
+void File::SetPriority(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x080A, 1, 0);
+
+    FileSessionSlot* file = GetSessionData(ctx.Session());
+    file->priority = rp.Pop<u32>();
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
+    rb.Push(RESULT_SUCCESS);
+}
+
+void File::GetPriority(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x080B, 0, 0);
+    const FileSessionSlot* file = GetSessionData(ctx.Session());
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(2, 0);
+    rb.Push(RESULT_SUCCESS);
+    rb.Push(file->priority);
+}
+
+void File::OpenLinkFile(Kernel::HLERequestContext& ctx) {
+    LOG_WARNING(Service_FS, "(STUBBED) File command OpenLinkFile %s", GetName().c_str());
     using Kernel::ClientSession;
     using Kernel::ServerSession;
     using Kernel::SharedPtr;
+    IPC::RequestParser rp(ctx, 0x080C, 0, 0);
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 2);
+    auto sessions = ServerSession::CreateSessionPair(GetName());
+    auto server = std::get<SharedPtr<ServerSession>>(sessions);
+    ClientConnected(server);
 
-    u32* cmd_buff = Kernel::GetCommandBuffer();
-    FileCommand cmd = static_cast<FileCommand>(cmd_buff[0]);
-    switch (cmd) {
+    FileSessionSlot* slot = GetSessionData(server);
+    const FileSessionSlot* original_file = GetSessionData(ctx.Session());
 
-    // Read from file...
-    case FileCommand::Read: {
-        u64 offset = cmd_buff[1] | ((u64)cmd_buff[2]) << 32;
-        u32 length = cmd_buff[3];
-        u32 address = cmd_buff[5];
-        LOG_TRACE(Service_FS, "Read %s: offset=0x%llx length=%d address=0x%x", GetName().c_str(),
-                  offset, length, address);
+    slot->priority = original_file->priority;
+    slot->offset = 0;
+    slot->size = backend->GetSize();
+    slot->subfile = false;
 
-        if (offset + length > backend->GetSize()) {
-            LOG_ERROR(Service_FS, "Reading from out of bounds offset=0x%" PRIx64
-                                  " length=0x%08X file_size=0x%" PRIx64,
-                      offset, length, backend->GetSize());
-        }
+    rb.Push(RESULT_SUCCESS);
+    rb.PushMoveObjects(std::get<SharedPtr<ClientSession>>(sessions));
+}
 
-        std::vector<u8> data(length);
-        ResultVal<size_t> read = backend->Read(offset, data.size(), data.data());
-        if (read.Failed()) {
-            cmd_buff[1] = read.Code().raw;
-            return;
-        }
-        Memory::WriteBlock(address, data.data(), *read);
-        cmd_buff[2] = static_cast<u32>(*read);
-        break;
-    }
+void File::OpenSubFile(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x0801, 4, 0);
+    s64 offset = rp.PopRaw<s64>();
+    s64 size = rp.PopRaw<s64>();
 
-    // Write to file...
-    case FileCommand::Write: {
-        u64 offset = cmd_buff[1] | ((u64)cmd_buff[2]) << 32;
-        u32 length = cmd_buff[3];
-        u32 flush = cmd_buff[4];
-        u32 address = cmd_buff[6];
-        LOG_TRACE(Service_FS, "Write %s: offset=0x%llx length=%d address=0x%x, flush=0x%x",
-                  GetName().c_str(), offset, length, address, flush);
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 2);
 
-        std::vector<u8> data(length);
-        Memory::ReadBlock(address, data.data(), data.size());
-        ResultVal<size_t> written = backend->Write(offset, data.size(), flush != 0, data.data());
-        if (written.Failed()) {
-            cmd_buff[1] = written.Code().raw;
-            return;
-        }
-        cmd_buff[2] = static_cast<u32>(*written);
-        break;
-    }
+    const FileSessionSlot* original_file = GetSessionData(ctx.Session());
 
-    case FileCommand::GetSize: {
-        LOG_TRACE(Service_FS, "GetSize %s", GetName().c_str());
-        u64 size = backend->GetSize();
-        cmd_buff[2] = (u32)size;
-        cmd_buff[3] = size >> 32;
-        break;
-    }
-
-    case FileCommand::SetSize: {
-        u64 size = cmd_buff[1] | ((u64)cmd_buff[2] << 32);
-        LOG_TRACE(Service_FS, "SetSize %s size=%llu", GetName().c_str(), size);
-        backend->SetSize(size);
-        break;
-    }
-
-    case FileCommand::Close: {
-        LOG_TRACE(Service_FS, "Close %s", GetName().c_str());
-        backend->Close();
-        break;
-    }
-
-    case FileCommand::Flush: {
-        LOG_TRACE(Service_FS, "Flush");
-        backend->Flush();
-        break;
-    }
-
-    case FileCommand::OpenLinkFile: {
-        LOG_WARNING(Service_FS, "(STUBBED) File command OpenLinkFile %s", GetName().c_str());
-        auto sessions = ServerSession::CreateSessionPair(GetName());
-        ClientConnected(std::get<SharedPtr<ServerSession>>(sessions));
-        cmd_buff[3] = Kernel::g_handle_table.Create(std::get<SharedPtr<ClientSession>>(sessions))
-                          .ValueOr(INVALID_HANDLE);
-        break;
-    }
-
-    case FileCommand::SetPriority: {
-        priority = cmd_buff[1];
-        LOG_TRACE(Service_FS, "SetPriority %u", priority);
-        break;
-    }
-
-    case FileCommand::GetPriority: {
-        cmd_buff[2] = priority;
-        LOG_TRACE(Service_FS, "GetPriority");
-        break;
-    }
-
-    // Unknown command...
-    default:
-        LOG_ERROR(Service_FS, "Unknown command=0x%08X!", static_cast<u32>(cmd));
-        ResultCode error = UnimplementedFunction(ErrorModule::FS);
-        cmd_buff[1] = error.raw; // TODO(Link Mauve): use the correct error code for that.
+    if (original_file->subfile) {
+        // OpenSubFile can not be called on a file which is already as subfile
+        rb.Push(FileSys::ERROR_UNSUPPORTED_OPEN_FLAGS);
         return;
     }
-    cmd_buff[1] = RESULT_SUCCESS.raw; // No error
+
+    if (offset < 0 || size < 0) {
+        rb.Push(FileSys::ERR_WRITE_BEYOND_END);
+        return;
+    }
+
+    size_t end = offset + size;
+
+    // TODO(Subv): Check for overflow and return ERR_WRITE_BEYOND_END
+
+    if (end > original_file->size) {
+        rb.Push(FileSys::ERR_WRITE_BEYOND_END);
+        return;
+    }
+
+    using Kernel::ClientSession;
+    using Kernel::ServerSession;
+    using Kernel::SharedPtr;
+    auto sessions = ServerSession::CreateSessionPair(GetName());
+    auto server = std::get<SharedPtr<ServerSession>>(sessions);
+    ClientConnected(server);
+
+    FileSessionSlot* slot = GetSessionData(server);
+    slot->priority = original_file->priority;
+    slot->offset = offset;
+    slot->size = size;
+    slot->subfile = true;
+
+    rb.Push(RESULT_SUCCESS);
+    rb.PushMoveObjects(std::get<SharedPtr<ClientSession>>(sessions));
+}
+
+Kernel::SharedPtr<Kernel::ClientSession> File::Connect() {
+    auto sessions = Kernel::ServerSession::CreateSessionPair(GetName());
+    auto server = std::get<Kernel::SharedPtr<Kernel::ServerSession>>(sessions);
+    ClientConnected(server);
+
+    FileSessionSlot* slot = GetSessionData(server);
+    slot->priority = 0;
+    slot->offset = 0;
+    slot->size = backend->GetSize();
+    slot->subfile = false;
+
+    return std::get<Kernel::SharedPtr<Kernel::ClientSession>>(sessions);
 }
 
 Directory::Directory(std::unique_ptr<FileSys::DirectoryBackend>&& backend,

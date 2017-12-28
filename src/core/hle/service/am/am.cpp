@@ -320,7 +320,7 @@ InstallStatus InstallCIA(const std::string& path,
                 update_callback(total_bytes_read, file.GetSize());
             if (result.Failed()) {
                 LOG_ERROR(Service_AM, "CIA file installation aborted with error code %08x",
-                          result.Code());
+                          result.Code().raw);
                 return InstallStatus::ErrorAborted;
             }
             total_bytes_read += bytes_read;
@@ -606,7 +606,7 @@ void DeleteContents(Service::Interface* self) {
     u8 media_type = rp.Pop<u8>();
     u64 title_id = rp.Pop<u64>();
     u32 content_count = rp.Pop<u32>();
-    VAddr content_ids_in = rp.PopMappedBuffer();
+    VAddr content_ids_in = rp.PopMappedBuffer(nullptr);
 
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
     rb.Push(RESULT_SUCCESS);
@@ -620,7 +620,7 @@ void GetProgramList(Service::Interface* self) {
 
     u32 count = rp.Pop<u32>();
     u8 media_type = rp.Pop<u8>();
-    VAddr title_ids_output_pointer = rp.PopMappedBuffer();
+    VAddr title_ids_output_pointer = rp.PopMappedBuffer(nullptr);
 
     if (!Memory::IsValidVirtualAddress(title_ids_output_pointer) || media_type > 2) {
         IPC::RequestBuilder rb = rp.MakeBuilder(2, 0);
@@ -765,7 +765,7 @@ void ListDataTitleTicketInfos(Service::Interface* self) {
     u32 ticket_count = rp.Pop<u32>();
     u64 title_id = rp.Pop<u64>();
     u32 start_index = rp.Pop<u32>();
-    VAddr ticket_info_out = rp.PopMappedBuffer();
+    VAddr ticket_info_out = rp.PopMappedBuffer(nullptr);
     VAddr ticket_info_write = ticket_info_out;
 
     for (u32 i = 0; i < ticket_count; i++) {
@@ -840,7 +840,7 @@ void GetTicketList(Service::Interface* self) {
     IPC::RequestParser rp(Kernel::GetCommandBuffer(), 9, 2, 2); // 0x00090082
     u32 ticket_list_count = rp.Pop<u32>();
     u32 ticket_index = rp.Pop<u32>();
-    VAddr ticket_tids_out = rp.PopMappedBuffer();
+    VAddr ticket_tids_out = rp.PopMappedBuffer(nullptr);
 
     IPC::RequestBuilder rb = rp.MakeBuilder(2, 0);
     rb.Push(RESULT_SUCCESS);
@@ -909,16 +909,12 @@ void BeginImportProgram(Service::Interface* self) {
     const FileSys::Path cia_path = {};
     auto file =
         std::make_shared<Service::FS::File>(std::make_unique<CIAFile>(media_type), cia_path);
-    auto sessions = Kernel::ServerSession::CreateSessionPair(file->GetName());
-    file->ClientConnected(std::get<Kernel::SharedPtr<Kernel::ServerSession>>(sessions));
 
     cia_installing = true;
 
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 2);
     rb.Push(RESULT_SUCCESS); // No error
-    rb.PushCopyHandles(
-        Kernel::g_handle_table.Create(std::get<Kernel::SharedPtr<Kernel::ClientSession>>(sessions))
-            .Unwrap());
+    rb.PushCopyHandles(Kernel::g_handle_table.Create(file->Connect()).Unwrap());
 
     LOG_WARNING(Service_AM, "(STUBBED) media_type=%u", static_cast<u32>(media_type));
 }
