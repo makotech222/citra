@@ -30,6 +30,8 @@ add_library(core STATIC
     arm/skyeye_common/vfp/vfpsingle.cpp
     core.cpp
     core.h
+    cheat_core.h
+    cheat_core.cpp
     core_timing.cpp
     core_timing.h
     file_sys/archive_backend.cpp

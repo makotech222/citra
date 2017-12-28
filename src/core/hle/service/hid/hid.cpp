@@ -32,6 +32,7 @@ static Kernel::SharedPtr<Kernel::Event> event_pad_or_touch_2;
 static Kernel::SharedPtr<Kernel::Event> event_accelerometer;
 static Kernel::SharedPtr<Kernel::Event> event_gyroscope;
 static Kernel::SharedPtr<Kernel::Event> event_debug_pad;
+static PadState inputs_this_frame;
 
 static u32 next_pad_index;
 static u32 next_touch_index;
@@ -161,6 +162,7 @@ static void UpdatePadCallback(u64 userdata, int cycles_late) {
     pad_entry.delta_removals.hex = changed.hex & old_state.hex;
     pad_entry.circle_pad_x = circle_pad_x;
     pad_entry.circle_pad_y = circle_pad_y;
+    inputs_this_frame.hex = state.hex;
 
     // If we just updated index 0, provide a new timestamp
     if (mem->pad.index == 0) {
@@ -197,7 +199,9 @@ static void UpdatePadCallback(u64 userdata, int cycles_late) {
     // Reschedule recurrent event
     CoreTiming::ScheduleEvent(pad_update_ticks - cycles_late, pad_update_event);
 }
-
+PadState& GetInputsThisFrame() {
+    return inputs_this_frame;
+}
 static void UpdateAccelerometerCallback(u64 userdata, int cycles_late) {
     SharedMem* mem = reinterpret_cast<SharedMem*>(shared_mem->GetPointer());
 

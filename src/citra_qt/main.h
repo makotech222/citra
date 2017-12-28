@@ -30,6 +30,8 @@ class QProgressBar;
 class RegistersWidget;
 class Updater;
 class WaitTreeWidget;
+class CheatDialog;
+class CheatSearch;
 
 class GMainWindow : public QMainWindow {
     Q_OBJECT
@@ -138,6 +140,8 @@ private slots:
     void OnMenuRecentFile();
     void OnSwapScreens();
     void OnConfigure();
+    void OnCheats();
+    void OnCheatsSearch();
     void OnToggleFilterBar();
     void OnDisplayTitleBars(bool);
     void ToggleFullscreen();
@@ -189,6 +193,8 @@ private:
 
     bool explicit_update_check = false;
     bool defer_update_prompt = false;
+    std::shared_ptr<CheatDialog> cheatWindow;
+    std::shared_ptr<CheatSearch> cheatSearchWindow;
 
     QAction* actions_recent_files[max_recent_files_item];
 

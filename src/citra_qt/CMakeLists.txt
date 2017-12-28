@@ -9,6 +9,10 @@ add_executable(citra-qt
     aboutdialog.h
     bootmanager.cpp
     bootmanager.h
+    cheatsearch.cpp
+    cheat_gui.cpp
+    cheatsearch.h
+    cheat_gui.h
     citra-qt.rc
     configuration/config.cpp
     configuration/config.h
@@ -68,6 +72,8 @@ add_executable(citra-qt
 )
 
 set(UIS
+    cheatsearch.ui
+    cheat_gui.ui
     configuration/configure.ui
     configuration/configure_audio.ui
     configuration/configure_debug.ui
