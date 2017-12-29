@@ -285,6 +285,7 @@ private:
     OGLBuffer vertex_buffer;
     OGLBuffer uniform_buffer;
     OGLFramebuffer framebuffer;
+    GLsizeiptr vertex_buffer_size;
 
     OGLBuffer lighting_lut_buffer;
     OGLTexture lighting_lut;

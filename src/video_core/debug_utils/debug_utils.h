@@ -235,13 +235,14 @@ class MemoryAccessTracker {
 public:
     /// Record a particular memory access in the list
     void AddAccess(u32 paddr, u32 size) {
+        std::lock_guard<std::mutex> lock(mutex);
         // Create new range or extend existing one
         ranges[paddr] = std::max(ranges[paddr], size);
 
         // Simplify ranges...
         SimplifyRanges();
     }
-
+    std::mutex mutex;
     /// Map of accessed ranges (mapping start address to range size)
     std::map<u32, u32> ranges;
 };
