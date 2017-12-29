@@ -105,6 +105,8 @@ void FrameLimiter::ChangeFrameLimit(bool increase)
         MAX_LAG_TIME_US += 2ms;
     else if (MAX_LAG_TIME_US >= 2ms)
         MAX_LAG_TIME_US -= 2ms;
+    else if (MAX_LAG_TIME_US < 2ms)
+        MAX_LAG_TIME_US = 0ms;
 }
 
 } // namespace Core
