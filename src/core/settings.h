@@ -54,9 +54,21 @@ constexpr int NUM_BUTTONS_IR = BUTTON_IR_END - BUTTON_IR_BEGIN;
 constexpr int NUM_BUTTONS_NS = BUTTON_NS_END - BUTTON_NS_BEGIN;
 
 static const std::array<const char*, NumButtons> mapping = {{
-    "button_a", "button_b", "button_x", "button_y", "button_up", "button_down", "button_left",
-    "button_right", "button_l", "button_r", "button_start", "button_select", "button_zl",
-    "button_zr", "button_home",
+    "button_a",
+    "button_b",
+    "button_x",
+    "button_y",
+    "button_up",
+    "button_down",
+    "button_left",
+    "button_right",
+    "button_l",
+    "button_r",
+    "button_start",
+    "button_select",
+    "button_zl",
+    "button_zr",
+    "button_home",
 }};
 } // namespace NativeButton
 
@@ -69,7 +81,8 @@ enum Values {
 };
 
 static const std::array<const char*, NumAnalogs> mapping = {{
-    "circle_pad", "c_stick",
+    "circle_pad",
+    "c_stick",
 }};
 } // namespace NativeAnalog
 
@@ -95,9 +108,10 @@ struct Values {
     // Renderer
     bool use_hw_renderer;
     bool use_shader_jit;
-    float resolution_factor;
+    u16 resolution_factor;
     bool use_vsync;
-    bool toggle_framelimit;
+    bool use_frame_limit;
+    u16 frame_limit;
 
     LayoutOption layout_option;
     bool swap_screen;
@@ -130,10 +144,15 @@ struct Values {
     bool use_gdbstub;
     u16 gdbstub_port;
 
+    // Movie
+    std::string movie_play;
+    std::string movie_record;
+
     // WebService
     bool enable_telemetry;
     std::string telemetry_endpoint_url;
     std::string verify_endpoint_url;
+    std::string announce_multiplayer_room_endpoint_url;
     std::string citra_username;
     std::string citra_token;
 } extern values;

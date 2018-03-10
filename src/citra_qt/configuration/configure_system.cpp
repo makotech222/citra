@@ -11,7 +11,18 @@
 #include "ui_configure_system.h"
 
 static const std::array<int, 12> days_in_month = {{
-    31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+    31,
+    29,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
 }};
 
 ConfigureSystem::ConfigureSystem(QWidget* parent) : QWidget(parent), ui(new Ui::ConfigureSystem) {
@@ -166,4 +177,8 @@ void ConfigureSystem::refreshConsoleID() {
     Service::CFG::SetConsoleUniqueId(random_number, console_id);
     Service::CFG::UpdateConfigNANDSavegame();
     ui->label_console_id->setText("Console ID: 0x" + QString::number(console_id, 16).toUpper());
+}
+
+void ConfigureSystem::retranslateUi() {
+    ui->retranslateUi(this);
 }

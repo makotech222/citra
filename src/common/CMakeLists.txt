@@ -17,7 +17,7 @@ if ($ENV{CI})
       string(SUBSTRING ${WORD} 1 -1 REMAINDER)
       string(TOUPPER ${FIRST_LETTER} FIRST_LETTER)
       # this leaves a trailing space on the last word, but we actually want that
-      # because of how its styled in the title bar.
+      # because of how it's styled in the title bar.
       set(REPO_NAME "${REPO_NAME}${FIRST_LETTER}${REMAINDER} ")
     endforeach()
   endif()
@@ -26,12 +26,15 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/scm_rev.cpp.in" "${CMAKE_CURRENT_SOU
 
 add_library(common STATIC
     alignment.h
+    announce_multiplayer_room.h
     assert.h
     bit_field.h
     bit_set.h
     break_points.cpp
     break_points.h
     chunk_file.h
+    cityhash.cpp
+    cityhash.h
     code_block.h
     color.h
     common_funcs.h
@@ -39,7 +42,6 @@ add_library(common STATIC
     common_types.h
     file_util.cpp
     file_util.h
-    hash.cpp
     hash.h
     linear_disk_cache.h
     logging/backend.cpp

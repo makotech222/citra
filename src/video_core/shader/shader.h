@@ -17,9 +17,9 @@
 #include "video_core/regs_rasterizer.h"
 #include "video_core/regs_shader.h"
 
+using nihstro::DestRegister;
 using nihstro::RegisterType;
 using nihstro::SourceRegister;
-using nihstro::DestRegister;
 
 namespace Pica {
 
@@ -50,6 +50,7 @@ struct OutputVertex {
     INSERT_PADDING_WORDS(1);
     Math::Vec2<float24> tc2;
 
+    static void ValidateSemantics(const RasterizerRegs& regs);
     static OutputVertex FromAttributeBuffer(const RasterizerRegs& regs,
                                             const AttributeBuffer& output);
 };

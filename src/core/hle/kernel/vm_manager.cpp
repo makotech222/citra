@@ -58,7 +58,6 @@ void VMManager::Reset() {
 
     page_table.pointers.fill(nullptr);
     page_table.attributes.fill(Memory::PageType::Unmapped);
-    page_table.cached_res_count.fill(0);
 
     UpdatePageTableForVMA(initial_vma);
 }
@@ -91,6 +90,36 @@ ResultVal<VMManager::VMAHandle> VMManager::MapMemoryBlock(VAddr target,
     UpdatePageTableForVMA(final_vma);
 
     return MakeResult<VMAHandle>(MergeAdjacent(vma_handle));
+}
+
+ResultVal<VAddr> VMManager::MapMemoryBlockToBase(VAddr base, u32 region_size,
+                                                 std::shared_ptr<std::vector<u8>> block,
+                                                 size_t offset, u32 size, MemoryState state) {
+
+    // Find the first Free VMA.
+    VMAHandle vma_handle = std::find_if(vma_map.begin(), vma_map.end(), [&](const auto& vma) {
+        if (vma.second.type != VMAType::Free)
+            return false;
+
+        VAddr vma_end = vma.second.base + vma.second.size;
+        return vma_end > base && vma_end >= base + size;
+    });
+
+    VAddr target = std::max(base, vma_handle->second.base);
+
+    // Do not try to allocate the block if there are no available addresses within the desired
+    // region.
+    if (vma_handle == vma_map.end() || target + size > base + region_size) {
+        return ResultCode(ErrorDescription::OutOfMemory, ErrorModule::Kernel,
+                          ErrorSummary::OutOfResource, ErrorLevel::Permanent);
+    }
+
+    auto result = MapMemoryBlock(target, block, offset, size, state);
+
+    if (result.Failed())
+        return result.Code();
+
+    return MakeResult<VAddr>(target);
 }
 
 ResultVal<VMManager::VMAHandle> VMManager::MapBackingMemory(VAddr target, u8* memory, u32 size,
@@ -127,6 +156,39 @@ ResultVal<VMManager::VMAHandle> VMManager::MapMMIO(VAddr target, PAddr paddr, u3
     UpdatePageTableForVMA(final_vma);
 
     return MakeResult<VMAHandle>(MergeAdjacent(vma_handle));
+}
+
+ResultCode VMManager::ChangeMemoryState(VAddr target, u32 size, MemoryState expected_state,
+                                        VMAPermission expected_perms, MemoryState new_state,
+                                        VMAPermission new_perms) {
+    VAddr target_end = target + size;
+    VMAIter begin_vma = StripIterConstness(FindVMA(target));
+    VMAIter i_end = vma_map.lower_bound(target_end);
+
+    if (begin_vma == vma_map.end())
+        return ERR_INVALID_ADDRESS;
+
+    for (auto i = begin_vma; i != i_end; ++i) {
+        auto& vma = i->second;
+        if (vma.meminfo_state != expected_state) {
+            return ERR_INVALID_ADDRESS_STATE;
+        }
+        u32 perms = static_cast<u32>(expected_perms);
+        if ((static_cast<u32>(vma.permissions) & perms) != perms) {
+            return ERR_INVALID_ADDRESS_STATE;
+        }
+    }
+
+    CASCADE_RESULT(auto vma, CarveVMARange(target, size));
+    ASSERT(vma->second.size == size);
+
+    vma->second.permissions = new_perms;
+    vma->second.meminfo_state = new_state;
+    UpdatePageTableForVMA(vma->second);
+
+    MergeAdjacent(vma);
+
+    return RESULT_SUCCESS;
 }
 
 VMManager::VMAIter VMManager::Unmap(VMAIter vma_handle) {
@@ -346,4 +408,4 @@ void VMManager::UpdatePageTableForVMA(const VirtualMemoryArea& vma) {
         break;
     }
 }
-}
+} // namespace Kernel

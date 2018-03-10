@@ -24,6 +24,7 @@
 #include "common/common_paths.h"
 #include "common/logging/log.h"
 #include "common/string_util.h"
+#include "core/hle/service/fs/archive.h"
 #include "core/loader/loader.h"
 
 GameList::SearchField::KeyReleaseEater::KeyReleaseEater(GameList* gamelist) {
@@ -315,10 +316,24 @@ void GameList::PopupContextMenu(const QPoint& menu_location) {
     u64 program_id = child_file->data(GameListItemPath::ProgramIdRole).toULongLong();
 
     QMenu context_menu;
+
     QAction* open_save_location = context_menu.addAction(tr("Open Save Data Location"));
+    QAction* open_application_location = context_menu.addAction(tr("Open Application Location"));
+    QAction* open_update_location = context_menu.addAction(tr("Open Update Data Location"));
+
     open_save_location->setEnabled(program_id != 0);
+    open_application_location->setVisible(FileUtil::Exists(
+        Service::AM::GetTitleContentPath(Service::FS::MediaType::SDMC, program_id)));
+    open_update_location->setEnabled(0x00040000'00000000 <= program_id &&
+                                     program_id <= 0x00040000'FFFFFFFF);
+
     connect(open_save_location, &QAction::triggered,
-            [&]() { emit OpenSaveFolderRequested(program_id); });
+            [&]() { emit OpenFolderRequested(program_id, GameListOpenTarget::SAVE_DATA); });
+    connect(open_application_location, &QAction::triggered,
+            [&]() { emit OpenFolderRequested(program_id, GameListOpenTarget::APPLICATION); });
+    connect(open_update_location, &QAction::triggered,
+            [&]() { emit OpenFolderRequested(program_id, GameListOpenTarget::UPDATE_DATA); });
+
     context_menu.exec(tree_view->viewport()->mapToGlobal(menu_location));
 }
 
@@ -395,11 +410,31 @@ void GameListWorker::AddFstEntriesToGameList(const std::string& dir_path, unsign
             if (!loader)
                 return true;
 
-            std::vector<u8> smdh;
-            loader->ReadIcon(smdh);
-
             u64 program_id = 0;
             loader->ReadProgramId(program_id);
+
+            std::vector<u8> smdh = [program_id, &loader]() -> std::vector<u8> {
+                std::vector<u8> original_smdh;
+                loader->ReadIcon(original_smdh);
+
+                if (program_id < 0x00040000'00000000 || program_id > 0x00040000'FFFFFFFF)
+                    return original_smdh;
+
+                std::string update_path = Service::AM::GetTitleContentPath(
+                    Service::FS::MediaType::SDMC, program_id + 0x0000000E'00000000);
+
+                if (!FileUtil::Exists(update_path))
+                    return original_smdh;
+
+                std::unique_ptr<Loader::AppLoader> update_loader = Loader::GetLoader(update_path);
+
+                if (!update_loader)
+                    return original_smdh;
+
+                std::vector<u8> update_smdh;
+                update_loader->ReadIcon(update_smdh);
+                return update_smdh;
+            }();
 
             emit EntryReady({
                 new GameListItemPath(QString::fromStdString(physical_name), smdh, program_id),
@@ -421,7 +456,26 @@ void GameListWorker::AddFstEntriesToGameList(const std::string& dir_path, unsign
 void GameListWorker::run() {
     stop_processing = false;
     watch_list.append(dir_path);
+    watch_list.append(QString::fromStdString(
+        std::string(FileUtil::GetUserPath(D_SDMC_IDX).c_str()) +
+        "Nintendo "
+        "3DS/00000000000000000000000000000000/00000000000000000000000000000000/title/00040000"));
+    watch_list.append(QString::fromStdString(
+        std::string(FileUtil::GetUserPath(D_SDMC_IDX).c_str()) +
+        "Nintendo "
+        "3DS/00000000000000000000000000000000/00000000000000000000000000000000/title/0004000e"));
+    watch_list.append(
+        QString::fromStdString(std::string(FileUtil::GetUserPath(D_NAND_IDX).c_str()) +
+                               "00000000000000000000000000000000/title/00040010"));
     AddFstEntriesToGameList(dir_path.toStdString(), deep_scan ? 256 : 0);
+    AddFstEntriesToGameList(
+        std::string(FileUtil::GetUserPath(D_SDMC_IDX).c_str()) +
+            "Nintendo "
+            "3DS/00000000000000000000000000000000/00000000000000000000000000000000/title/00040000",
+        2);
+    AddFstEntriesToGameList(std::string(FileUtil::GetUserPath(D_NAND_IDX).c_str()) +
+                                "00000000000000000000000000000000/title/00040010",
+                            2);
     emit Finished(watch_list);
 }
 

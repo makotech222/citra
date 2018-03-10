@@ -1,10 +1,8 @@
 add_library(core STATIC
     3ds.h
+    announce_multiplayer_session.cpp
+    announce_multiplayer_session.h
     arm/arm_interface.h
-    arm/dynarmic/arm_dynarmic.cpp
-    arm/dynarmic/arm_dynarmic.h
-    arm/dynarmic/arm_dynarmic_cp15.cpp
-    arm/dynarmic/arm_dynarmic_cp15.h
     arm/dyncom/arm_dyncom.cpp
     arm/dyncom/arm_dyncom.h
     arm/dyncom/arm_dyncom_dec.cpp
@@ -59,6 +57,7 @@ add_library(core STATIC
     file_sys/disk_archive.h
     file_sys/errors.h
     file_sys/file_backend.h
+    file_sys/delay_generator.h
     file_sys/ivfc_archive.cpp
     file_sys/ivfc_archive.h
     file_sys/ncch_container.cpp
@@ -168,6 +167,8 @@ add_library(core STATIC
     hle/service/am/am_sys.h
     hle/service/am/am_u.cpp
     hle/service/am/am_u.h
+    hle/service/apt/applet_manager.cpp
+    hle/service/apt/applet_manager.h
     hle/service/apt/apt.cpp
     hle/service/apt/apt.h
     hle/service/apt/apt_a.cpp
@@ -178,6 +179,7 @@ add_library(core STATIC
     hle/service/apt/apt_u.h
     hle/service/apt/bcfnt/bcfnt.cpp
     hle/service/apt/bcfnt/bcfnt.h
+    hle/service/apt/errors.h
     hle/service/boss/boss.cpp
     hle/service/boss/boss.h
     hle/service/boss/boss_p.cpp
@@ -390,6 +392,8 @@ add_library(core STATIC
     memory.h
     memory_setup.h
     mmio.h
+    movie.cpp
+    movie.h
     perf_stats.cpp
     perf_stats.h
     settings.cpp
@@ -404,7 +408,17 @@ add_library(core STATIC
 create_target_directory_groups(core)
 
 target_link_libraries(core PUBLIC common PRIVATE audio_core network video_core)
-target_link_libraries(core PUBLIC Boost::boost PRIVATE cryptopp dynarmic fmt)
+target_link_libraries(core PUBLIC Boost::boost PRIVATE cryptopp fmt)
 if (ENABLE_WEB_SERVICE)
     target_link_libraries(core PUBLIC json-headers web_service)
+endif()
+
+if (ARCHITECTURE_x86_64)
+    target_sources(core PRIVATE
+        arm/dynarmic/arm_dynarmic.cpp
+        arm/dynarmic/arm_dynarmic.h
+        arm/dynarmic/arm_dynarmic_cp15.cpp
+        arm/dynarmic/arm_dynarmic_cp15.h
+    )
+    target_link_libraries(core PRIVATE dynarmic)
 endif()

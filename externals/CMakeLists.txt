@@ -11,14 +11,17 @@ target_include_directories(catch-single-include INTERFACE catch/single_include)
 add_subdirectory(cryptopp)
 
 # Dynarmic
-# Dynarmic will skip defining xbyak if it's already defined, we then define it below
-add_library(xbyak INTERFACE)
-option(DYNARMIC_TESTS OFF)
-set(DYNARMIC_NO_BUNDLED_FMT ON)
-add_subdirectory(dynarmic)
+if (ARCHITECTURE_x86_64)
+    # Dynarmic will skip defining xbyak if it's already defined, we then define it below
+    add_library(xbyak INTERFACE)
+    option(DYNARMIC_TESTS OFF)
+    set(DYNARMIC_NO_BUNDLED_FMT ON)
+    add_subdirectory(dynarmic)
+endif()
 
 # libfmt
 add_subdirectory(fmt)
+add_library(fmt::fmt ALIAS fmt)
 
 # getopt
 if (MSVC)

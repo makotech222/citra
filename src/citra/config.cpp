@@ -49,10 +49,18 @@ static const std::array<int, Settings::NativeButton::NumButtons> default_buttons
 
 static const std::array<std::array<int, 5>, Settings::NativeAnalog::NumAnalogs> default_analogs{{
     {
-        SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT, SDL_SCANCODE_D,
+        SDL_SCANCODE_UP,
+        SDL_SCANCODE_DOWN,
+        SDL_SCANCODE_LEFT,
+        SDL_SCANCODE_RIGHT,
+        SDL_SCANCODE_D,
     },
     {
-        SDL_SCANCODE_I, SDL_SCANCODE_K, SDL_SCANCODE_J, SDL_SCANCODE_L, SDL_SCANCODE_D,
+        SDL_SCANCODE_I,
+        SDL_SCANCODE_K,
+        SDL_SCANCODE_J,
+        SDL_SCANCODE_L,
+        SDL_SCANCODE_D,
     },
 }};
 
@@ -76,8 +84,9 @@ void Config::ReadValues() {
             Settings::values.analogs[i] = default_param;
     }
 
-    Settings::values.motion_device = sdl2_config->Get(
-        "Controls", "motion_device", "engine:motion_emu,update_period:100,sensitivity:0.01");
+    Settings::values.motion_device =
+        sdl2_config->Get("Controls", "motion_device",
+                         "engine:motion_emu,update_period:100,sensitivity:0.01,tilt_clamp:90.0");
     Settings::values.touch_device =
         sdl2_config->Get("Controls", "touch_device", "engine:emu_window");
 
@@ -88,10 +97,11 @@ void Config::ReadValues() {
     Settings::values.use_hw_renderer = sdl2_config->GetBoolean("Renderer", "use_hw_renderer", true);
     Settings::values.use_shader_jit = sdl2_config->GetBoolean("Renderer", "use_shader_jit", true);
     Settings::values.resolution_factor =
-        (float)sdl2_config->GetReal("Renderer", "resolution_factor", 1.0);
+        static_cast<u16>(sdl2_config->GetInteger("Renderer", "resolution_factor", 1));
     Settings::values.use_vsync = sdl2_config->GetBoolean("Renderer", "use_vsync", false);
-    Settings::values.toggle_framelimit =
-        sdl2_config->GetBoolean("Renderer", "toggle_framelimit", true);
+    Settings::values.use_frame_limit = sdl2_config->GetBoolean("Renderer", "use_frame_limit", true);
+    Settings::values.frame_limit =
+        static_cast<u16>(sdl2_config->GetInteger("Renderer", "frame_limit", 100));
 
     Settings::values.bg_red = (float)sdl2_config->GetReal("Renderer", "bg_red", 0.0);
     Settings::values.bg_green = (float)sdl2_config->GetReal("Renderer", "bg_green", 0.0);
@@ -164,6 +174,9 @@ void Config::ReadValues() {
         "WebService", "telemetry_endpoint_url", "https://services.citra-emu.org/api/telemetry");
     Settings::values.verify_endpoint_url = sdl2_config->Get(
         "WebService", "verify_endpoint_url", "https://services.citra-emu.org/api/profile");
+    Settings::values.announce_multiplayer_room_endpoint_url =
+        sdl2_config->Get("WebService", "announce_multiplayer_room_endpoint_url",
+                         "https://services.citra-emu.org/api/multiplayer/rooms");
     Settings::values.citra_username = sdl2_config->Get("WebService", "citra_username", "");
     Settings::values.citra_token = sdl2_config->Get("WebService", "citra_token", "");
 }

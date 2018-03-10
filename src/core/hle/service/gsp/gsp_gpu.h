@@ -8,12 +8,12 @@
 #include <string>
 #include "common/bit_field.h"
 #include "common/common_types.h"
+#include "core/hle/kernel/event.h"
 #include "core/hle/kernel/hle_ipc.h"
 #include "core/hle/result.h"
 #include "core/hle/service/service.h"
 
 namespace Kernel {
-class Event;
 class SharedMemory;
 } // namespace Kernel
 
@@ -179,10 +179,24 @@ struct CommandBuffer {
 };
 static_assert(sizeof(CommandBuffer) == 0x200, "CommandBuffer struct has incorrect size");
 
-class GSP_GPU final : public ServiceFramework<GSP_GPU> {
+struct SessionData : public Kernel::SessionRequestHandler::SessionDataBase {
+    SessionData();
+    ~SessionData();
+
+    /// Event triggered when GSP interrupt has been signalled
+    Kernel::SharedPtr<Kernel::Event> interrupt_event;
+    /// Thread index into interrupt relay queue
+    u32 thread_id;
+    /// Whether RegisterInterruptRelayQueue was called for this session
+    bool registered = false;
+};
+
+class GSP_GPU final : public ServiceFramework<GSP_GPU, SessionData> {
 public:
     GSP_GPU();
     ~GSP_GPU() = default;
+
+    void ClientDisconnected(Kernel::SharedPtr<Kernel::ServerSession> server_session) override;
 
     /**
      * Signals that the specified interrupt type has occurred to userland code
@@ -201,6 +215,14 @@ public:
     FrameBufferUpdate* GetFrameBufferInfo(u32 thread_id, u32 screen_index);
 
 private:
+    /**
+     * Signals that the specified interrupt type has occurred to userland code for the specified GSP
+     * thread id.
+     * @param interrupt_id ID of interrupt that is being signalled.
+     * @param thread_id GSP thread that will receive the interrupt.
+     */
+    void SignalInterruptForThread(InterruptId interrupt_id, u32 thread_id);
+
     /**
      * GSP_GPU::WriteHWRegs service function
      *
@@ -315,6 +337,12 @@ private:
     void ReleaseRight(Kernel::HLERequestContext& ctx);
 
     /**
+     * Releases rights to the GPU.
+     * Will fail if the session_data doesn't have the GPU right
+     */
+    void ReleaseRight(SessionData* session_data);
+
+    /**
      * GSP_GPU::ImportDisplayCaptureInfo service function
      *
      * Returns information about the current framebuffer state
@@ -351,14 +379,15 @@ private:
      */
     void StoreDataCache(Kernel::HLERequestContext& ctx);
 
-    /// Event triggered when GSP interrupt has been signalled
-    Kernel::SharedPtr<Kernel::Event> interrupt_event;
-    /// GSP shared memoryings
-    Kernel::SharedPtr<Kernel::SharedMemory> shared_memory;
-    /// Thread index into interrupt relay queue
-    u32 thread_id = 0;
+    /// Returns the session data for the specified registered thread id, or nullptr if not found.
+    SessionData* FindRegisteredThreadData(u32 thread_id);
 
-    bool gpu_right_acquired = false;
+    /// GSP shared memory
+    Kernel::SharedPtr<Kernel::SharedMemory> shared_memory;
+
+    /// Thread id that currently has GPU rights or -1 if none.
+    int active_thread_id = -1;
+
     bool first_initialization = true;
 };
 
