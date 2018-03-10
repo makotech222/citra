@@ -288,7 +288,6 @@ static ResultCode WaitSynchronization1(Handle handle, s64 nano_seconds) {
 
         thread->wakeup_callback = [](ThreadWakeupReason reason, SharedPtr<Thread> thread,
                                      SharedPtr<WaitObject> object) {
-
             ASSERT(thread->status == THREADSTATUS_WAIT_SYNCH_ANY);
 
             if (reason == ThreadWakeupReason::Timeout) {
@@ -378,7 +377,6 @@ static ResultCode WaitSynchronizationN(s32* out, VAddr handles_address, s32 hand
 
         thread->wakeup_callback = [](ThreadWakeupReason reason, SharedPtr<Thread> thread,
                                      SharedPtr<WaitObject> object) {
-
             ASSERT(thread->status == THREADSTATUS_WAIT_SYNCH_ALL);
 
             if (reason == ThreadWakeupReason::Timeout) {
@@ -439,7 +437,6 @@ static ResultCode WaitSynchronizationN(s32* out, VAddr handles_address, s32 hand
 
         thread->wakeup_callback = [](ThreadWakeupReason reason, SharedPtr<Thread> thread,
                                      SharedPtr<WaitObject> object) {
-
             ASSERT(thread->status == THREADSTATUS_WAIT_SYNCH_ANY);
 
             if (reason == ThreadWakeupReason::Timeout) {
@@ -472,8 +469,8 @@ static ResultCode ReceiveIPCRequest(SharedPtr<ServerSession> server_session,
     VAddr target_address = thread->GetCommandBufferAddress();
     VAddr source_address = server_session->currently_handling->GetCommandBufferAddress();
 
-    ResultCode translation_result = TranslateCommandBuffer(server_session->currently_handling,
-                                                           thread, source_address, target_address);
+    ResultCode translation_result = TranslateCommandBuffer(
+        server_session->currently_handling, thread, source_address, target_address, false);
 
     // If a translation error occurred, immediately resume the client thread.
     if (translation_result.IsError()) {
@@ -535,8 +532,8 @@ static ResultCode ReplyAndReceive(s32* index, VAddr handles_address, s32 handle_
         VAddr source_address = GetCurrentThread()->GetCommandBufferAddress();
         VAddr target_address = request_thread->GetCommandBufferAddress();
 
-        ResultCode translation_result = TranslateCommandBuffer(GetCurrentThread(), request_thread,
-                                                               source_address, target_address);
+        ResultCode translation_result = TranslateCommandBuffer(
+            Kernel::GetCurrentThread(), request_thread, source_address, target_address, true);
 
         // Note: The real kernel seems to always panic if the Server->Client buffer translation
         // fails for whatever reason.
@@ -591,7 +588,6 @@ static ResultCode ReplyAndReceive(s32* index, VAddr handles_address, s32 handle_
 
     thread->wakeup_callback = [](ThreadWakeupReason reason, SharedPtr<Thread> thread,
                                  SharedPtr<WaitObject> object) {
-
         ASSERT(thread->status == THREADSTATUS_WAIT_SYNCH_ANY);
         ASSERT(reason == ThreadWakeupReason::Signal);
 
@@ -715,7 +711,7 @@ static ResultCode GetResourceLimitLimitValues(VAddr values, Handle resource_limi
 
     for (unsigned int i = 0; i < name_count; ++i) {
         u32 name = Memory::Read32(names + i * sizeof(u32));
-        s64 value = resource_limit->GetMaxResourceValue(names);
+        s64 value = resource_limit->GetMaxResourceValue(name);
         Memory::Write64(values + i * sizeof(u64), value);
     }
 
@@ -763,15 +759,16 @@ static ResultCode CreateThread(Handle* out_handle, u32 priority, u32 entry_point
                    Thread::Create(name, entry_point, priority, arg, processor_id, stack_top,
                                   g_current_process));
 
-    thread->context.fpscr =
-        FPSCR_DEFAULT_NAN | FPSCR_FLUSH_TO_ZERO | FPSCR_ROUND_TOZERO; // 0x03C00000
+    thread->context->SetFpscr(FPSCR_DEFAULT_NAN | FPSCR_FLUSH_TO_ZERO |
+                              FPSCR_ROUND_TOZERO); // 0x03C00000
 
     CASCADE_RESULT(*out_handle, g_handle_table.Create(std::move(thread)));
 
     Core::System::GetInstance().PrepareReschedule();
 
-    LOG_TRACE(Kernel_SVC, "called entrypoint=0x%08X (%s), arg=0x%08X, stacktop=0x%08X, "
-                          "threadpriority=0x%08X, processorid=0x%08X : created handle=0x%08X",
+    LOG_TRACE(Kernel_SVC,
+              "called entrypoint=0x%08X (%s), arg=0x%08X, stacktop=0x%08X, "
+              "threadpriority=0x%08X, processorid=0x%08X : created handle=0x%08X",
               entry_point, name.c_str(), arg, stack_top, priority, processor_id, *out_handle);
 
     return RESULT_SUCCESS;

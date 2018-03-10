@@ -24,10 +24,18 @@ const std::array<int, Settings::NativeButton::NumButtons> Config::default_button
 
 const std::array<std::array<int, 5>, Settings::NativeAnalog::NumAnalogs> Config::default_analogs{{
     {
-        Qt::Key_Up, Qt::Key_Down, Qt::Key_Left, Qt::Key_Right, Qt::Key_D,
+        Qt::Key_Up,
+        Qt::Key_Down,
+        Qt::Key_Left,
+        Qt::Key_Right,
+        Qt::Key_D,
     },
     {
-        Qt::Key_I, Qt::Key_K, Qt::Key_J, Qt::Key_L, Qt::Key_D,
+        Qt::Key_I,
+        Qt::Key_K,
+        Qt::Key_J,
+        Qt::Key_L,
+        Qt::Key_D,
     },
 }};
 
@@ -58,7 +66,9 @@ void Config::ReadValues() {
     }
 
     Settings::values.motion_device =
-        qt_config->value("motion_device", "engine:motion_emu,update_period:100,sensitivity:0.01")
+        qt_config
+            ->value("motion_device",
+                    "engine:motion_emu,update_period:100,sensitivity:0.01,tilt_clamp:90.0")
             .toString()
             .toStdString();
     Settings::values.touch_device =
@@ -73,9 +83,11 @@ void Config::ReadValues() {
     qt_config->beginGroup("Renderer");
     Settings::values.use_hw_renderer = qt_config->value("use_hw_renderer", true).toBool();
     Settings::values.use_shader_jit = qt_config->value("use_shader_jit", true).toBool();
-    Settings::values.resolution_factor = qt_config->value("resolution_factor", 1.0).toFloat();
+    Settings::values.resolution_factor =
+        static_cast<u16>(qt_config->value("resolution_factor", 1).toInt());
     Settings::values.use_vsync = qt_config->value("use_vsync", false).toBool();
-    Settings::values.toggle_framelimit = qt_config->value("toggle_framelimit", true).toBool();
+    Settings::values.use_frame_limit = qt_config->value("use_frame_limit", true).toBool();
+    Settings::values.frame_limit = qt_config->value("frame_limit", 100).toInt();
 
     Settings::values.bg_red = qt_config->value("bg_red", 0.0).toFloat();
     Settings::values.bg_green = qt_config->value("bg_green", 0.0).toFloat();
@@ -182,6 +194,7 @@ void Config::ReadValues() {
     UISettings::values.gamedir = qt_config->value("gameListRootDir", ".").toString();
     UISettings::values.gamedir_deepscan = qt_config->value("gameListDeepScan", false).toBool();
     UISettings::values.recent_files = qt_config->value("recentFiles").toStringList();
+    UISettings::values.language = qt_config->value("language", "").toString();
     qt_config->endGroup();
 
     qt_config->beginGroup("Shortcuts");
@@ -236,9 +249,10 @@ void Config::SaveValues() {
     qt_config->beginGroup("Renderer");
     qt_config->setValue("use_hw_renderer", Settings::values.use_hw_renderer);
     qt_config->setValue("use_shader_jit", Settings::values.use_shader_jit);
-    qt_config->setValue("resolution_factor", (double)Settings::values.resolution_factor);
+    qt_config->setValue("resolution_factor", Settings::values.resolution_factor);
     qt_config->setValue("use_vsync", Settings::values.use_vsync);
-    qt_config->setValue("toggle_framelimit", Settings::values.toggle_framelimit);
+    qt_config->setValue("use_frame_limit", Settings::values.use_frame_limit);
+    qt_config->setValue("frame_limit", Settings::values.frame_limit);
 
     // Cast to double because Qt's written float values are not human-readable
     qt_config->setValue("bg_red", (double)Settings::values.bg_red);
@@ -333,6 +347,7 @@ void Config::SaveValues() {
     qt_config->setValue("gameListRootDir", UISettings::values.gamedir);
     qt_config->setValue("gameListDeepScan", UISettings::values.gamedir_deepscan);
     qt_config->setValue("recentFiles", UISettings::values.recent_files);
+    qt_config->setValue("language", UISettings::values.language);
     qt_config->endGroup();
 
     qt_config->beginGroup("Shortcuts");

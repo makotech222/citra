@@ -221,6 +221,8 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
                     MICROPROFILE_SCOPE(GPU_Drawing);
                     immediate_attribute_id = 0;
 
+                    Shader::OutputVertex::ValidateSemantics(regs.rasterizer);
+
                     auto* shader_engine = Shader::GetEngine();
                     shader_engine->SetupBatch(g_state.vs, regs.vs.main_offset);
 
@@ -289,6 +291,7 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
         // Later, these can be compiled and cached.
         const u32 base_address = regs.pipeline.vertex_attributes.GetPhysicalBaseAddress();
         VertexLoader loader(regs.pipeline);
+        Shader::OutputVertex::ValidateSemantics(regs.rasterizer);
 
         // Load vertices
         bool is_indexed = (id == PICA_REG_INDEX(pipeline.trigger_draw_indexed));
@@ -308,8 +311,9 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
 
                 u8* texture_data = Memory::GetPhysicalPointer(texture.config.GetPhysicalAddress());
                 g_debug_context->recorder->MemoryAccessed(
-                    texture_data, Pica::TexturingRegs::NibblesPerPixel(texture.format) *
-                                      texture.config.width / 2 * texture.config.height,
+                    texture_data,
+                    Pica::TexturingRegs::NibblesPerPixel(texture.format) * texture.config.width /
+                        2 * texture.config.height,
                     texture.config.GetPhysicalAddress());
             }
         }

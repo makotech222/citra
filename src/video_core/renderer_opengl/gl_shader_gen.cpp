@@ -41,7 +41,7 @@ struct LightSrc {
 };
 
 layout (std140) uniform shader_data {
-    vec2 framebuffer_scale;
+    int framebuffer_scale;
     int alphatest_ref;
     float depth_scale;
     float depth_offset;
@@ -65,6 +65,7 @@ PicaShaderConfig PicaShaderConfig::BuildFromRegs(const Pica::Regs& regs) {
     PicaShaderConfig res;
 
     auto& state = res.state;
+    // Memset structure to zero padding bits, so that they will be deterministic when hashing
     std::memset(&state, 0, sizeof(PicaShaderConfig::State));
 
     state.scissor_test_mode = regs.rasterizer.scissor_test.mode;
@@ -661,7 +662,6 @@ static void WriteLighting(std::string& out, const PicaShaderConfig& config) {
             // LUT index is in the range of (-1.0, 1.0)
             return "LookupLightingLUTSigned(" + sampler_string + ", " + index + ")";
         }
-
     };
 
     // Write the code to emulate each enabled light
@@ -1174,7 +1174,8 @@ vec4 secondary_fragment_color = vec4(0.0);
         Core::Telemetry().AddField(Telemetry::FieldType::Session, "VideoCore_Pica_UseGasMode",
                                    true);
         LOG_CRITICAL(Render_OpenGL, "Unimplemented gas mode");
-        UNIMPLEMENTED();
+        out += "discard; }";
+        return out;
     }
 
     out += "gl_FragDepth = depth;\n";

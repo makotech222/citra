@@ -3,7 +3,6 @@
 // Refer to the license.txt file included.
 
 #include <memory>
-#include "audio_core/audio_core.h"
 #include "audio_core/sink.h"
 #include "audio_core/sink_details.h"
 #include "citra_qt/configuration/configure_audio.h"
@@ -75,4 +74,8 @@ void ConfigureAudio::updateAudioDevices(int sink_index) {
     for (const auto& device : device_list) {
         ui->audio_device_combo_box->addItem(device.c_str());
     }
+}
+
+void ConfigureAudio::retranslateUi() {
+    ui->retranslateUi(this);
 }

@@ -5,9 +5,11 @@
 #pragma once
 
 #include <array>
+#include <future>
 #include <string>
-#include <json.hpp>
+#include "common/announce_multiplayer_room.h"
 #include "common/telemetry.h"
+#include "web_service/json.h"
 
 namespace WebService {
 
@@ -54,6 +56,7 @@ private:
     std::string endpoint_url;
     std::string username;
     std::string token;
+    std::future<Common::WebResult> future;
 };
 
 } // namespace WebService

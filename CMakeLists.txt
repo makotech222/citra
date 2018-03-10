@@ -1,19 +1,24 @@
-# CMake 3.6 required for FindBoost to define IMPORTED libs properly on unknown Boost versions
-cmake_minimum_required(VERSION 3.6)
+# CMake 3.8 required for 17 to be a valid value for CXX_STANDARD
+cmake_minimum_required(VERSION 3.8)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/externals/cmake-modules")
 include(DownloadExternals)
+include(CMakeDependentOption)
 
 project(citra)
 
+# Set bundled sdl2/qt as dependent options.
+# OFF by default, but if ENABLE_SDL2 and MSVC are true then ON
 option(ENABLE_SDL2 "Enable the SDL2 frontend" ON)
-option(CITRA_USE_BUNDLED_SDL2 "Download bundled SDL2 binaries" OFF)
+CMAKE_DEPENDENT_OPTION(CITRA_USE_BUNDLED_SDL2 "Download bundled SDL2 binaries" ON "ENABLE_SDL2;MSVC" OFF)
 
 option(ENABLE_QT "Enable the Qt frontend" ON)
-option(CITRA_USE_BUNDLED_QT "Download bundled Qt binaries" OFF)
+option(ENABLE_QT_TRANSLATION "Enable translations for the Qt frontend" OFF)
+CMAKE_DEPENDENT_OPTION(CITRA_USE_BUNDLED_QT "Download bundled Qt binaries" ON "ENABLE_QT;MSVC" OFF)
 
 option(ENABLE_WEB_SERVICE "Enable web services (telemetry, etc.)" ON)
 option(CITRA_USE_BUNDLED_CURL "FOR MINGW ONLY: Download curl configured against winssl instead of openssl" OFF)
+
 if (ENABLE_WEB_SERVICE AND CITRA_USE_BUNDLED_CURL AND WINDOWS AND MSVC)
     message("Turning off use bundled curl as msvc can compile curl on cpr")
     SET(CITRA_USE_BUNDLED_CURL OFF CACHE BOOL "" FORCE)
@@ -65,14 +70,16 @@ function(detect_architecture symbol arch)
     endif()
 endfunction()
 
-if (MSVC)
-    detect_architecture("_M_AMD64" x86_64)
-    detect_architecture("_M_IX86" x86)
-    detect_architecture("_M_ARM" ARM)
-else()
-    detect_architecture("__x86_64__" x86_64)
-    detect_architecture("__i386__" x86)
-    detect_architecture("__arm__" ARM)
+if (NOT ENABLE_GENERIC)
+    if (MSVC)
+        detect_architecture("_M_AMD64" x86_64)
+        detect_architecture("_M_IX86" x86)
+        detect_architecture("_M_ARM" ARM)
+    else()
+        detect_architecture("__x86_64__" x86_64)
+        detect_architecture("__i386__" x86)
+        detect_architecture("__arm__" ARM)
+    endif()
 endif()
 if (NOT DEFINED ARCHITECTURE)
     set(ARCHITECTURE "GENERIC")
@@ -85,7 +92,7 @@ message(STATUS "Target architecture: ${ARCHITECTURE}")
 # Configure compilation flags
 # ===========================
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if (NOT MSVC)
@@ -125,9 +132,10 @@ else()
     # /permissive- - enables stricter C++ standards conformance checks
     set(CMAKE_C_FLAGS   "/W3 /MP /Zi /Zo /permissive-" CACHE STRING "" FORCE)
     # /EHsc - C++-only exception handling semantics
+    # /std:c++latest - Latest available C++ standard
     # /Zc:throwingNew - let codegen assume `operator new` will never return null
     # /Zc:inline - let codegen omit inline functions in object files
-    set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} /EHsc /Zc:throwingNew,inline" CACHE STRING "" FORCE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} /EHsc /std:c++latest /Zc:throwingNew,inline" CACHE STRING "" FORCE)
 
     # /MDd - Multi-threaded Debug Runtime DLL
     set(CMAKE_C_FLAGS_DEBUG   "/Od /MDd" CACHE STRING "" FORCE)
@@ -160,11 +168,6 @@ set_property(DIRECTORY APPEND PROPERTY
 
 # System imported libraries
 # ======================
-
-find_package(PNG QUIET)
-if (NOT PNG_FOUND)
-    message(STATUS "libpng not found. Some debugging features have been disabled.")
-endif()
 
 find_package(Boost 1.63.0 QUIET)
 if (NOT Boost_FOUND)
@@ -230,10 +233,17 @@ if (ENABLE_QT)
     endif()
 
     find_package(Qt5 REQUIRED COMPONENTS Widgets OpenGL ${QT_PREFIX_HINT})
+
+    if (ENABLE_QT_TRANSLATION)
+        find_package(Qt5 REQUIRED COMPONENTS LinguistTools ${QT_PREFIX_HINT})
+    endif()
 endif()
 
 if (ENABLE_WEB_SERVICE)
     add_definitions(-DENABLE_WEB_SERVICE)
+endif()
+if (CITRA_ENABLE_COMPATIBILITY_REPORTING)
+    add_definitions(-DCITRA_ENABLE_COMPATIBILITY_REPORTING)
 endif()
 
 # Platform-specific library requirements
@@ -267,6 +277,53 @@ if (UNIX OR MINGW)
     endif()
 endif()
 
+# Setup a custom clang-format target (if clang-format can be found) that will run
+# against all the src files. This should be used before making a pull request.
+# =======================================================================
+
+set(CLANG_FORMAT_POSTFIX "-6.0")
+find_program(CLANG_FORMAT
+    NAMES clang-format${CLANG_FORMAT_POSTFIX}
+          clang-format
+    PATHS ${CMAKE_BINARY_DIR}/externals)
+# if find_program doesn't find it, try to download from externals
+if (NOT CLANG_FORMAT)
+    if (WIN32)
+        message(STATUS "Clang format not found! Downloading...")
+        set(CLANG_FORMAT "${CMAKE_BINARY_DIR}/externals/clang-format${CLANG_FORMAT_POSTFIX}.exe")
+        file(DOWNLOAD
+            https://github.com/yuzu-emu/ext-windows-bin/raw/master/clang-format${CLANG_FORMAT_POSTFIX}.exe
+            "${CLANG_FORMAT}" SHOW_PROGRESS
+            STATUS DOWNLOAD_SUCCESS)
+        if (NOT DOWNLOAD_SUCCESS EQUAL 0)
+            message(WARNING "Could not download clang format! Disabling the clang format target")
+            file(REMOVE ${CLANG_FORMAT})
+            unset(CLANG_FORMAT)
+        endif()
+    else()
+        message(WARNING "Clang format not found! Disabling the clang format target")
+    endif()
+endif()
+
+if (CLANG_FORMAT)
+    set(SRCS ${CMAKE_SOURCE_DIR}/src)
+    set(CCOMMENT "Running clang format against all the .h and .cpp files in src/")
+    if (WIN32)
+        add_custom_target(clang-format
+            COMMAND powershell.exe -Command "${CLANG_FORMAT} -i @(Get-ChildItem -Recurse ${SRCS}/* -Include \'*.h\', \'*.cpp\')"
+            COMMENT ${CCOMMENT})
+    elseif(MINGW)
+        add_custom_target(clang-format
+            COMMAND find `cygpath -u ${SRCS}` -iname *.h -o -iname *.cpp | xargs `cygpath -u ${CLANG_FORMAT}` -i
+            COMMENT ${CCOMMENT})
+    else()
+        add_custom_target(clang-format
+            COMMAND find ${SRCS} -iname *.h -o -iname *.cpp | xargs ${CLANG_FORMAT} -i
+            COMMENT ${CCOMMENT})
+    endif()
+    unset(SRCS)
+    unset(CCOMMENT)
+endif()
 
 # Include source code
 # ===================

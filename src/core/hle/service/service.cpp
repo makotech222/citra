@@ -9,7 +9,6 @@
 #include "common/string_util.h"
 #include "core/hle/ipc.h"
 #include "core/hle/kernel/client_port.h"
-#include "core/hle/kernel/event.h"
 #include "core/hle/kernel/process.h"
 #include "core/hle/kernel/server_port.h"
 #include "core/hle/kernel/server_session.h"
@@ -27,6 +26,7 @@
 #include "core/hle/service/err_f.h"
 #include "core/hle/service/frd/frd.h"
 #include "core/hle/service/fs/archive.h"
+#include "core/hle/service/fs/fs_user.h"
 #include "core/hle/service/gsp/gsp.h"
 #include "core/hle/service/gsp_lcd.h"
 #include "core/hle/service/hid/hid.h"
@@ -150,15 +150,15 @@ void ServiceFrameworkBase::ReportUnimplementedFunction(u32* cmd_buf, const Funct
     int num_params = header.normal_params_size + header.translate_params_size;
     std::string function_name = info == nullptr ? fmt::format("{:#08x}", cmd_buf[0]) : info->name;
 
-    fmt::MemoryWriter w;
-    w.write("function '{}': port='{}' cmd_buf={{[0]={:#x}", function_name, service_name,
-            cmd_buf[0]);
+    fmt::memory_buffer buf;
+    fmt::format_to(buf, "function '{}': port='{}' cmd_buf={{[0]={:#x}", function_name, service_name,
+                   cmd_buf[0]);
     for (int i = 1; i <= num_params; ++i) {
-        w.write(", [{}]={:#x}", i, cmd_buf[i]);
+        fmt::format_to(buf, ", [{}]={:#x}", i, cmd_buf[i]);
     }
-    w << '}';
+    buf.push_back('}');
 
-    LOG_ERROR(Service, "unknown / unimplemented %s", w.c_str());
+    LOG_ERROR(Service, "unknown / unimplemented %s", fmt::to_string(buf).c_str());
     // TODO(bunnei): Hack - ignore error
     cmd_buf[1] = 0;
 }
@@ -182,8 +182,16 @@ void ServiceFrameworkBase::HandleSyncRequest(SharedPtr<ServerSession> server_ses
     LOG_TRACE(Service, "%s",
               MakeFunctionString(info->name, GetServiceName().c_str(), cmd_buf).c_str());
     handler_invoker(this, info->handler_callback, context);
-    context.WriteToOutgoingCommandBuffer(cmd_buf, *Kernel::g_current_process,
-                                         Kernel::g_handle_table);
+
+    auto thread = Kernel::GetCurrentThread();
+    ASSERT(thread->status == THREADSTATUS_RUNNING || thread->status == THREADSTATUS_WAIT_HLE_EVENT);
+    // Only write the response immediately if the thread is still running. If the HLE handler put
+    // the thread to sleep then the writing of the command buffer will be deferred to the wakeup
+    // callback.
+    if (thread->status == THREADSTATUS_RUNNING) {
+        context.WriteToOutgoingCommandBuffer(cmd_buf, *Kernel::g_current_process,
+                                             Kernel::g_handle_table);
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,47 +220,6 @@ void AddService(Interface* interface_) {
     server_port->SetHleHandler(std::shared_ptr<Interface>(interface_));
 }
 
-bool ThreadContinuationToken::IsValid() {
-    return thread != nullptr && event != nullptr;
-}
-
-ThreadContinuationToken SleepClientThread(const std::string& reason,
-                                          ThreadContinuationToken::Callback callback) {
-    auto thread = Kernel::GetCurrentThread();
-
-    ASSERT(thread->status == THREADSTATUS_RUNNING);
-
-    ThreadContinuationToken token;
-
-    token.event = Kernel::Event::Create(Kernel::ResetType::OneShot, "HLE Pause Event: " + reason);
-    token.thread = thread;
-    token.callback = std::move(callback);
-    token.pause_reason = std::move(reason);
-
-    // Make the thread wait on our newly created event, it will be signaled when
-    // ContinueClientThread is called.
-    thread->status = THREADSTATUS_WAIT_HLE_EVENT;
-    thread->wait_objects = {token.event};
-    token.event->AddWaitingThread(thread);
-
-    return token;
-}
-
-void ContinueClientThread(ThreadContinuationToken& token) {
-    ASSERT_MSG(token.IsValid(), "Invalid continuation token");
-    ASSERT(token.thread->status == THREADSTATUS_WAIT_HLE_EVENT);
-
-    // Signal the event to wake up the thread
-    token.event->Signal();
-    ASSERT(token.thread->status == THREADSTATUS_READY);
-
-    token.callback(token.thread);
-
-    token.event = nullptr;
-    token.thread = nullptr;
-    token.callback = nullptr;
-}
-
 /// Initialize ServiceManager
 void Init() {
     SM::g_service_manager = std::make_shared<SM::ServiceManager>();
@@ -265,27 +232,29 @@ void Init() {
     AC::InstallInterfaces(*SM::g_service_manager);
     LDR::InstallInterfaces(*SM::g_service_manager);
     MIC::InstallInterfaces(*SM::g_service_manager);
+    NWM::InstallInterfaces(*SM::g_service_manager);
 
+    FS::InstallInterfaces(*SM::g_service_manager);
     FS::ArchiveInit();
     ACT::Init();
-    AM::Init();
-    APT::Init();
+    AM::InstallInterfaces(*SM::g_service_manager);
+    APT::InstallInterfaces(*SM::g_service_manager);
     BOSS::Init();
     CAM::InstallInterfaces(*SM::g_service_manager);
     CECD::Init();
     CFG::Init();
     DLP::Init();
-    FRD::Init();
+    FRD::InstallInterfaces(*SM::g_service_manager);
     GSP::InstallInterfaces(*SM::g_service_manager);
-    HID::Init();
+    HID::InstallInterfaces(*SM::g_service_manager);
     IR::InstallInterfaces(*SM::g_service_manager);
     MVD::Init();
     NDM::Init();
-    NEWS::Init();
-    NFC::Init();
-    NIM::Init();
+    NEWS::InstallInterfaces(*SM::g_service_manager);
+    NFC::InstallInterfaces(*SM::g_service_manager);
+    NIM::InstallInterfaces(*SM::g_service_manager);
     NWM::Init();
-    PTM::Init();
+    PTM::InstallInterfaces(*SM::g_service_manager);
     QTM::Init();
 
     AddService(new CSND::CSND_SND);
@@ -295,26 +264,18 @@ void Init() {
     AddService(new PM::PM_APP);
     AddService(new SOC::SOC_U);
     AddService(new SSL::SSL_C);
-    AddService(new Y2R::Y2R_U);
+    Y2R::InstallInterfaces(*SM::g_service_manager);
 
     LOG_DEBUG(Service, "initialized OK");
 }
 
 /// Shutdown ServiceManager
 void Shutdown() {
-    PTM::Shutdown();
-    NFC::Shutdown();
-    NIM::Shutdown();
-    NEWS::Shutdown();
     NDM::Shutdown();
-    HID::Shutdown();
-    FRD::Shutdown();
     DLP::Shutdown();
     CFG::Shutdown();
     CECD::Shutdown();
     BOSS::Shutdown();
-    APT::Shutdown();
-    AM::Shutdown();
     FS::ArchiveShutdown();
 
     SM::g_service_manager = nullptr;

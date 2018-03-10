@@ -171,8 +171,11 @@ public:
 private:
     ResultVal<std::unique_ptr<FileBackend>> OpenRomFS() const {
         if (ncch_data.romfs_file) {
-            return MakeResult<std::unique_ptr<FileBackend>>(std::make_unique<IVFCFile>(
-                ncch_data.romfs_file, ncch_data.romfs_offset, ncch_data.romfs_size));
+            std::unique_ptr<DelayGenerator> delay_generator =
+                std::make_unique<RomFSDelayGenerator>();
+            return MakeResult<std::unique_ptr<FileBackend>>(
+                std::make_unique<IVFCFile>(ncch_data.romfs_file, ncch_data.romfs_offset,
+                                           ncch_data.romfs_size, std::move(delay_generator)));
         } else {
             LOG_INFO(Service_FS, "Unable to read RomFS");
             return ERROR_ROMFS_NOT_FOUND;
@@ -181,9 +184,11 @@ private:
 
     ResultVal<std::unique_ptr<FileBackend>> OpenUpdateRomFS() const {
         if (ncch_data.update_romfs_file) {
+            std::unique_ptr<DelayGenerator> delay_generator =
+                std::make_unique<RomFSDelayGenerator>();
             return MakeResult<std::unique_ptr<FileBackend>>(std::make_unique<IVFCFile>(
                 ncch_data.update_romfs_file, ncch_data.update_romfs_offset,
-                ncch_data.update_romfs_size));
+                ncch_data.update_romfs_size, std::move(delay_generator)));
         } else {
             LOG_INFO(Service_FS, "Unable to read update RomFS");
             return ERROR_ROMFS_NOT_FOUND;
@@ -240,8 +245,9 @@ void ArchiveFactory_SelfNCCH::Register(Loader::AppLoader& app_loader) {
               program_id);
 
     if (ncch_data.find(program_id) != ncch_data.end()) {
-        LOG_WARNING(Service_FS, "Registering program %016" PRIX64
-                                " with SelfNCCH will override existing mapping",
+        LOG_WARNING(Service_FS,
+                    "Registering program %016" PRIX64
+                    " with SelfNCCH will override existing mapping",
                     program_id);
     }
 
@@ -255,9 +261,9 @@ void ArchiveFactory_SelfNCCH::Register(Loader::AppLoader& app_loader) {
     }
 
     std::shared_ptr<FileUtil::IOFile> update_romfs_file;
-    if (Loader::ResultStatus::Success ==
-        app_loader.ReadUpdateRomFS(update_romfs_file, data.update_romfs_offset,
-                                   data.update_romfs_size)) {
+    if (Loader::ResultStatus::Success == app_loader.ReadUpdateRomFS(update_romfs_file,
+                                                                    data.update_romfs_offset,
+                                                                    data.update_romfs_size)) {
 
         data.update_romfs_file = std::move(update_romfs_file);
     }

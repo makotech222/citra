@@ -4,14 +4,12 @@
 
 #include <cstddef>
 
-#include "audio_core/hle/common.h"
-#include "audio_core/hle/dsp.h"
 #include "audio_core/hle/mixers.h"
 #include "common/assert.h"
 #include "common/logging/log.h"
 #include "common/math_util.h"
 
-namespace DSP {
+namespace AudioCore {
 namespace HLE {
 
 void Mixers::Reset() {
@@ -117,8 +115,8 @@ void Mixers::DownmixAndMixIntoCurrentFrame(float gain, const QuadFrame32& sample
         return;
 
     case OutputFormat::Surround:
-    // TODO(merry): Implement surround sound.
-    // fallthrough
+        // TODO(merry): Implement surround sound.
+        // fallthrough
 
     case OutputFormat::Stereo:
         std::transform(
@@ -207,4 +205,4 @@ DspStatus Mixers::GetCurrentStatus() const {
 }
 
 } // namespace HLE
-} // namespace DSP
+} // namespace AudioCore
