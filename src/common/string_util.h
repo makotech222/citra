@@ -142,4 +142,4 @@ std::string Trim(const std::string& str, const std::string delimiters = " \f\n\r
 
 std::string Join(const std::vector<std::string>& elements, const char* const separator);
 }
-} // namespace Common
+// namespace Common

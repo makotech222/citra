@@ -339,5 +339,3 @@ void ReloadInputDevices();
 PadState& GetInputsThisFrame();
 }
 }
-} // namespace HID
-} // namespace Service
