@@ -209,8 +209,7 @@ PicaShaderConfig PicaShaderConfig::BuildFromRegs(const Pica::Regs& regs) {
     return res;
 }
 
-PicaShaderConfigCommon::PicaShaderConfigCommon(const Pica::ShaderRegs& regs,
-                                               Pica::Shader::ShaderSetup& setup) {
+void PicaShaderConfigCommon::Init(const Pica::ShaderRegs& regs, Pica::Shader::ShaderSetup& setup) {
     program_hash = setup.GetProgramCodeHash();
     swizzle_hash = setup.GetSwizzleDataHash();
     main_offset = regs.main_offset;
@@ -226,7 +225,7 @@ PicaShaderConfigCommon::PicaShaderConfigCommon(const Pica::ShaderRegs& regs,
     }
 }
 
-PicaGSConfigCommon::PicaGSConfigCommon(const Pica::Regs& regs) {
+void PicaGSConfigCommonRaw::Init(const Pica::Regs& regs) {
     vs_output_attributes = 0;
     for (u32 i = 0; i < 16; ++i) {
         if ((regs.vs.output_mask.Value() >> i) & 1) {
@@ -254,8 +253,9 @@ PicaGSConfigCommon::PicaGSConfigCommon(const Pica::Regs& regs) {
     }
 }
 
-PicaGSConfig::PicaGSConfig(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setup)
-    : PicaShaderConfigCommon(regs.gs, setup), PicaGSConfigCommon(regs) {
+void PicaGSConfigRaw::Init(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setup) {
+    PicaShaderConfigCommon::Init(regs.gs, setup);
+    PicaGSConfigCommonRaw::Init(regs);
 
     num_inputs = regs.gs.max_input_attribute_index + 1;
     input_map.fill(16);
@@ -1349,15 +1349,15 @@ std::string GenerateVertexShader(const Pica::Shader::ShaderSetup& setup,
 
     auto get_output_reg = [&](u32 reg) -> std::string {
         ASSERT(reg < 16);
-        if (config.output_map[reg] < config.num_outputs) {
-            return "vs_out_attr" + std::to_string(config.output_map[reg]);
+        if (config.state.output_map[reg] < config.state.num_outputs) {
+            return "vs_out_attr" + std::to_string(config.state.output_map[reg]);
         }
         return "";
     };
 
     std::string program_source = Pica::Shader::Decompiler::DecompileProgram(
-        setup.program_code, setup.swizzle_data, config.main_offset, get_input_reg, get_output_reg,
-        config.sanitize_mul);
+        setup.program_code, setup.swizzle_data, config.state.main_offset, get_input_reg,
+        get_output_reg, config.state.sanitize_mul);
 
     out += R"(
 layout (std140) uniform vs_config {
@@ -1375,13 +1375,13 @@ layout (std140) uniform vs_config {
     out += "\n";
 
     // output attributes declaration
-    for (u32 i = 0; i < config.num_outputs; ++i) {
+    for (u32 i = 0; i < config.state.num_outputs; ++i) {
         out += "layout(location = " + std::to_string(i) + ") out vec4 vs_out_attr" +
                std::to_string(i) + ";\n";
     }
 
     out += "\nvoid main() {\n";
-    for (u32 i = 0; i < config.num_outputs; ++i) {
+    for (u32 i = 0; i < config.state.num_outputs; ++i) {
         out += "    vs_out_attr" + std::to_string(i) + " = vec4(0.0, 0.0, 0.0, 1.0);\n";
     }
     out += "\n    exec_shader();\n}\n\n";
@@ -1391,7 +1391,7 @@ layout (std140) uniform vs_config {
     return out;
 }
 
-static std::string GetGSCommonSource(const PicaGSConfigCommon& config) {
+static std::string GetGSCommonSource(const PicaGSConfigCommonRaw& config) {
     std::string out = GetVertexInterfaceDeclaration(true, true);
     out += UniformBlockDef;
     out += Pica::Shader::Decompiler::GetCommonDeclarations();
@@ -1413,8 +1413,8 @@ struct Vertex {
     out += "};\n\n";
 
     auto get_vertex_semantic = [&](const std::string& vertex_name, u32 slot) -> std::string {
-        u32 attrib = config.semantic_maps[slot].first;
-        u32 comp = config.semantic_maps[slot].second;
+        u32 attrib = config.semantic_maps[slot].attribute_index;
+        u32 comp = config.semantic_maps[slot].component_index;
         if (attrib < config.gs_output_attributes) {
             return vertex_name + ".attributes[" + std::to_string(attrib) + "]." + "xyzw"[comp % 4];
         }
@@ -1496,7 +1496,7 @@ layout(triangle_strip, max_vertices = 3) out;
 
 )";
 
-    out += GetGSCommonSource(config);
+    out += GetGSCommonSource(config.state);
 
     out += R"(
 void main() {
@@ -1504,8 +1504,8 @@ void main() {
 )";
     for (u32 vtx = 0; vtx < 3; ++vtx) {
         out += "    prim_buffer[" + std::to_string(vtx) + "].attributes = vec4[" +
-               std::to_string(config.gs_output_attributes) + "](";
-        for (u32 i = 0; i < config.vs_output_attributes; ++i) {
+               std::to_string(config.state.gs_output_attributes) + "](";
+        for (u32 i = 0; i < config.state.vs_output_attributes; ++i) {
             out += std::string(i == 0 ? "" : ", ") + "vs_out_attr" + std::to_string(i) + "[" +
                    std::to_string(vtx) + "]";
         }
@@ -1525,7 +1525,7 @@ std::string GenerateGeometryShader(const Pica::Shader::ShaderSetup& setup,
 
 )";
 
-    switch (config.num_inputs / config.attributes_per_vertex) {
+    switch (config.state.num_inputs / config.state.attributes_per_vertex) {
     case 1:
         out += "layout(points) in;\n";
         break;
@@ -1546,29 +1546,29 @@ std::string GenerateGeometryShader(const Pica::Shader::ShaderSetup& setup,
     }
     out += "layout(triangle_strip, max_vertices = 30) out;\n\n";
 
-    out += GetGSCommonSource(config);
+    out += GetGSCommonSource(config.state);
 
     auto get_input_reg = [&](u32 reg) -> std::string {
         ASSERT(reg < 16);
-        u32 attr = config.input_map[reg];
-        if (attr < config.num_inputs) {
-            return "vs_out_attr" + std::to_string(attr % config.attributes_per_vertex) + "[" +
-                   std::to_string(attr / config.attributes_per_vertex) + "]";
+        u32 attr = config.state.input_map[reg];
+        if (attr < config.state.num_inputs) {
+            return "vs_out_attr" + std::to_string(attr % config.state.attributes_per_vertex) + "[" +
+                   std::to_string(attr / config.state.attributes_per_vertex) + "]";
         }
         return "vec4(0.0, 0.0, 0.0, 1.0)";
     };
 
     auto get_output_reg = [&](u32 reg) -> std::string {
         ASSERT(reg < 16);
-        if (config.output_map[reg] < config.num_outputs) {
-            return "output_buffer.attributes[" + std::to_string(config.output_map[reg]) + "]";
+        if (config.state.output_map[reg] < config.state.num_outputs) {
+            return "output_buffer.attributes[" + std::to_string(config.state.output_map[reg]) + "]";
         }
         return "";
     };
 
     std::string program_source = Pica::Shader::Decompiler::DecompileProgram(
-        setup.program_code, setup.swizzle_data, config.main_offset, get_input_reg, get_output_reg,
-        config.sanitize_mul, "emit_cb", "setemit_cb");
+        setup.program_code, setup.swizzle_data, config.state.main_offset, get_input_reg,
+        get_output_reg, config.state.sanitize_mul, "emit_cb", "setemit_cb");
 
     out += R"(
 Vertex output_buffer;
@@ -1598,8 +1598,9 @@ void emit_cb() {
 
 void main() {
 )";
-    for (u32 i = 0; i < config.num_outputs; ++i) {
-        out += "    output_buffer.attributes[" + std::to_string(i) + "] = vec4(0.0, 0.0, 0.0, 1.0);\n";
+    for (u32 i = 0; i < config.state.num_outputs; ++i) {
+        out +=
+            "    output_buffer.attributes[" + std::to_string(i) + "] = vec4(0.0, 0.0, 0.0, 1.0);\n";
     }
 
     // execute shader

@@ -123,7 +123,7 @@ struct PicaShaderConfig : Common::HashableStruct<PicaShaderConfigState> {
 };
 
 struct PicaShaderConfigCommon {
-    explicit PicaShaderConfigCommon(const Pica::ShaderRegs& regs, Pica::Shader::ShaderSetup& setup);
+    void Init(const Pica::ShaderRegs& regs, Pica::Shader::ShaderSetup& setup);
 
     u64 program_hash;
     u64 swizzle_hash;
@@ -135,42 +135,49 @@ struct PicaShaderConfigCommon {
     std::array<u32, 16> output_map;
 };
 
-struct PicaVSConfig : PicaShaderConfigCommon {
-    explicit PicaVSConfig(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setup)
-        : PicaShaderConfigCommon(regs.vs, setup) {}
-
-    bool operator==(const PicaVSConfig& o) const {
-        return std::memcmp(this, &o, sizeof(PicaVSConfig)) == 0;
-    };
+struct PicaVSConfig : Common::HashableStruct<PicaShaderConfigCommon> {
+    explicit PicaVSConfig(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setup) {
+        state.Init(regs.vs, setup);
+    }
 };
 
-struct PicaGSConfigCommon {
-    explicit PicaGSConfigCommon(const Pica::Regs& regs);
-
-    bool operator==(const PicaGSConfigCommon& o) const {
-        return std::memcmp(this, &o, sizeof(PicaGSConfigCommon)) == 0;
-    };
+struct PicaGSConfigCommonRaw {
+    void Init(const Pica::Regs& regs);
 
     u32 vs_output_attributes;
     u32 gs_output_attributes;
 
-    // first: attribute index
-    // second: component index
-    std::array<std::pair<u32, u32>, 24> semantic_maps;
+    struct SemanticMap {
+        u32 attribute_index;
+        u32 component_index;
+    };
+
+    std::array<SemanticMap, 24> semantic_maps;
 };
 
-struct PicaGSConfig : PicaShaderConfigCommon, PicaGSConfigCommon {
-    explicit PicaGSConfig(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setup);
+struct PicaGSConfigCommon : Common::HashableStruct<PicaGSConfigCommonRaw> {
+    explicit PicaGSConfigCommon(const Pica::Regs& regs) {
+        state.Init(regs);
+    }
+};
 
-    bool operator==(const PicaGSConfig& o) const {
-        return std::memcmp(this, &o, sizeof(PicaGSConfig)) == 0;
-    };
+static_assert(std::is_trivial<PicaShaderConfigCommon>(), "!");
+static_assert(std::is_trivial<PicaGSConfigCommonRaw>(), "!");
+
+struct PicaGSConfigRaw : PicaShaderConfigCommon, PicaGSConfigCommonRaw {
+    void Init(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setup);
 
     u32 num_inputs;
     // reg to attribute
     std::array<u32, 16> input_map;
 
     u32 attributes_per_vertex;
+};
+
+struct PicaGSConfig : Common::HashableStruct<PicaGSConfigRaw> {
+    explicit PicaGSConfig(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setups) {
+        state.Init(regs, setups);
+    }
 };
 
 /**
@@ -221,20 +228,20 @@ struct hash<GLShader::PicaShaderConfig> {
 template <>
 struct hash<GLShader::PicaVSConfig> {
     size_t operator()(const GLShader::PicaVSConfig& k) const {
-        return Common::ComputeHash64(&k, sizeof(GLShader::PicaVSConfig));
+        return k.Hash();
     }
 };
 template <>
 struct hash<GLShader::PicaGSConfigCommon> {
     size_t operator()(const GLShader::PicaGSConfigCommon& k) const {
-        return Common::ComputeHash64(&k, sizeof(GLShader::PicaGSConfigCommon));
+        return k.Hash();
     }
 };
 
 template <>
 struct hash<GLShader::PicaGSConfig> {
     size_t operator()(const GLShader::PicaGSConfig& k) const {
-        return Common::ComputeHash64(&k, sizeof(GLShader::PicaGSConfig));
+        return k.Hash();
     }
 };
 } // namespace std
