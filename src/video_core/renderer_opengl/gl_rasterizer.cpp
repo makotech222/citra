@@ -123,7 +123,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
     state.draw.uniform_buffer = uniform_buffer.handle;
     state.Apply();
 
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), nullptr, GL_STATIC_DRAW);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), nullptr, GL_DYNAMIC_DRAW);
     glBindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer.handle);
 
     uniform_block_data.dirty = true;
@@ -180,7 +180,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
     glBindBuffer(GL_TEXTURE_BUFFER, lighting_lut_buffer.handle);
     glBufferData(GL_TEXTURE_BUFFER,
                  sizeof(GLfloat) * 2 * 256 * Pica::LightingRegs::NumLightingSampler, nullptr,
-                 GL_STATIC_DRAW);
+                 GL_DYNAMIC_DRAW);
     glActiveTexture(TextureUnits::LightingLUT.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, lighting_lut_buffer.handle);
 
@@ -190,7 +190,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
     state.Apply();
     fog_lut_buffer.Create();
     glBindBuffer(GL_TEXTURE_BUFFER, fog_lut_buffer.handle);
-    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 2 * 128, nullptr, GL_STATIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 2 * 128, nullptr, GL_DYNAMIC_DRAW);
     glActiveTexture(TextureUnits::FogLUT.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, fog_lut_buffer.handle);
 
@@ -200,7 +200,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
     state.Apply();
     proctex_noise_lut_buffer.Create();
     glBindBuffer(GL_TEXTURE_BUFFER, proctex_noise_lut_buffer.handle);
-    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 2 * 128, nullptr, GL_STATIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 2 * 128, nullptr, GL_DYNAMIC_DRAW);
     glActiveTexture(TextureUnits::ProcTexNoiseLUT.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, proctex_noise_lut_buffer.handle);
 
@@ -210,7 +210,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
     state.Apply();
     proctex_color_map_buffer.Create();
     glBindBuffer(GL_TEXTURE_BUFFER, proctex_color_map_buffer.handle);
-    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 2 * 128, nullptr, GL_STATIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 2 * 128, nullptr, GL_DYNAMIC_DRAW);
     glActiveTexture(TextureUnits::ProcTexColorMap.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, proctex_color_map_buffer.handle);
 
@@ -220,7 +220,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
     state.Apply();
     proctex_alpha_map_buffer.Create();
     glBindBuffer(GL_TEXTURE_BUFFER, proctex_alpha_map_buffer.handle);
-    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 2 * 128, nullptr, GL_STATIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 2 * 128, nullptr, GL_DYNAMIC_DRAW);
     glActiveTexture(TextureUnits::ProcTexAlphaMap.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RG32F, proctex_alpha_map_buffer.handle);
 
@@ -230,7 +230,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
     state.Apply();
     proctex_lut_buffer.Create();
     glBindBuffer(GL_TEXTURE_BUFFER, proctex_lut_buffer.handle);
-    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 4 * 256, nullptr, GL_STATIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 4 * 256, nullptr, GL_DYNAMIC_DRAW);
     glActiveTexture(TextureUnits::ProcTexLUT.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, proctex_lut_buffer.handle);
 
@@ -240,7 +240,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
     state.Apply();
     proctex_diff_lut_buffer.Create();
     glBindBuffer(GL_TEXTURE_BUFFER, proctex_diff_lut_buffer.handle);
-    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 4 * 256, nullptr, GL_STATIC_DRAW);
+    glBufferData(GL_TEXTURE_BUFFER, sizeof(GLfloat) * 4 * 256, nullptr, GL_DYNAMIC_DRAW);
     glActiveTexture(TextureUnits::ProcTexDiffLUT.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, proctex_diff_lut_buffer.handle);
 
