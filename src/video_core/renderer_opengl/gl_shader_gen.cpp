@@ -1357,7 +1357,7 @@ std::string GenerateVertexShader(const Pica::Shader::ShaderSetup& setup,
 
     std::string program_source = Pica::Shader::Decompiler::DecompileProgram(
         setup.program_code, setup.swizzle_data, config.state.main_offset, get_input_reg,
-        get_output_reg, config.state.sanitize_mul);
+        get_output_reg, config.state.sanitize_mul, false);
 
     out += R"(
 layout (std140) uniform vs_config {
@@ -1568,7 +1568,7 @@ std::string GenerateGeometryShader(const Pica::Shader::ShaderSetup& setup,
 
     std::string program_source = Pica::Shader::Decompiler::DecompileProgram(
         setup.program_code, setup.swizzle_data, config.state.main_offset, get_input_reg,
-        get_output_reg, config.state.sanitize_mul, "emit_cb", "setemit_cb");
+        get_output_reg, config.state.sanitize_mul, true);
 
     out += R"(
 Vertex output_buffer;
@@ -1577,13 +1577,13 @@ uint vertex_id = 0u;
 bool prim_emit = false;
 bool winding = false;
 
-void setemit_cb(uint vertex_id_, bool prim_emit_, bool winding_) {
+void setemit(uint vertex_id_, bool prim_emit_, bool winding_) {
     vertex_id = vertex_id_;
     prim_emit = prim_emit_;
     winding = winding_;
 }
 
-void emit_cb() {
+void emit() {
     prim_buffer[vertex_id] = output_buffer;
 
     if (prim_emit) {
