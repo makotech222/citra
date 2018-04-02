@@ -80,17 +80,17 @@ public:
     GLuint handle = 0;
 };
 
-class OGLShader : private NonCopyable {
+class OGLProgram : private NonCopyable {
 public:
-    OGLShader() = default;
+    OGLProgram() = default;
 
-    OGLShader(OGLShader&& o) : handle(std::exchange(o.handle, 0)) {}
+    OGLProgram(OGLProgram&& o) : handle(std::exchange(o.handle, 0)) {}
 
-    ~OGLShader() {
+    ~OGLProgram() {
         Release();
     }
 
-    OGLShader& operator=(OGLShader&& o) {
+    OGLProgram& operator=(OGLProgram&& o) {
         Release();
         handle = std::exchange(o.handle, 0);
         return *this;

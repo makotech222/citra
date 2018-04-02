@@ -56,15 +56,15 @@ public:
     /// OpenGL shader generated for a given Pica register state
     struct PicaShader {
         /// OpenGL shader resource
-        OGLShader shader;
+        OGLProgram shader;
     };
 
     struct VertexShader {
-        OGLShader shader;
+        OGLProgram shader;
     };
 
     struct GeometryShader {
-        OGLShader shader;
+        OGLProgram shader;
     };
 
     struct LightSrc {
@@ -384,7 +384,7 @@ private:
     OGLBuffer vs_uniform_buffer;
     std::unordered_map<GLShader::PicaVSConfig, VertexShader*> vs_shader_map;
     std::unordered_map<std::string, VertexShader> vs_shader_cache;
-    OGLShader vs_default_shader;
+    OGLProgram vs_default_shader;
 
     void SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_offset);
 
