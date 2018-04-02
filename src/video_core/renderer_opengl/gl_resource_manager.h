@@ -80,6 +80,40 @@ public:
     GLuint handle = 0;
 };
 
+class OGLShader : private NonCopyable {
+public:
+    OGLShader() = default;
+
+    OGLShader(OGLShader&& o) : handle(std::exchange(o.handle, 0)) {}
+
+    ~OGLShader() {
+        Release();
+    }
+
+    OGLShader& operator=(OGLShader&& o) {
+        Release();
+        handle = std::exchange(o.handle, 0);
+        return *this;
+    }
+
+    void Create(const char* source, GLenum type, const char* debug_type) {
+        if (handle != 0)
+            return;
+        if (source == nullptr)
+            return;
+        handle = GLShader::LoadShader(source, type, debug_type);
+    }
+
+    void Release() {
+        if (handle == 0)
+            return;
+        glDeleteShader(handle);
+        handle = 0;
+    }
+
+    GLuint handle = 0;
+};
+
 class OGLProgram : private NonCopyable {
 public:
     OGLProgram() = default;
