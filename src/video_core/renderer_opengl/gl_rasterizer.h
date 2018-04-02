@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 #include <glad/glad.h>
@@ -32,6 +33,44 @@
 #include "video_core/shader/shader.h"
 
 struct ScreenInfo;
+
+// TODO(wwylele): deal with this
+static void SetShaderUniformBlockBindings(GLuint shader);
+
+// TODO(wwylele): beautify this doc
+// This is a shader cache designed for translating PICA shader to GLSL shader.
+// The double cache is needed because diffent KeyConfigType, which includes a hash of the code
+// region (including its leftover unused code) can generate the same GLSL code.
+template <typename KeyConfigType,
+          std::string (*CodeGenerator)(const Pica::Shader::ShaderSetup&, const KeyConfigType&),
+          GLenum ShaderType>
+class ShaderDoubleCache {
+public:
+    // Note: the tuple type is intentional, for use of visitor pattern later
+    GLuint Get(std::tuple<const KeyConfigType&, const Pica::Shader::ShaderSetup&> config) {
+        const auto& [key, setup] = config;
+        auto map_it = shader_map.find(key);
+        if (map_it == shader_map.end()) {
+            std::string program = CodeGenerator(setup, key);
+
+            OGLProgram& cached_shader = shader_cache[program];
+            if (cached_shader.handle == 0) {
+                OGLShader shader;
+                shader.Create(program.c_str(), ShaderType);
+                cached_shader.Create(true, shader.handle);
+                SetShaderUniformBlockBindings(cached_shader.handle);
+            }
+            shader_map[key] = &cached_shader;
+            return cached_shader.handle;
+        } else {
+            return map_it->second->handle;
+        }
+    }
+
+private:
+    std::unordered_map<KeyConfigType, OGLProgram*> shader_map;
+    std::unordered_map<std::string, OGLProgram> shader_cache;
+};
 
 class RasterizerOpenGL : public VideoCore::RasterizerInterface {
 public:
@@ -382,15 +421,15 @@ private:
     void SetupVertexArray(u8* array_ptr, GLintptr buffer_offset);
 
     OGLBuffer vs_uniform_buffer;
-    std::unordered_map<GLShader::PicaVSConfig, VertexShader*> vs_shader_map;
-    std::unordered_map<std::string, VertexShader> vs_shader_cache;
+    ShaderDoubleCache<GLShader::PicaVSConfig, &GLShader::GenerateVertexShader, GL_VERTEX_SHADER>
+        vs_shader_cache;
     OGLProgram vs_default_shader;
 
     void SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_offset);
 
     OGLBuffer gs_uniform_buffer;
-    std::unordered_map<GLShader::PicaGSConfig, GeometryShader*> gs_shader_map;
-    std::unordered_map<std::string, GeometryShader> gs_shader_cache;
+    ShaderDoubleCache<GLShader::PicaGSConfig, &GLShader::GenerateGeometryShader, GL_GEOMETRY_SHADER>
+        gs_shader_cache;
     std::unordered_map<GLShader::PicaGSConfigCommon, GeometryShader> gs_default_shaders;
 
     void SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffer_offset);

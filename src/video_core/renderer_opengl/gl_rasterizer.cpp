@@ -502,25 +502,8 @@ void RasterizerOpenGL::SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_
 
     ub_ptr->uniforms.SetFromRegs(Pica::g_state.regs.vs, Pica::g_state.vs);
 
-    GLuint shader;
     const GLShader::PicaVSConfig vs_config(Pica::g_state.regs, Pica::g_state.vs);
-
-    auto map_it = vs_shader_map.find(vs_config);
-    if (map_it == vs_shader_map.end()) {
-        std::string vs_program = GLShader::GenerateVertexShader(Pica::g_state.vs, vs_config);
-
-        VertexShader& cached_shader = vs_shader_cache[vs_program];
-        if (cached_shader.shader.handle == 0) {
-            OGLShader shader;
-            shader.Create(vs_program.c_str(), GL_VERTEX_SHADER);
-            cached_shader.shader.Create(true, shader.handle);
-            SetShaderUniformBlockBindings(cached_shader.shader.handle);
-        }
-        vs_shader_map[vs_config] = &cached_shader;
-        shader = cached_shader.shader.handle;
-    } else {
-        shader = map_it->second->shader.handle;
-    }
+    GLuint shader = vs_shader_cache.Get(std::tie(vs_config, Pica::g_state.vs));
 
     glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT, shader);
 }
@@ -549,23 +532,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
         Pica::g_state.gs.uniforms.b[15] = true;
 
         const GLShader::PicaGSConfig gs_config(regs, Pica::g_state.gs);
-
-        auto map_it = gs_shader_map.find(gs_config);
-        if (map_it == gs_shader_map.end()) {
-            std::string gs_program = GLShader::GenerateGeometryShader(Pica::g_state.gs, gs_config);
-
-            GeometryShader& cached_shader = gs_shader_cache[gs_program];
-            if (cached_shader.shader.handle == 0) {
-                OGLShader shader;
-                shader.Create(gs_program.c_str(), GL_GEOMETRY_SHADER);
-                cached_shader.shader.Create(0, shader.handle, 0, true);
-                SetShaderUniformBlockBindings(cached_shader.shader.handle);
-            }
-            gs_shader_map[gs_config] = &cached_shader;
-            shader = cached_shader.shader.handle;
-        } else {
-            shader = map_it->second->shader.handle;
-        }
+        shader = gs_shader_cache.Get(std::tie(gs_config, Pica::g_state.gs));
     }
 
     glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, shader);
