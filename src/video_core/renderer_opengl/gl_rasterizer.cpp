@@ -275,7 +275,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
         glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
 
         vs_default_shader.Create(GLShader::GenerateDefaultVertexShader(true).c_str(), nullptr,
-                                 nullptr, {}, true);
+                                 nullptr, true);
         SetShaderUniformBlockBindings(vs_default_shader.handle);
     }
 
@@ -512,7 +512,7 @@ void RasterizerOpenGL::SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_
         VertexShader& cached_shader = vs_shader_cache[vs_program];
         if (cached_shader.shader.handle == 0) {
             cached_shader.shader.handle =
-                GLShader::LoadProgram(vs_program.c_str(), nullptr, nullptr, {}, true);
+                GLShader::LoadProgram(vs_program.c_str(), nullptr, nullptr, true);
             SetShaderUniformBlockBindings(cached_shader.shader.handle);
         }
         vs_shader_map[vs_config] = &cached_shader;
@@ -535,8 +535,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
         GeometryShader& cached_shader = gs_default_shaders[gs_config];
         if (cached_shader.shader.handle == 0) {
             cached_shader.shader.handle = GLShader::LoadProgram(
-                nullptr, GLShader::GenerateDefaultGeometryShader(gs_config).c_str(), nullptr, {},
-                true);
+                nullptr, GLShader::GenerateDefaultGeometryShader(gs_config).c_str(), nullptr, true);
             SetShaderUniformBlockBindings(cached_shader.shader.handle);
         }
         shader = cached_shader.shader.handle;
@@ -555,7 +554,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
             GeometryShader& cached_shader = gs_shader_cache[gs_program];
             if (cached_shader.shader.handle == 0) {
                 cached_shader.shader.handle =
-                    GLShader::LoadProgram(nullptr, gs_program.c_str(), nullptr, {}, true);
+                    GLShader::LoadProgram(nullptr, gs_program.c_str(), nullptr, true);
                 SetShaderUniformBlockBindings(cached_shader.shader.handle);
             }
             gs_shader_map[gs_config] = &cached_shader;
@@ -1748,7 +1747,7 @@ void RasterizerOpenGL::SetShader() {
 
         if (has_ARB_separate_shader_objects) {
             shader.shader.Create(nullptr, nullptr,
-                                 GLShader::GenerateFragmentShader(config, true).c_str(), {}, true);
+                                 GLShader::GenerateFragmentShader(config, true).c_str(), true);
 
             glActiveShaderProgram(pipeline.handle, shader.shader.handle);
         } else {

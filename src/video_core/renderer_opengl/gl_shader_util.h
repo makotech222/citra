@@ -17,7 +17,6 @@ namespace GLShader {
  * @returns Handle of the newly created OpenGL shader object
  */
 GLuint LoadProgram(const char* vertex_shader, const char* geometry_shader,
-                   const char* fragment_shader, const std::vector<const char*>& feedback_vars = {},
-                   bool separable_program = false);
+                   const char* fragment_shader, bool separable_program = false);
 
 } // namespace GLShader

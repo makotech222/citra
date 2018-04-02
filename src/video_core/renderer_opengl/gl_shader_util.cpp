@@ -34,8 +34,7 @@ GLuint LoadShader(const char* source, GLenum type, const char* debug_type) {
 }
 
 GLuint LoadProgram(const char* vertex_shader, const char* geometry_shader,
-                   const char* fragment_shader, const std::vector<const char*>& feedback_vars,
-                   bool separable_program) {
+                   const char* fragment_shader, bool separable_program) {
     // Create the shaders
     GLuint vertex_shader_id =
         vertex_shader ? LoadShader(vertex_shader, GL_VERTEX_SHADER, "vertex") : 0;
@@ -56,12 +55,6 @@ GLuint LoadProgram(const char* vertex_shader, const char* geometry_shader,
     }
     if (fragment_shader) {
         glAttachShader(program_id, fragment_shader_id);
-    }
-
-    if (!feedback_vars.empty()) {
-        auto varyings = feedback_vars;
-        glTransformFeedbackVaryings(program_id, static_cast<GLsizei>(feedback_vars.size()),
-                                    &varyings[0], GL_INTERLEAVED_ATTRIBS);
     }
 
     if (separable_program) {
