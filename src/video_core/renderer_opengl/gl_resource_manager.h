@@ -130,12 +130,24 @@ public:
         return *this;
     }
 
-    /// Creates a new internal OpenGL resource and stores the handle
-    void Create(const char* vert_shader, const char* geo_shader, const char* frag_shader,
+    void Create(GLuint vert_shader, GLuint geo_shader, GLuint frag_shader,
                 bool separable_program = false) {
         if (handle != 0)
             return;
         handle = GLShader::LoadProgram(vert_shader, geo_shader, frag_shader, separable_program);
+    }
+
+    /// Creates a new internal OpenGL resource and stores the handle
+    void Create(const char* vert_shader, const char* geo_shader, const char* frag_shader,
+                bool separable_program = false) {
+        OGLShader vert, geo, frag;
+        if (vert_shader)
+            vert.Create(vert_shader, GL_VERTEX_SHADER, "vertex");
+        if (geo_shader)
+            geo.Create(geo_shader, GL_GEOMETRY_SHADER, "geometry");
+        if (frag_shader)
+            frag.Create(frag_shader, GL_FRAGMENT_SHADER, "fragment");
+        Create(vert.handle, geo.handle, frag.handle, separable_program);
     }
 
     /// Deletes the internal OpenGL resource

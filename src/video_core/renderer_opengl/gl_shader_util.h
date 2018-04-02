@@ -19,12 +19,12 @@ GLuint LoadShader(const char* source, GLenum type, const char* debug_type);
 
 /**
  * Utility function to create and compile an OpenGL GLSL shader program (vertex + fragment shader)
- * @param vertex_shader String of the GLSL vertex shader program
- * @param geometry_shader String of the GLSL geometry shader program
- * @param fragment_shader String of the GLSL fragment shader program
- * @returns Handle of the newly created OpenGL shader object
+ * @param vertex_shader ID of vertex shader
+ * @param geometry_shader ID of geometry shader
+ * @param fragment_shader ID of fragment shader
+ * @returns Handle of the newly created OpenGL program object
  */
-GLuint LoadProgram(const char* vertex_shader, const char* geometry_shader,
-                   const char* fragment_shader, bool separable_program = false);
+GLuint LoadProgram(GLuint vertex_shader, GLuint geometry_shader, GLuint fragment_shader,
+                   bool separable_program = false);
 
 } // namespace GLShader

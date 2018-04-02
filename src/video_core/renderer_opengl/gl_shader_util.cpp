@@ -33,27 +33,19 @@ GLuint LoadShader(const char* source, GLenum type, const char* debug_type) {
     return shader_id;
 }
 
-GLuint LoadProgram(const char* vertex_shader, const char* geometry_shader,
-                   const char* fragment_shader, bool separable_program) {
-    // Create the shaders
-    GLuint vertex_shader_id =
-        vertex_shader ? LoadShader(vertex_shader, GL_VERTEX_SHADER, "vertex") : 0;
-    GLuint geometry_shader_id =
-        geometry_shader ? LoadShader(geometry_shader, GL_GEOMETRY_SHADER, "geometry") : 0;
-    GLuint fragment_shader_id =
-        fragment_shader ? LoadShader(fragment_shader, GL_FRAGMENT_SHADER, "fragment") : 0;
-
+GLuint LoadProgram(GLuint vertex_shader_id, GLuint geometry_shader_id, GLuint fragment_shader_id,
+                   bool separable_program) {
     // Link the program
-    LOG_DEBUG(Render_OpenGL, "Linking program...");
+    NGLOG_DEBUG(Render_OpenGL, "Linking program...");
 
     GLuint program_id = glCreateProgram();
-    if (vertex_shader) {
+    if (vertex_shader_id != 0) {
         glAttachShader(program_id, vertex_shader_id);
     }
-    if (geometry_shader) {
+    if (geometry_shader_id != 0) {
         glAttachShader(program_id, geometry_shader_id);
     }
-    if (fragment_shader) {
+    if (fragment_shader_id != 0) {
         glAttachShader(program_id, fragment_shader_id);
     }
 
@@ -70,40 +62,25 @@ GLuint LoadProgram(const char* vertex_shader, const char* geometry_shader,
     glGetProgramiv(program_id, GL_INFO_LOG_LENGTH, &info_log_length);
 
     if (info_log_length > 1) {
-        std::vector<char> program_error(info_log_length);
+        std::string program_error(info_log_length, ' ');
         glGetProgramInfoLog(program_id, info_log_length, nullptr, &program_error[0]);
         if (result == GL_TRUE) {
-            LOG_DEBUG(Render_OpenGL, "%s", &program_error[0]);
+            NGLOG_DEBUG(Render_OpenGL, "{}", program_error);
         } else {
-            LOG_ERROR(Render_OpenGL, "Error linking shader:\n%s", &program_error[0]);
+            NGLOG_ERROR(Render_OpenGL, "Error linking shader:\n{}", program_error);
         }
     }
 
-    // If the program linking failed at least one of the shaders was probably bad
-    if (result == GL_FALSE) {
-        if (vertex_shader) {
-            LOG_ERROR(Render_OpenGL, "Vertex shader:\n%s", vertex_shader);
-        }
-        if (geometry_shader) {
-            LOG_ERROR(Render_OpenGL, "Geometry shader:\n%s", geometry_shader);
-        }
-        if (fragment_shader) {
-            LOG_ERROR(Render_OpenGL, "Fragment shader:\n%s", fragment_shader);
-        }
-    }
     ASSERT_MSG(result == GL_TRUE, "Shader not linked");
 
-    if (vertex_shader) {
+    if (vertex_shader_id != 0) {
         glDetachShader(program_id, vertex_shader_id);
-        glDeleteShader(vertex_shader_id);
     }
-    if (geometry_shader) {
+    if (geometry_shader_id != 0) {
         glDetachShader(program_id, geometry_shader_id);
-        glDeleteShader(geometry_shader_id);
     }
-    if (fragment_shader) {
+    if (fragment_shader_id != 0) {
         glDetachShader(program_id, fragment_shader_id);
-        glDeleteShader(fragment_shader_id);
     }
 
     return program_id;
