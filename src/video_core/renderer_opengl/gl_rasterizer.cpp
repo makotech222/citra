@@ -274,8 +274,8 @@ RasterizerOpenGL::RasterizerOpenGL() {
 
         glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
 
-        vs_default_shader.Create(GLShader::GenerateDefaultVertexShader(true).c_str(), nullptr,
-                                 nullptr, true);
+        vs_default_shader.CreateFromSource(GLShader::GenerateDefaultVertexShader(true).c_str(),
+                                           nullptr, nullptr, true);
         SetShaderUniformBlockBindings(vs_default_shader.handle);
     }
 
@@ -513,7 +513,7 @@ void RasterizerOpenGL::SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_
         if (cached_shader.shader.handle == 0) {
             OGLShader shader;
             shader.Create(vs_program.c_str(), GL_VERTEX_SHADER);
-            cached_shader.shader.Create(shader.handle, 0, 0, true);
+            cached_shader.shader.Create(true, shader.handle);
             SetShaderUniformBlockBindings(cached_shader.shader.handle);
         }
         vs_shader_map[vs_config] = &cached_shader;
@@ -538,7 +538,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
             OGLShader shader;
             shader.Create(GLShader::GenerateDefaultGeometryShader(gs_config).c_str(),
                           GL_GEOMETRY_SHADER);
-            cached_shader.shader.Create(0, shader.handle, 0, true);
+            cached_shader.shader.Create(true, shader.handle);
             SetShaderUniformBlockBindings(cached_shader.shader.handle);
         }
         shader = cached_shader.shader.handle;
@@ -1750,13 +1750,14 @@ void RasterizerOpenGL::SetShader() {
         current_shader = &shader;
 
         if (has_ARB_separate_shader_objects) {
-            shader.shader.Create(nullptr, nullptr,
-                                 GLShader::GenerateFragmentShader(config, true).c_str(), true);
+            shader.shader.CreateFromSource(
+                nullptr, nullptr, GLShader::GenerateFragmentShader(config, true).c_str(), true);
 
             glActiveShaderProgram(pipeline.handle, shader.shader.handle);
         } else {
-            shader.shader.Create(GLShader::GenerateDefaultVertexShader(false).c_str(), nullptr,
-                                 GLShader::GenerateFragmentShader(config, false).c_str());
+            shader.shader.CreateFromSource(GLShader::GenerateDefaultVertexShader(false).c_str(),
+                                           nullptr,
+                                           GLShader::GenerateFragmentShader(config, false).c_str());
         }
 
         state.draw.shader_program = shader.shader.handle;
