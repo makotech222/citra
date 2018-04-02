@@ -512,7 +512,7 @@ void RasterizerOpenGL::SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_
         VertexShader& cached_shader = vs_shader_cache[vs_program];
         if (cached_shader.shader.handle == 0) {
             OGLShader shader;
-            shader.Create(vs_program.c_str(), GL_VERTEX_SHADER, "vertex");
+            shader.Create(vs_program.c_str(), GL_VERTEX_SHADER);
             cached_shader.shader.handle = GLShader::LoadProgram(shader.handle, 0, 0, true);
             SetShaderUniformBlockBindings(cached_shader.shader.handle);
         }
@@ -537,7 +537,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
         if (cached_shader.shader.handle == 0) {
             OGLShader shader;
             shader.Create(GLShader::GenerateDefaultGeometryShader(gs_config).c_str(),
-                          GL_GEOMETRY_SHADER, "geometry");
+                          GL_GEOMETRY_SHADER);
             cached_shader.shader.handle = GLShader::LoadProgram(0, shader.handle, 0, true);
             SetShaderUniformBlockBindings(cached_shader.shader.handle);
         }
@@ -557,7 +557,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
             GeometryShader& cached_shader = gs_shader_cache[gs_program];
             if (cached_shader.shader.handle == 0) {
                 OGLShader shader;
-                shader.Create(gs_program.c_str(), GL_GEOMETRY_SHADER, "geometry");
+                shader.Create(gs_program.c_str(), GL_GEOMETRY_SHADER);
                 cached_shader.shader.handle = GLShader::LoadProgram(0, shader.handle, 0, true);
                 SetShaderUniformBlockBindings(cached_shader.shader.handle);
             }

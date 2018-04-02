@@ -96,12 +96,12 @@ public:
         return *this;
     }
 
-    void Create(const char* source, GLenum type, const char* debug_type) {
+    void Create(const char* source, GLenum type) {
         if (handle != 0)
             return;
         if (source == nullptr)
             return;
-        handle = GLShader::LoadShader(source, type, debug_type);
+        handle = GLShader::LoadShader(source, type);
     }
 
     void Release() {
@@ -142,11 +142,11 @@ public:
                 bool separable_program = false) {
         OGLShader vert, geo, frag;
         if (vert_shader)
-            vert.Create(vert_shader, GL_VERTEX_SHADER, "vertex");
+            vert.Create(vert_shader, GL_VERTEX_SHADER);
         if (geo_shader)
-            geo.Create(geo_shader, GL_GEOMETRY_SHADER, "geometry");
+            geo.Create(geo_shader, GL_GEOMETRY_SHADER);
         if (frag_shader)
-            frag.Create(frag_shader, GL_FRAGMENT_SHADER, "fragment");
+            frag.Create(frag_shader, GL_FRAGMENT_SHADER);
         Create(vert.handle, geo.handle, frag.handle, separable_program);
     }
 

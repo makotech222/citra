@@ -13,9 +13,8 @@ namespace GLShader {
  * Utility function to create and compile an OpenGL GLSL shader
  * @param source String of the GLSL shader program
  * @param type Type of the shader (GL_VERTEX_SHADER, GL_GEOMETRY_SHADER or GL_FRAGMENT_SHADER)
- * @param debug_type A string for display the shader type. This is for debug only
  */
-GLuint LoadShader(const char* source, GLenum type, const char* debug_type);
+GLuint LoadShader(const char* source, GLenum type);
 
 /**
  * Utility function to create and compile an OpenGL GLSL shader program (vertex + fragment shader)

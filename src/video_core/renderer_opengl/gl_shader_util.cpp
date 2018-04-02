@@ -10,7 +10,21 @@
 
 namespace GLShader {
 
-GLuint LoadShader(const char* source, GLenum type, const char* debug_type) {
+GLuint LoadShader(const char* source, GLenum type) {
+    const char* debug_type;
+    switch (type) {
+    case GL_VERTEX_SHADER:
+        debug_type = "vertex";
+        break;
+    case GL_GEOMETRY_SHADER:
+        debug_type = "geometry";
+        break;
+    case GL_FRAGMENT_SHADER:
+        debug_type = "fragment";
+        break;
+    default:
+        UNREACHABLE();
+    }
     GLuint shader_id = glCreateShader(type);
     glShaderSource(shader_id, 1, &source, nullptr);
     NGLOG_DEBUG(Render_OpenGL, "Compiling {} shader...", debug_type);
