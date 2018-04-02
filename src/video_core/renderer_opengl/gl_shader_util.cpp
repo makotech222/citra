@@ -10,87 +10,39 @@
 
 namespace GLShader {
 
+GLuint LoadShader(const char* source, GLenum type, const char* debug_type) {
+    GLuint shader_id = glCreateShader(type);
+    glShaderSource(shader_id, 1, &source, nullptr);
+    NGLOG_DEBUG(Render_OpenGL, "Compiling {} shader...", debug_type);
+    glCompileShader(shader_id);
+
+    GLint result = GL_FALSE;
+    GLint info_log_length;
+    glGetShaderiv(shader_id, GL_COMPILE_STATUS, &result);
+    glGetShaderiv(shader_id, GL_INFO_LOG_LENGTH, &info_log_length);
+
+    if (info_log_length > 1) {
+        std::string shader_error(info_log_length, ' ');
+        glGetShaderInfoLog(shader_id, info_log_length, nullptr, &shader_error[0]);
+        if (result == GL_TRUE) {
+            NGLOG_DEBUG(Render_OpenGL, "{}", shader_error);
+        } else {
+            NGLOG_ERROR(Render_OpenGL, "Error compiling {} shader:\n{}", debug_type, shader_error);
+        }
+    }
+    return shader_id;
+}
+
 GLuint LoadProgram(const char* vertex_shader, const char* geometry_shader,
                    const char* fragment_shader, const std::vector<const char*>& feedback_vars,
                    bool separable_program) {
     // Create the shaders
-    GLuint vertex_shader_id = vertex_shader ? glCreateShader(GL_VERTEX_SHADER) : 0;
-    GLuint geometry_shader_id = geometry_shader ? glCreateShader(GL_GEOMETRY_SHADER) : 0;
-    GLuint fragment_shader_id = fragment_shader ? glCreateShader(GL_FRAGMENT_SHADER) : 0;
-
-    GLint result = GL_FALSE;
-    int info_log_length;
-
-    if (vertex_shader) {
-        // Compile Vertex Shader
-        LOG_DEBUG(Render_OpenGL, "Compiling vertex shader...");
-
-        glShaderSource(vertex_shader_id, 1, &vertex_shader, nullptr);
-        glCompileShader(vertex_shader_id);
-
-        // Check Vertex Shader
-        glGetShaderiv(vertex_shader_id, GL_COMPILE_STATUS, &result);
-        glGetShaderiv(vertex_shader_id, GL_INFO_LOG_LENGTH, &info_log_length);
-
-        if (info_log_length > 1) {
-            std::vector<char> vertex_shader_error(info_log_length);
-            glGetShaderInfoLog(vertex_shader_id, info_log_length, nullptr, &vertex_shader_error[0]);
-            if (result == GL_TRUE) {
-                LOG_DEBUG(Render_OpenGL, "%s", &vertex_shader_error[0]);
-            }
-            else {
-                LOG_ERROR(Render_OpenGL, "Error compiling vertex shader:\n%s", &vertex_shader_error[0]);
-            }
-        }
-    }
-
-    if (geometry_shader) {
-        // Compile Geometry Shader
-        LOG_DEBUG(Render_OpenGL, "Compiling geometry shader...");
-
-        glShaderSource(geometry_shader_id, 1, &geometry_shader, nullptr);
-        glCompileShader(geometry_shader_id);
-
-        // Check Geometry Shader
-        glGetShaderiv(geometry_shader_id, GL_COMPILE_STATUS, &result);
-        glGetShaderiv(geometry_shader_id, GL_INFO_LOG_LENGTH, &info_log_length);
-
-        if (info_log_length > 1) {
-            std::vector<char> geometry_shader_error(info_log_length);
-            glGetShaderInfoLog(geometry_shader_id, info_log_length, nullptr, &geometry_shader_error[0]);
-            if (result == GL_TRUE) {
-                LOG_DEBUG(Render_OpenGL, "%s", &geometry_shader_error[0]);
-            }
-            else {
-                LOG_ERROR(Render_OpenGL, "Error compiling geometry shader:\n%s",
-                    &geometry_shader_error[0]);
-            }
-        }
-    }
-
-    if (fragment_shader) {
-        // Compile Fragment Shader
-        LOG_DEBUG(Render_OpenGL, "Compiling fragment shader...");
-
-        glShaderSource(fragment_shader_id, 1, &fragment_shader, nullptr);
-        glCompileShader(fragment_shader_id);
-
-        // Check Fragment Shader
-        glGetShaderiv(fragment_shader_id, GL_COMPILE_STATUS, &result);
-        glGetShaderiv(fragment_shader_id, GL_INFO_LOG_LENGTH, &info_log_length);
-
-        if (info_log_length > 1) {
-            std::vector<char> fragment_shader_error(info_log_length);
-            glGetShaderInfoLog(fragment_shader_id, info_log_length, nullptr, &fragment_shader_error[0]);
-            if (result == GL_TRUE) {
-                LOG_DEBUG(Render_OpenGL, "%s", &fragment_shader_error[0]);
-            }
-            else {
-                LOG_ERROR(Render_OpenGL, "Error compiling fragment shader:\n%s",
-                    &fragment_shader_error[0]);
-            }
-        }
-    }
+    GLuint vertex_shader_id =
+        vertex_shader ? LoadShader(vertex_shader, GL_VERTEX_SHADER, "vertex") : 0;
+    GLuint geometry_shader_id =
+        geometry_shader ? LoadShader(geometry_shader, GL_GEOMETRY_SHADER, "geometry") : 0;
+    GLuint fragment_shader_id =
+        fragment_shader ? LoadShader(fragment_shader, GL_FRAGMENT_SHADER, "fragment") : 0;
 
     // Link the program
     LOG_DEBUG(Render_OpenGL, "Linking program...");
@@ -108,7 +60,8 @@ GLuint LoadProgram(const char* vertex_shader, const char* geometry_shader,
 
     if (!feedback_vars.empty()) {
         auto varyings = feedback_vars;
-        glTransformFeedbackVaryings(program_id, static_cast<GLsizei>(feedback_vars.size()), &varyings[0], GL_INTERLEAVED_ATTRIBS);
+        glTransformFeedbackVaryings(program_id, static_cast<GLsizei>(feedback_vars.size()),
+                                    &varyings[0], GL_INTERLEAVED_ATTRIBS);
     }
 
     if (separable_program) {
@@ -118,6 +71,8 @@ GLuint LoadProgram(const char* vertex_shader, const char* geometry_shader,
     glLinkProgram(program_id);
 
     // Check the program
+    GLint result = GL_FALSE;
+    GLint info_log_length;
     glGetProgramiv(program_id, GL_LINK_STATUS, &result);
     glGetProgramiv(program_id, GL_INFO_LOG_LENGTH, &info_log_length);
 
