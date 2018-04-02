@@ -833,6 +833,8 @@ void RasterizerOpenGL::DrawTriangles() {
     state.scissor.height = draw_rect.GetHeight();
     state.Apply();
 
+    glUseProgramStages(pipeline.handle,
+                       GL_VERTEX_SHADER_BIT | GL_GEOMETRY_SHADER_BIT | GL_FRAGMENT_SHADER_BIT, 0);
     // Draw the vertex batch
     if (accelerate_draw != AccelDraw::Disabled) {
         GLenum primitive_mode;
