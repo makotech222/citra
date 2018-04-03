@@ -315,10 +315,9 @@ RasterizerOpenGL::RasterizerOpenGL() {
         stream_buffer->Create(STREAM_BUFFER_SIZE, STREAM_BUFFER_SIZE / 2);
         state.draw.vertex_buffer = stream_buffer->GetHandle();
 
-        pipeline.Create();
+        shader_program_manager = std::make_unique<ShaderProgramManager>();
         vs_input_index_min = 0;
         vs_input_index_max = 0;
-        state.draw.program_pipeline = pipeline.handle;
         state.draw.shader_program = 0;
         state.draw.vertex_array = hw_vao.handle;
         state.Apply();
@@ -562,9 +561,7 @@ void RasterizerOpenGL::SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_
     ub_ptr->uniforms.SetFromRegs(Pica::g_state.regs.vs, Pica::g_state.vs);
 
     const GLShader::PicaVSConfig vs_config(Pica::g_state.regs, Pica::g_state.vs);
-    GLuint shader = vertex_shaders.Get(std::tie(vs_config, Pica::g_state.vs));
-
-    glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT, shader);
+    shader_program_manager->UseVertexShader(std::tie(vs_config, Pica::g_state.vs));
 }
 
 void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffer_offset) {
@@ -575,7 +572,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
 
     if (regs.pipeline.use_gs == Pica::PipelineRegs::UseGS::No) {
         const GLShader::PicaGSConfigCommon gs_config(regs);
-        shader = geometry_shaders.Get(gs_config);
+        shader_program_manager->UseGeometryShader(gs_config);
     } else {
         ub_ptr->uniforms.SetFromRegs(Pica::g_state.regs.gs, Pica::g_state.gs);
 
@@ -583,10 +580,8 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
         Pica::g_state.gs.uniforms.b[15] = true;
 
         const GLShader::PicaGSConfig gs_config(regs, Pica::g_state.gs);
-        shader = geometry_shaders.Get(std::tie(gs_config, Pica::g_state.gs));
+        shader_program_manager->UseGeometryShader(std::tie(gs_config, Pica::g_state.gs));
     }
-
-    glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, shader);
 }
 
 bool RasterizerOpenGL::AccelerateDrawBatch(bool is_indexed) {
@@ -854,8 +849,6 @@ void RasterizerOpenGL::DrawTriangles() {
     state.scissor.height = draw_rect.GetHeight();
     state.Apply();
 
-    glUseProgramStages(pipeline.handle,
-                       GL_VERTEX_SHADER_BIT | GL_GEOMETRY_SHADER_BIT | GL_FRAGMENT_SHADER_BIT, 0);
     // Draw the vertex batch
     if (accelerate_draw != AccelDraw::Disabled) {
         GLenum primitive_mode;
@@ -964,8 +957,8 @@ void RasterizerOpenGL::DrawTriangles() {
             copy_buffer(gs_uniform_buffer.handle, gs_ubo_offset, sizeof(GSUniformData));
         }
 
-        glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, current_fragment_shader);
-
+        shader_program_manager->ApplyTo(state);
+        state.Apply();
         if (is_indexed) {
             glDrawRangeElementsBaseVertex(
                 primitive_mode, vs_input_index_min, vs_input_index_max, regs.pipeline.num_vertices,
@@ -978,11 +971,9 @@ void RasterizerOpenGL::DrawTriangles() {
         state.draw.vertex_array = sw_vao.handle;
         state.draw.vertex_buffer = vertex_buffer->GetHandle();
         if (has_ARB_separate_shader_objects) {
-            glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT,
-                               vertex_shaders.Get(DefaultVertexShaderTag{}));
-            glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT,
-                               geometry_shaders.Get(DefaultGeometryShaderTag{}));
-            glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, current_fragment_shader);
+            shader_program_manager->UseVertexShader(DefaultVertexShaderTag{});
+            shader_program_manager->UseGeometryShader(DefaultGeometryShaderTag{});
+            shader_program_manager->ApplyTo(state);
         } else {
             state.draw.shader_program = current_shader->shader.handle;
         }
@@ -1759,9 +1750,7 @@ void RasterizerOpenGL::SetShader() {
     auto config = GLShader::PicaShaderConfig::BuildFromRegs(Pica::g_state.regs);
 
     if (has_ARB_separate_shader_objects) {
-        current_fragment_shader = fragment_shaders.Get(config);
-        state.draw.shader_program = 0; // TODO: move this to somewhere else!
-        state.Apply();
+        shader_program_manager->UseFragmentShader(config);
         current_shader = nullptr; // kill old path
         return;
     }

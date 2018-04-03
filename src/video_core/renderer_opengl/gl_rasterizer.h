@@ -187,6 +187,39 @@ template <Separable separable>
 using FragmentShaders = ShaderCache<separable, GLShader::PicaShaderConfig,
                                     &GLShader::GenerateFragmentShader, GL_FRAGMENT_SHADER>;
 
+class ShaderProgramManager {
+public:
+    ShaderProgramManager() {
+        pipeline.Create();
+    }
+
+    template <typename ConfigType>
+    void UseVertexShader(const ConfigType& config) {
+        glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT, vertex_shaders.Get(config));
+    }
+
+    template <typename ConfigType>
+    void UseGeometryShader(const ConfigType& config) {
+        glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, geometry_shaders.Get(config));
+    }
+
+    template <typename ConfigType>
+    void UseFragmentShader(const ConfigType& config) {
+        glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, fragment_shaders.Get(config));
+    }
+
+    void ApplyTo(OpenGLState& state) const {
+        state.draw.shader_program = 0;
+        state.draw.program_pipeline = pipeline.handle;
+    }
+
+private:
+    OGLPipeline pipeline;
+    VertexShaders<Separable::Yes> vertex_shaders;
+    GeometryShaders<Separable::Yes> geometry_shaders;
+    FragmentShaders<Separable::Yes> fragment_shaders;
+};
+
 class RasterizerOpenGL : public VideoCore::RasterizerInterface {
 public:
     RasterizerOpenGL();
@@ -462,9 +495,6 @@ private:
     const PicaShader* current_shader = nullptr;
     bool shader_dirty;
 
-    FragmentShaders<Separable::Yes> fragment_shaders;
-    GLuint current_fragment_shader; // temporary
-
     struct {
         UniformData data;
         std::array<bool, Pica::LightingRegs::NumLightingSampler> lut_dirty;
@@ -477,7 +507,8 @@ private:
         bool dirty;
     } uniform_block_data = {};
 
-    OGLPipeline pipeline;
+    // OGLPipeline pipeline;
+    std::unique_ptr<ShaderProgramManager> shader_program_manager;
     OGLVertexArray sw_vao;
     OGLVertexArray hw_vao;
     std::array<bool, 16> hw_vao_enabled_attributes;
@@ -531,12 +562,10 @@ private:
     void SetupVertexArray(u8* array_ptr, GLintptr buffer_offset);
 
     OGLBuffer vs_uniform_buffer;
-    VertexShaders<Separable::Yes> vertex_shaders;
 
     void SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_offset);
 
     OGLBuffer gs_uniform_buffer;
-    GeometryShaders<Separable::Yes> geometry_shaders;
 
     void SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffer_offset);
 
