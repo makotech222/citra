@@ -1333,10 +1333,12 @@ void main() {
     return out;
 }
 
-std::string GenerateVertexShader(const Pica::Shader::ShaderSetup& setup,
-                                 const PicaVSConfig& config) {
+std::string GenerateVertexShader(const Pica::Shader::ShaderSetup& setup, const PicaVSConfig& config,
+                                 bool separable_shader) {
     std::string out = "#version 330 core\n";
-    out += "#extension GL_ARB_separate_shader_objects : enable\n\n";
+    if (separable_shader) {
+        out += "#extension GL_ARB_separate_shader_objects : enable\n\n";
+    }
 
     out += Pica::Shader::Decompiler::GetCommonDeclarations();
 
@@ -1489,11 +1491,13 @@ void EmitPrim(Vertex vtx0, Vertex vtx1, Vertex vtx2) {
     return out;
 };
 
-std::string GenerateDefaultGeometryShader(const PicaGSConfigCommon& config) {
-    std::string out = R"(
-#version 330 core
-#extension GL_ARB_separate_shader_objects : enable
+std::string GenerateDefaultGeometryShader(const PicaGSConfigCommon& config, bool separable_shader) {
+    std::string out = "#version 330 core\n";
+    if (separable_shader) {
+        out += "#extension GL_ARB_separate_shader_objects : enable\n\n";
+    }
 
+    out += R"(
 layout(triangles) in;
 layout(triangle_strip, max_vertices = 3) out;
 
@@ -1521,12 +1525,11 @@ void main() {
 }
 
 std::string GenerateGeometryShader(const Pica::Shader::ShaderSetup& setup,
-                                   const PicaGSConfig& config) {
-    std::string out = R"(
-#version 330 core
-#extension GL_ARB_separate_shader_objects : enable
-
-)";
+                                   const PicaGSConfig& config, bool separable_shader) {
+    std::string out = "#version 330 core\n";
+    if (separable_shader) {
+        out += "#extension GL_ARB_separate_shader_objects : enable\n\n";
+    }
 
     switch (config.state.num_inputs / config.state.attributes_per_vertex) {
     case 1:

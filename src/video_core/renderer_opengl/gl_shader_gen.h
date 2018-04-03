@@ -190,14 +190,14 @@ std::string GenerateDefaultVertexShader(bool separable_shader);
  * Generates the GLSL vertex shader program source code for the given VS program and its main offset
  * @returns String of the shader source code
  */
-std::string GenerateVertexShader(const Pica::Shader::ShaderSetup& setup,
-                                 const PicaVSConfig& config);
+std::string GenerateVertexShader(const Pica::Shader::ShaderSetup& setup, const PicaVSConfig& config,
+                                 bool separable_shader);
 
 /**
  * Generates the GLSL default geometry shader program source code for the HW pipeline
  * @returns String of the shader source code
  */
-std::string GenerateDefaultGeometryShader(const PicaGSConfigCommon& config);
+std::string GenerateDefaultGeometryShader(const PicaGSConfigCommon& config, bool separable_shader);
 
 /**
  * Generates the GLSL geometry shader program source code for the given GS program and its
@@ -205,7 +205,7 @@ std::string GenerateDefaultGeometryShader(const PicaGSConfigCommon& config);
  * @returns String of the shader source code
  */
 std::string GenerateGeometryShader(const Pica::Shader::ShaderSetup& setup,
-                                   const PicaGSConfig& config);
+                                   const PicaGSConfig& config, bool separable_shader);
 
 /**
  * Generates the GLSL fragment shader program source code for the current Pica state

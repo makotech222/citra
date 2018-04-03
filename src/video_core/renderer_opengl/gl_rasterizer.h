@@ -88,7 +88,8 @@ template <Separable separable>
 class DefaultVertexShader {
 public:
     DefaultVertexShader() {
-        program.Create(GLShader::GenerateDefaultVertexShader(true).c_str(), GL_VERTEX_SHADER);
+        program.Create(GLShader::GenerateDefaultVertexShader(separable == Separable::Yes).c_str(),
+                       GL_VERTEX_SHADER);
     }
     GLuint Get(DefaultVertexShaderTag) {
         return program.GetHandle();
@@ -99,13 +100,14 @@ private:
 };
 
 template <Separable separable, typename KeyConfigType,
-          std::string (*CodeGenerator)(const KeyConfigType&), GLenum ShaderType>
+          std::string (*CodeGenerator)(const KeyConfigType&, bool), GLenum ShaderType>
 class ShaderCache {
 public:
     GLuint Get(const KeyConfigType& config) {
         OGLShaderStage<separable>& cached_shader = shaders[config];
         if (cached_shader.GetHandle() == 0) {
-            cached_shader.Create(CodeGenerator(config).c_str(), ShaderType);
+            cached_shader.Create(CodeGenerator(config, separable == Separable::Yes).c_str(),
+                                 ShaderType);
         }
         return cached_shader.GetHandle();
     }
@@ -119,7 +121,8 @@ private:
 // The double cache is needed because diffent KeyConfigType, which includes a hash of the code
 // region (including its leftover unused code) can generate the same GLSL code.
 template <Separable separable, typename KeyConfigType,
-          std::string (*CodeGenerator)(const Pica::Shader::ShaderSetup&, const KeyConfigType&),
+          std::string (*CodeGenerator)(const Pica::Shader::ShaderSetup&, const KeyConfigType&,
+                                       bool),
           GLenum ShaderType>
 class ShaderDoubleCache {
 public:
@@ -128,7 +131,7 @@ public:
         const auto& [key, setup] = config;
         auto map_it = shader_map.find(key);
         if (map_it == shader_map.end()) {
-            std::string program = CodeGenerator(setup, key);
+            std::string program = CodeGenerator(setup, key, separable == Separable::Yes);
 
             OGLShaderStage<separable>& cached_shader = shader_cache[program];
             if (cached_shader.GetHandle() == 0) {
