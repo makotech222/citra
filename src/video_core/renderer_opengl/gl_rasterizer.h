@@ -36,6 +36,7 @@ struct ScreenInfo;
 
 // TODO(wwylele): deal with this
 static void SetShaderUniformBlockBindings(GLuint shader);
+static void SetShaderSamplerBindings(GLuint shader);
 
 enum class Separable {
     No,
@@ -67,6 +68,7 @@ public:
         shader.Create(source, type);
         program.Create(true, shader.handle);
         SetShaderUniformBlockBindings(program.handle);
+        SetShaderSamplerBindings(program.handle);
     }
     GLuint GetHandle() const {
         return program.handle;
