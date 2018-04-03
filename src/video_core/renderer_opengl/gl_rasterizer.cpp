@@ -516,15 +516,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
 
     if (regs.pipeline.use_gs == Pica::PipelineRegs::UseGS::No) {
         const GLShader::PicaGSConfigCommon gs_config(regs);
-        GeometryShader& cached_shader = gs_default_shaders[gs_config];
-        if (cached_shader.shader.handle == 0) {
-            OGLShader shader;
-            shader.Create(GLShader::GenerateDefaultGeometryShader(gs_config).c_str(),
-                          GL_GEOMETRY_SHADER);
-            cached_shader.shader.Create(true, shader.handle);
-            SetShaderUniformBlockBindings(cached_shader.shader.handle);
-        }
-        shader = cached_shader.shader.handle;
+        shader = gs_default_shaders.Get(gs_config);
     } else {
         ub_ptr->uniforms.SetFromRegs(Pica::g_state.regs.gs, Pica::g_state.gs);
 

@@ -37,6 +37,25 @@ struct ScreenInfo;
 // TODO(wwylele): deal with this
 static void SetShaderUniformBlockBindings(GLuint shader);
 
+template <typename KeyConfigType, std::string (*CodeGenerator)(const KeyConfigType&),
+          GLenum ShaderType>
+class ShaderCache {
+public:
+    GLuint Get(const KeyConfigType& config) {
+        OGLProgram& cached_shader = shaders[config];
+        if (cached_shader.handle == 0) {
+            OGLShader shader;
+            shader.Create(CodeGenerator(config).c_str(), ShaderType);
+            cached_shader.Create(true, shader.handle);
+            SetShaderUniformBlockBindings(cached_shader.handle);
+        }
+        return cached_shader.handle;
+    }
+
+private:
+    std::unordered_map<KeyConfigType, OGLProgram> shaders;
+};
+
 // TODO(wwylele): beautify this doc
 // This is a shader cache designed for translating PICA shader to GLSL shader.
 // The double cache is needed because diffent KeyConfigType, which includes a hash of the code
@@ -95,14 +114,6 @@ public:
     /// OpenGL shader generated for a given Pica register state
     struct PicaShader {
         /// OpenGL shader resource
-        OGLProgram shader;
-    };
-
-    struct VertexShader {
-        OGLProgram shader;
-    };
-
-    struct GeometryShader {
         OGLProgram shader;
     };
 
@@ -430,7 +441,9 @@ private:
     OGLBuffer gs_uniform_buffer;
     ShaderDoubleCache<GLShader::PicaGSConfig, &GLShader::GenerateGeometryShader, GL_GEOMETRY_SHADER>
         gs_shader_cache;
-    std::unordered_map<GLShader::PicaGSConfigCommon, GeometryShader> gs_default_shaders;
+    ShaderCache<GLShader::PicaGSConfigCommon, &GLShader::GenerateDefaultGeometryShader,
+                GL_GEOMETRY_SHADER>
+        gs_default_shaders;
 
     void SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffer_offset);
 
