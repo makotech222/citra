@@ -980,7 +980,8 @@ void RasterizerOpenGL::DrawTriangles() {
         if (has_ARB_separate_shader_objects) {
             glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT,
                                vertex_shaders.Get(DefaultVertexShaderTag{}));
-            glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, 0);
+            glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT,
+                               geometry_shaders.Get(DefaultGeometryShaderTag{}));
             glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, current_fragment_shader);
         } else {
             state.draw.shader_program = current_shader->shader.handle;

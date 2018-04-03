@@ -101,6 +101,15 @@ private:
     OGLShaderStage<separable> program;
 };
 
+struct DefaultGeometryShaderTag {};
+
+class DefaultGeometryShader {
+public:
+    GLuint Get(DefaultGeometryShaderTag) {
+        return 0;
+    }
+};
+
 template <Separable separable, typename KeyConfigType,
           std::string (*CodeGenerator)(const KeyConfigType&, bool), GLenum ShaderType>
 class ShaderCache {
@@ -171,8 +180,8 @@ using FixedGeometryShaders =
                 GL_GEOMETRY_SHADER>;
 
 template <Separable separable>
-using GeometryShaders =
-    ComposeShaderGetter<ProgrammableGeometryShaders<separable>, FixedGeometryShaders<separable>>;
+using GeometryShaders = ComposeShaderGetter<ProgrammableGeometryShaders<separable>,
+                                            FixedGeometryShaders<separable>, DefaultGeometryShader>;
 
 template <Separable separable>
 using FragmentShaders = ShaderCache<separable, GLShader::PicaShaderConfig,
