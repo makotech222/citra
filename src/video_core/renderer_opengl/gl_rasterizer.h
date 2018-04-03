@@ -11,6 +11,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <vector>
+#include <boost/functional/hash.hpp>
 #include <glad/glad.h>
 #include "common/bit_field.h"
 #include "common/common_types.h"
@@ -186,7 +187,7 @@ using GeometryShaders = ComposeShaderGetter<ProgrammableGeometryShaders<separabl
 template <Separable separable>
 using FragmentShaders = ShaderCache<separable, GLShader::PicaShaderConfig,
                                     &GLShader::GenerateFragmentShader, GL_FRAGMENT_SHADER>;
-
+/*
 class ShaderProgramManager {
 public:
     ShaderProgramManager() {
@@ -208,7 +209,7 @@ public:
         glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, fragment_shaders.Get(config));
     }
 
-    void ApplyTo(OpenGLState& state) const {
+    void ApplyTo(OpenGLState& state) {
         state.draw.shader_program = 0;
         state.draw.program_pipeline = pipeline.handle;
     }
@@ -218,6 +219,56 @@ private:
     VertexShaders<Separable::Yes> vertex_shaders;
     GeometryShaders<Separable::Yes> geometry_shaders;
     FragmentShaders<Separable::Yes> fragment_shaders;
+};*/
+
+class ShaderProgramManager {
+public:
+    template <typename ConfigType>
+    void UseVertexShader(const ConfigType& config) {
+        current.vs = vertex_shaders.Get(config);
+    }
+
+    template <typename ConfigType>
+    void UseGeometryShader(const ConfigType& config) {
+        current.gs = geometry_shaders.Get(config);
+    }
+
+    template <typename ConfigType>
+    void UseFragmentShader(const ConfigType& config) {
+        current.fs = fragment_shaders.Get(config);
+    }
+
+    void ApplyTo(OpenGLState& state) {
+        OGLProgram& cached_program = program_cache[current];
+        if (cached_program.handle == 0) {
+            cached_program.Create(false, current.vs, current.gs, current.fs);
+            SetShaderUniformBlockBindings(cached_program.handle);
+            SetShaderSamplerBindings(cached_program.handle);
+        }
+        state.draw.shader_program = cached_program.handle;
+    }
+
+private:
+    struct ShaderTuple {
+        GLuint vs = 0, gs = 0, fs = 0;
+        bool operator==(const ShaderTuple& rhs) const {
+            return std::tie(vs, gs, fs) == std::tie(rhs.vs, rhs.gs, rhs.fs);
+        }
+        struct Hash {
+            std::size_t operator()(const ShaderTuple& tuple) const {
+                std::size_t hash = 0;
+                boost::hash_combine(hash, tuple.vs);
+                boost::hash_combine(hash, tuple.gs);
+                boost::hash_combine(hash, tuple.fs);
+                return hash;
+            }
+        };
+    };
+    ShaderTuple current;
+    std::unordered_map<ShaderTuple, OGLProgram, ShaderTuple::Hash> program_cache;
+    VertexShaders<Separable::No> vertex_shaders;
+    GeometryShaders<Separable::No> geometry_shaders;
+    FragmentShaders<Separable::No> fragment_shaders;
 };
 
 class RasterizerOpenGL : public VideoCore::RasterizerInterface {
