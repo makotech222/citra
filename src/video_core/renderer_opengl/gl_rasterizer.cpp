@@ -964,7 +964,7 @@ void RasterizerOpenGL::DrawTriangles() {
             copy_buffer(gs_uniform_buffer.handle, gs_ubo_offset, sizeof(GSUniformData));
         }
 
-        glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, current_shader->shader.handle);
+        glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, current_fragment_shader);
 
         if (is_indexed) {
             glDrawRangeElementsBaseVertex(
@@ -981,8 +981,7 @@ void RasterizerOpenGL::DrawTriangles() {
             glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT,
                                vertex_shaders.Get(DefaultVertexShaderTag{}));
             glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, 0);
-            glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT,
-                               current_shader->shader.handle);
+            glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, current_fragment_shader);
         } else {
             state.draw.shader_program = current_shader->shader.handle;
         }
@@ -1758,6 +1757,14 @@ void RasterizerOpenGL::SamplerInfo::SyncWithConfig(
 void RasterizerOpenGL::SetShader() {
     auto config = GLShader::PicaShaderConfig::BuildFromRegs(Pica::g_state.regs);
 
+    if (has_ARB_separate_shader_objects) {
+        current_fragment_shader = fragment_shaders.Get(config);
+        state.draw.shader_program = 0; // TODO: move this to somewhere else!
+        state.Apply();
+        current_shader = nullptr; // kill old path
+        return;
+    }
+
     // Find (or generate) the GLSL shader for the current TEV state
     auto cached_shader = shader_cache.find(config);
     if (cached_shader != shader_cache.end()) {
@@ -1768,24 +1775,12 @@ void RasterizerOpenGL::SetShader() {
         auto& shader = shader_cache.emplace(config, PicaShader{}).first->second;
         current_shader = &shader;
 
-        if (has_ARB_separate_shader_objects) {
-            shader.shader.CreateFromSource(
-                nullptr, nullptr, GLShader::GenerateFragmentShader(config, true).c_str(), true);
-
-            glActiveShaderProgram(pipeline.handle, shader.shader.handle);
-        } else {
-            shader.shader.CreateFromSource(GLShader::GenerateDefaultVertexShader(false).c_str(),
-                                           nullptr,
-                                           GLShader::GenerateFragmentShader(config, false).c_str());
-        }
+        shader.shader.CreateFromSource(GLShader::GenerateDefaultVertexShader(false).c_str(),
+                                       nullptr,
+                                       GLShader::GenerateFragmentShader(config, false).c_str());
 
         SetShaderSamplerBindings(shader.shader.handle);
         SetShaderUniformBlockBindings(shader.shader.handle);
-
-        if (has_ARB_separate_shader_objects) {
-            state.draw.shader_program = 0;
-            state.Apply();
-        }
     }
 }
 

@@ -174,6 +174,10 @@ template <Separable separable>
 using GeometryShaders =
     ComposeShaderGetter<ProgrammableGeometryShaders<separable>, FixedGeometryShaders<separable>>;
 
+template <Separable separable>
+using FragmentShaders = ShaderCache<separable, GLShader::PicaShaderConfig,
+                                    &GLShader::GenerateFragmentShader, GL_FRAGMENT_SHADER>;
+
 class RasterizerOpenGL : public VideoCore::RasterizerInterface {
 public:
     RasterizerOpenGL();
@@ -448,6 +452,9 @@ private:
     std::unordered_map<GLShader::PicaShaderConfig, PicaShader> shader_cache;
     const PicaShader* current_shader = nullptr;
     bool shader_dirty;
+
+    FragmentShaders<Separable::Yes> fragment_shaders;
+    GLuint current_fragment_shader; // temporary
 
     struct {
         UniformData data;
