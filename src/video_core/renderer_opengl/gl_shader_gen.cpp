@@ -1365,6 +1365,7 @@ std::string GenerateVertexShader(const Pica::Shader::ShaderSetup& setup, const P
             .get_value_or("");
 
     out += R"(
+#define uniforms vs_uniforms
 layout (std140) uniform vs_config {
     pica_uniforms uniforms;
 };
@@ -1408,6 +1409,7 @@ static std::string GetGSCommonSource(const PicaGSConfigCommonRaw& config, bool s
     }
 
     out += R"(
+#define uniforms gs_uniforms
 layout (std140) uniform gs_config {
     pica_uniforms uniforms;
 };
