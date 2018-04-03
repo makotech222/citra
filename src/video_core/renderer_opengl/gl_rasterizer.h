@@ -37,6 +37,23 @@ struct ScreenInfo;
 // TODO(wwylele): deal with this
 static void SetShaderUniformBlockBindings(GLuint shader);
 
+struct DefaultVertexShaderTag {};
+class DefaultVertexShader {
+public:
+    DefaultVertexShader() {
+        OGLShader shader;
+        shader.Create(GLShader::GenerateDefaultVertexShader(true).c_str(), GL_VERTEX_SHADER);
+        program.Create(true, shader.handle);
+        SetShaderUniformBlockBindings(program.handle);
+    }
+    GLuint Get(DefaultVertexShaderTag) {
+        return program.handle;
+    }
+
+private:
+    OGLProgram program;
+};
+
 template <typename KeyConfigType, std::string (*CodeGenerator)(const KeyConfigType&),
           GLenum ShaderType>
 class ShaderCache {
@@ -434,7 +451,7 @@ private:
     OGLBuffer vs_uniform_buffer;
     ShaderDoubleCache<GLShader::PicaVSConfig, &GLShader::GenerateVertexShader, GL_VERTEX_SHADER>
         vs_shader_cache;
-    OGLProgram vs_default_shader;
+    DefaultVertexShader vs_default_shader;
 
     void SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_offset);
 

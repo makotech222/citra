@@ -273,10 +273,6 @@ RasterizerOpenGL::RasterizerOpenGL() {
         glBindBufferBase(GL_UNIFORM_BUFFER, 2, gs_uniform_buffer.handle);
 
         glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
-
-        vs_default_shader.CreateFromSource(GLShader::GenerateDefaultVertexShader(true).c_str(),
-                                           nullptr, nullptr, true);
-        SetShaderUniformBlockBindings(vs_default_shader.handle);
     }
 
     accelerate_draw = AccelDraw::Disabled;
@@ -919,7 +915,8 @@ void RasterizerOpenGL::DrawTriangles() {
         state.draw.vertex_array = sw_vao.handle;
         state.draw.vertex_buffer = vertex_buffer->GetHandle();
         if (has_ARB_separate_shader_objects) {
-            glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT, vs_default_shader.handle);
+            glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT,
+                               vs_default_shader.Get(DefaultVertexShaderTag{}));
             glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, 0);
             glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT,
                                current_shader->shader.handle);
