@@ -499,7 +499,7 @@ void RasterizerOpenGL::SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_
     ub_ptr->uniforms.SetFromRegs(Pica::g_state.regs.vs, Pica::g_state.vs);
 
     const GLShader::PicaVSConfig vs_config(Pica::g_state.regs, Pica::g_state.vs);
-    GLuint shader = vs_shader_cache.Get(std::tie(vs_config, Pica::g_state.vs));
+    GLuint shader = vertex_shaders.Get(std::tie(vs_config, Pica::g_state.vs));
 
     glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT, shader);
 }
@@ -512,7 +512,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
 
     if (regs.pipeline.use_gs == Pica::PipelineRegs::UseGS::No) {
         const GLShader::PicaGSConfigCommon gs_config(regs);
-        shader = gs_default_shaders.Get(gs_config);
+        shader = geometry_shaders.Get(gs_config);
     } else {
         ub_ptr->uniforms.SetFromRegs(Pica::g_state.regs.gs, Pica::g_state.gs);
 
@@ -520,7 +520,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
         Pica::g_state.gs.uniforms.b[15] = true;
 
         const GLShader::PicaGSConfig gs_config(regs, Pica::g_state.gs);
-        shader = gs_shader_cache.Get(std::tie(gs_config, Pica::g_state.gs));
+        shader = geometry_shaders.Get(std::tie(gs_config, Pica::g_state.gs));
     }
 
     glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, shader);
@@ -916,7 +916,7 @@ void RasterizerOpenGL::DrawTriangles() {
         state.draw.vertex_buffer = vertex_buffer->GetHandle();
         if (has_ARB_separate_shader_objects) {
             glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT,
-                               vs_default_shader.Get(DefaultVertexShaderTag{}));
+                               vertex_shaders.Get(DefaultVertexShaderTag{}));
             glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, 0);
             glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT,
                                current_shader->shader.handle);

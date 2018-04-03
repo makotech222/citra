@@ -37,6 +37,12 @@ struct ScreenInfo;
 // TODO(wwylele): deal with this
 static void SetShaderUniformBlockBindings(GLuint shader);
 
+template <class... Ts>
+class ComposeShaderGetter : private Ts... {
+public:
+    using Ts::Get...;
+};
+
 struct DefaultVertexShaderTag {};
 class DefaultVertexShader {
 public:
@@ -107,6 +113,18 @@ private:
     std::unordered_map<KeyConfigType, OGLProgram*> shader_map;
     std::unordered_map<std::string, OGLProgram> shader_cache;
 };
+
+using ProgrammableVertexShaders =
+    ShaderDoubleCache<GLShader::PicaVSConfig, &GLShader::GenerateVertexShader, GL_VERTEX_SHADER>;
+using VertexShaders = ComposeShaderGetter<ProgrammableVertexShaders, DefaultVertexShader>;
+
+using ProgrammableGeometryShaders =
+    ShaderDoubleCache<GLShader::PicaGSConfig, &GLShader::GenerateGeometryShader,
+                      GL_GEOMETRY_SHADER>;
+using FixedGeometryShaders =
+    ShaderCache<GLShader::PicaGSConfigCommon, &GLShader::GenerateDefaultGeometryShader,
+                GL_GEOMETRY_SHADER>;
+using GeometryShaders = ComposeShaderGetter<ProgrammableGeometryShaders, FixedGeometryShaders>;
 
 class RasterizerOpenGL : public VideoCore::RasterizerInterface {
 public:
@@ -449,18 +467,12 @@ private:
     void SetupVertexArray(u8* array_ptr, GLintptr buffer_offset);
 
     OGLBuffer vs_uniform_buffer;
-    ShaderDoubleCache<GLShader::PicaVSConfig, &GLShader::GenerateVertexShader, GL_VERTEX_SHADER>
-        vs_shader_cache;
-    DefaultVertexShader vs_default_shader;
+    VertexShaders vertex_shaders;
 
     void SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_offset);
 
     OGLBuffer gs_uniform_buffer;
-    ShaderDoubleCache<GLShader::PicaGSConfig, &GLShader::GenerateGeometryShader, GL_GEOMETRY_SHADER>
-        gs_shader_cache;
-    ShaderCache<GLShader::PicaGSConfigCommon, &GLShader::GenerateDefaultGeometryShader,
-                GL_GEOMETRY_SHADER>
-        gs_default_shaders;
+    GeometryShaders geometry_shaders;
 
     void SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffer_offset);
 
