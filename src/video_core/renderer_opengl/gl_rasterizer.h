@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <vector>
 #include <boost/functional/hash.hpp>
+#include <boost/variant.hpp>
 #include <glad/glad.h>
 #include "common/bit_field.h"
 #include "common/common_types.h"
@@ -39,114 +40,110 @@ struct ScreenInfo;
 static void SetShaderUniformBlockBindings(GLuint shader);
 static void SetShaderSamplerBindings(GLuint shader);
 
-enum class Separable {
-    No,
-    Yes,
-};
-
-template <Separable separable>
-class OGLShaderStage;
-
-template <>
-class OGLShaderStage<Separable::No> {
+class OGLShaderStage {
 public:
+    OGLShaderStage(bool separable) {
+        if (separable) {
+            shader_or_program = OGLProgram();
+        } else {
+            shader_or_program = OGLShader();
+        }
+    }
     void Create(const char* source, GLenum type) {
-        shader.Create(source, type);
+        if (shader_or_program.which() == 0) {
+            boost::get<OGLShader>(shader_or_program).Create(source, type);
+        } else {
+            OGLShader shader;
+            shader.Create(source, type);
+            OGLProgram& program = boost::get<OGLProgram>(shader_or_program);
+            program.Create(true, shader.handle);
+            SetShaderUniformBlockBindings(program.handle);
+            SetShaderSamplerBindings(program.handle);
+        }
     }
     GLuint GetHandle() const {
-        return shader.handle;
+        if (shader_or_program.which() == 0) {
+            return boost::get<OGLShader>(shader_or_program).handle;
+        } else {
+            return boost::get<OGLProgram>(shader_or_program).handle;
+        }
     }
 
 private:
-    OGLShader shader;
-};
-
-template <>
-class OGLShaderStage<Separable::Yes> {
-public:
-    void Create(const char* source, GLenum type) {
-        OGLShader shader;
-        shader.Create(source, type);
-        program.Create(true, shader.handle);
-        SetShaderUniformBlockBindings(program.handle);
-        SetShaderSamplerBindings(program.handle);
-    }
-    GLuint GetHandle() const {
-        return program.handle;
-    }
-
-private:
-    OGLProgram program;
+    boost::variant<OGLShader, OGLProgram> shader_or_program;
 };
 
 template <class... Ts>
 class ComposeShaderGetter : private Ts... {
 public:
     using Ts::Get...;
+    ComposeShaderGetter(bool separable) : Ts(separable)... {}
 };
 
 struct DefaultVertexShaderTag {};
 
-template <Separable separable>
 class DefaultVertexShader {
 public:
-    DefaultVertexShader() {
-        program.Create(GLShader::GenerateDefaultVertexShader(separable == Separable::Yes).c_str(),
-                       GL_VERTEX_SHADER);
+    DefaultVertexShader(bool separable) : program(separable) {
+        program.Create(GLShader::GenerateDefaultVertexShader(separable).c_str(), GL_VERTEX_SHADER);
     }
     GLuint Get(DefaultVertexShaderTag) {
         return program.GetHandle();
     }
 
 private:
-    OGLShaderStage<separable> program;
+    OGLShaderStage program;
 };
 
 struct DefaultGeometryShaderTag {};
 
 class DefaultGeometryShader {
 public:
+    DefaultGeometryShader(bool) {}
     GLuint Get(DefaultGeometryShaderTag) {
         return 0;
     }
 };
 
-template <Separable separable, typename KeyConfigType,
-          std::string (*CodeGenerator)(const KeyConfigType&, bool), GLenum ShaderType>
+template <typename KeyConfigType, std::string (*CodeGenerator)(const KeyConfigType&, bool),
+          GLenum ShaderType>
 class ShaderCache {
 public:
+    ShaderCache(bool separable) : separable(separable) {}
     GLuint Get(const KeyConfigType& config) {
-        OGLShaderStage<separable>& cached_shader = shaders[config];
-        if (cached_shader.GetHandle() == 0) {
-            cached_shader.Create(CodeGenerator(config, separable == Separable::Yes).c_str(),
-                                 ShaderType);
+        auto [iter, new_shader] = shaders.emplace(config, OGLShaderStage{separable});
+        OGLShaderStage& cached_shader = iter->second;
+        if (new_shader) {
+            cached_shader.Create(CodeGenerator(config, separable).c_str(), ShaderType);
         }
         return cached_shader.GetHandle();
     }
 
 private:
-    std::unordered_map<KeyConfigType, OGLShaderStage<separable>> shaders;
+    bool separable;
+    std::unordered_map<KeyConfigType, OGLShaderStage> shaders;
 };
 
 // TODO(wwylele): beautify this doc
 // This is a shader cache designed for translating PICA shader to GLSL shader.
 // The double cache is needed because diffent KeyConfigType, which includes a hash of the code
 // region (including its leftover unused code) can generate the same GLSL code.
-template <Separable separable, typename KeyConfigType,
+template <typename KeyConfigType,
           std::string (*CodeGenerator)(const Pica::Shader::ShaderSetup&, const KeyConfigType&,
                                        bool),
           GLenum ShaderType>
 class ShaderDoubleCache {
 public:
-    // Note: the tuple type is intentional, for use of visitor pattern later
+    ShaderDoubleCache(bool separable) : separable(separable) {}
     GLuint Get(std::tuple<const KeyConfigType&, const Pica::Shader::ShaderSetup&> config) {
         const auto& [key, setup] = config;
         auto map_it = shader_map.find(key);
         if (map_it == shader_map.end()) {
-            std::string program = CodeGenerator(setup, key, separable == Separable::Yes);
+            std::string program = CodeGenerator(setup, key, separable);
 
-            OGLShaderStage<separable>& cached_shader = shader_cache[program];
-            if (cached_shader.GetHandle() == 0) {
+            auto [iter, new_shader] = shader_cache.emplace(program, OGLShaderStage{separable});
+            OGLShaderStage& cached_shader = iter->second;
+            if (new_shader) {
                 cached_shader.Create(program.c_str(), ShaderType);
             }
             shader_map[key] = &cached_shader;
@@ -157,36 +154,29 @@ public:
     }
 
 private:
-    std::unordered_map<KeyConfigType, OGLShaderStage<separable>*> shader_map;
-    std::unordered_map<std::string, OGLShaderStage<separable>> shader_cache;
+    bool separable;
+    std::unordered_map<KeyConfigType, OGLShaderStage*> shader_map;
+    std::unordered_map<std::string, OGLShaderStage> shader_cache;
 };
 
-template <Separable separable>
 using ProgrammableVertexShaders =
-    ShaderDoubleCache<separable, GLShader::PicaVSConfig, &GLShader::GenerateVertexShader,
-                      GL_VERTEX_SHADER>;
+    ShaderDoubleCache<GLShader::PicaVSConfig, &GLShader::GenerateVertexShader, GL_VERTEX_SHADER>;
 
-template <Separable separable>
-using VertexShaders =
-    ComposeShaderGetter<ProgrammableVertexShaders<separable>, DefaultVertexShader<separable>>;
+using VertexShaders = ComposeShaderGetter<ProgrammableVertexShaders, DefaultVertexShader>;
 
-template <Separable separable>
 using ProgrammableGeometryShaders =
-    ShaderDoubleCache<separable, GLShader::PicaGSConfig, &GLShader::GenerateGeometryShader,
+    ShaderDoubleCache<GLShader::PicaGSConfig, &GLShader::GenerateGeometryShader,
                       GL_GEOMETRY_SHADER>;
 
-template <Separable separable>
 using FixedGeometryShaders =
-    ShaderCache<separable, GLShader::PicaGSConfigCommon, &GLShader::GenerateDefaultGeometryShader,
+    ShaderCache<GLShader::PicaGSConfigCommon, &GLShader::GenerateDefaultGeometryShader,
                 GL_GEOMETRY_SHADER>;
 
-template <Separable separable>
-using GeometryShaders = ComposeShaderGetter<ProgrammableGeometryShaders<separable>,
-                                            FixedGeometryShaders<separable>, DefaultGeometryShader>;
+using GeometryShaders =
+    ComposeShaderGetter<ProgrammableGeometryShaders, FixedGeometryShaders, DefaultGeometryShader>;
 
-template <Separable separable>
-using FragmentShaders = ShaderCache<separable, GLShader::PicaShaderConfig,
-                                    &GLShader::GenerateFragmentShader, GL_FRAGMENT_SHADER>;
+using FragmentShaders =
+    ShaderCache<GLShader::PicaShaderConfig, &GLShader::GenerateFragmentShader, GL_FRAGMENT_SHADER>;
 /*
 class ShaderProgramManager {
 public:
@@ -266,9 +256,9 @@ private:
     };
     ShaderTuple current;
     std::unordered_map<ShaderTuple, OGLProgram, ShaderTuple::Hash> program_cache;
-    VertexShaders<Separable::No> vertex_shaders;
-    GeometryShaders<Separable::No> geometry_shaders;
-    FragmentShaders<Separable::No> fragment_shaders;
+    VertexShaders vertex_shaders{false};
+    GeometryShaders geometry_shaders{false};
+    FragmentShaders fragment_shaders{false};
 };
 
 class RasterizerOpenGL : public VideoCore::RasterizerInterface {
