@@ -177,42 +177,16 @@ using GeometryShaders =
 
 using FragmentShaders =
     ShaderCache<GLShader::PicaShaderConfig, &GLShader::GenerateFragmentShader, GL_FRAGMENT_SHADER>;
-/*
-class ShaderProgramManager {
-public:
-    ShaderProgramManager() {
-        pipeline.Create();
-    }
-
-    template <typename ConfigType>
-    void UseVertexShader(const ConfigType& config) {
-        glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT, vertex_shaders.Get(config));
-    }
-
-    template <typename ConfigType>
-    void UseGeometryShader(const ConfigType& config) {
-        glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, geometry_shaders.Get(config));
-    }
-
-    template <typename ConfigType>
-    void UseFragmentShader(const ConfigType& config) {
-        glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, fragment_shaders.Get(config));
-    }
-
-    void ApplyTo(OpenGLState& state) {
-        state.draw.shader_program = 0;
-        state.draw.program_pipeline = pipeline.handle;
-    }
-
-private:
-    OGLPipeline pipeline;
-    VertexShaders<Separable::Yes> vertex_shaders;
-    GeometryShaders<Separable::Yes> geometry_shaders;
-    FragmentShaders<Separable::Yes> fragment_shaders;
-};*/
 
 class ShaderProgramManager {
 public:
+    ShaderProgramManager(bool separable)
+        : separable(separable), vertex_shaders(separable), geometry_shaders(separable),
+          fragment_shaders(separable) {
+        if (separable)
+            pipeline.Create();
+    }
+
     template <typename ConfigType>
     void UseVertexShader(const ConfigType& config) {
         current.vs = vertex_shaders.Get(config);
@@ -229,13 +203,26 @@ public:
     }
 
     void ApplyTo(OpenGLState& state) {
-        OGLProgram& cached_program = program_cache[current];
-        if (cached_program.handle == 0) {
-            cached_program.Create(false, current.vs, current.gs, current.fs);
-            SetShaderUniformBlockBindings(cached_program.handle);
-            SetShaderSamplerBindings(cached_program.handle);
+        if (separable) {
+            // Workaround for AMD bug
+            glUseProgramStages(
+                pipeline.handle,
+                GL_VERTEX_SHADER_BIT | GL_GEOMETRY_SHADER_BIT | GL_FRAGMENT_SHADER_BIT, 0);
+
+            glUseProgramStages(pipeline.handle, GL_VERTEX_SHADER_BIT, current.vs);
+            glUseProgramStages(pipeline.handle, GL_GEOMETRY_SHADER_BIT, current.gs);
+            glUseProgramStages(pipeline.handle, GL_FRAGMENT_SHADER_BIT, current.fs);
+            state.draw.shader_program = 0;
+            state.draw.program_pipeline = pipeline.handle;
+        } else {
+            OGLProgram& cached_program = program_cache[current];
+            if (cached_program.handle == 0) {
+                cached_program.Create(false, current.vs, current.gs, current.fs);
+                SetShaderUniformBlockBindings(cached_program.handle);
+                SetShaderSamplerBindings(cached_program.handle);
+            }
+            state.draw.shader_program = cached_program.handle;
         }
-        state.draw.shader_program = cached_program.handle;
     }
 
 private:
@@ -255,10 +242,13 @@ private:
         };
     };
     ShaderTuple current;
-    std::unordered_map<ShaderTuple, OGLProgram, ShaderTuple::Hash> program_cache;
     VertexShaders vertex_shaders{false};
     GeometryShaders geometry_shaders{false};
     FragmentShaders fragment_shaders{false};
+
+    bool separable;
+    std::unordered_map<ShaderTuple, OGLProgram, ShaderTuple::Hash> program_cache;
+    OGLPipeline pipeline;
 };
 
 class RasterizerOpenGL : public VideoCore::RasterizerInterface {

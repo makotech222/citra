@@ -315,7 +315,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
         stream_buffer->Create(STREAM_BUFFER_SIZE, STREAM_BUFFER_SIZE / 2);
         state.draw.vertex_buffer = stream_buffer->GetHandle();
 
-        shader_program_manager = std::make_unique<ShaderProgramManager>();
+        shader_program_manager = std::make_unique<ShaderProgramManager>(has_ARB_separate_shader_objects);
         vs_input_index_min = 0;
         vs_input_index_max = 0;
         state.draw.shader_program = 0;
