@@ -5,6 +5,7 @@
 #pragma once
 
 #include <utility>
+#include <vector>
 #include <glad/glad.h>
 #include "common/common_types.h"
 #include "video_core/renderer_opengl/gl_shader_util.h"
@@ -130,16 +131,16 @@ public:
         return *this;
     }
 
-    template <typename... T>
-    void Create(bool separable_program, T... shaders) {
+    /// Creates a new program from given shader objects
+    void Create(bool separable_program, const std::vector<GLuint>& shaders) {
         if (handle != 0)
             return;
-        handle = GLShader::LoadProgram(separable_program, shaders...);
+        handle = GLShader::LoadProgram(separable_program, shaders);
     }
 
-    /// Creates a new internal OpenGL resource and stores the handle
-    void CreateFromSource(const char* vert_shader, const char* geo_shader, const char* frag_shader,
-                          bool separable_program = false) {
+    /// Creates a new program from given shader soruce code
+    void CreateFromSource(const char* vert_shader, const char* geo_shader,
+                          const char* frag_shader) {
         OGLShader vert, geo, frag;
         if (vert_shader)
             vert.Create(vert_shader, GL_VERTEX_SHADER);
@@ -147,7 +148,7 @@ public:
             geo.Create(geo_shader, GL_GEOMETRY_SHADER);
         if (frag_shader)
             frag.Create(frag_shader, GL_FRAGMENT_SHADER);
-        Create(separable_program, vert.handle, geo.handle, frag.handle);
+        Create(false, {vert.handle, geo.handle, frag.handle});
     }
 
     /// Deletes the internal OpenGL resource

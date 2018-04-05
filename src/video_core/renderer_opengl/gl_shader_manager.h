@@ -105,7 +105,7 @@ public:
             OGLShader shader;
             shader.Create(source, type);
             OGLProgram& program = boost::get<OGLProgram>(shader_or_program);
-            program.Create(true, shader.handle);
+            program.Create(true, {shader.handle});
             Impl::SetShaderUniformBlockBindings(program.handle);
             Impl::SetShaderSamplerBindings(program.handle);
         }
@@ -284,7 +284,7 @@ public:
         } else {
             OGLProgram& cached_program = program_cache[current];
             if (cached_program.handle == 0) {
-                cached_program.Create(false, current.vs, current.gs, current.fs);
+                cached_program.Create(false, {current.vs, current.gs, current.fs});
                 Impl::SetShaderUniformBlockBindings(cached_program.handle);
                 Impl::SetShaderSamplerBindings(cached_program.handle);
             }
