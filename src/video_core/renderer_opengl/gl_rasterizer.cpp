@@ -307,35 +307,34 @@ RasterizerOpenGL::RasterizerOpenGL() {
     glActiveTexture(TextureUnits::ProcTexDiffLUT.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, proctex_diff_lut_buffer.handle);
 
-    if (has_ARB_separate_shader_objects) {
-        hw_vao.Create();
-        hw_vao_enabled_attributes.fill(false);
+    hw_vao.Create();
+    hw_vao_enabled_attributes.fill(false);
 
-        stream_buffer = OGLStreamBuffer::MakeBuffer(has_ARB_buffer_storage, GL_ARRAY_BUFFER);
-        stream_buffer->Create(STREAM_BUFFER_SIZE, STREAM_BUFFER_SIZE / 2);
-        state.draw.vertex_buffer = stream_buffer->GetHandle();
+    stream_buffer = OGLStreamBuffer::MakeBuffer(has_ARB_buffer_storage, GL_ARRAY_BUFFER);
+    stream_buffer->Create(STREAM_BUFFER_SIZE, STREAM_BUFFER_SIZE / 2);
+    state.draw.vertex_buffer = stream_buffer->GetHandle();
 
-        shader_program_manager = std::make_unique<ShaderProgramManager>(has_ARB_separate_shader_objects);
-        vs_input_index_min = 0;
-        vs_input_index_max = 0;
-        state.draw.shader_program = 0;
-        state.draw.vertex_array = hw_vao.handle;
-        state.Apply();
+    shader_program_manager =
+        std::make_unique<ShaderProgramManager>(has_ARB_separate_shader_objects);
+    vs_input_index_min = 0;
+    vs_input_index_max = 0;
+    state.draw.shader_program = 0;
+    state.draw.vertex_array = hw_vao.handle;
+    state.Apply();
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, stream_buffer->GetHandle());
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, stream_buffer->GetHandle());
 
-        vs_uniform_buffer.Create();
-        glBindBuffer(GL_UNIFORM_BUFFER, vs_uniform_buffer.handle);
-        glBufferData(GL_UNIFORM_BUFFER, sizeof(VSUniformData), nullptr, GL_STREAM_COPY);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 1, vs_uniform_buffer.handle);
+    vs_uniform_buffer.Create();
+    glBindBuffer(GL_UNIFORM_BUFFER, vs_uniform_buffer.handle);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(VSUniformData), nullptr, GL_STREAM_COPY);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 1, vs_uniform_buffer.handle);
 
-        gs_uniform_buffer.Create();
-        glBindBuffer(GL_UNIFORM_BUFFER, gs_uniform_buffer.handle);
-        glBufferData(GL_UNIFORM_BUFFER, sizeof(GSUniformData), nullptr, GL_STREAM_COPY);
-        glBindBufferBase(GL_UNIFORM_BUFFER, 2, gs_uniform_buffer.handle);
+    gs_uniform_buffer.Create();
+    glBindBuffer(GL_UNIFORM_BUFFER, gs_uniform_buffer.handle);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(GSUniformData), nullptr, GL_STREAM_COPY);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 2, gs_uniform_buffer.handle);
 
-        glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
-    }
+    glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
 
     accelerate_draw = AccelDraw::Disabled;
 
@@ -585,13 +584,6 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
 }
 
 bool RasterizerOpenGL::AccelerateDrawBatch(bool is_indexed) {
-    if (!has_ARB_separate_shader_objects) {
-        LOG_CRITICAL(Render_OpenGL,
-                     "GL_ARB_separate_shader_objects extension unsupported, disabling HW shaders");
-        Settings::values.hw_shaders = Settings::HwShaders::Off;
-        return false;
-    }
-
     const auto& regs = Pica::g_state.regs;
     if (regs.pipeline.use_gs != Pica::PipelineRegs::UseGS::No) {
         if (regs.pipeline.gs_config.mode != Pica::PipelineRegs::GSMode::Point) {
@@ -970,13 +962,9 @@ void RasterizerOpenGL::DrawTriangles() {
     } else {
         state.draw.vertex_array = sw_vao.handle;
         state.draw.vertex_buffer = vertex_buffer->GetHandle();
-        if (has_ARB_separate_shader_objects) {
-            shader_program_manager->UseVertexShader(DefaultVertexShaderTag{});
-            shader_program_manager->UseGeometryShader(DefaultGeometryShaderTag{});
-            shader_program_manager->ApplyTo(state);
-        } else {
-            state.draw.shader_program = current_shader->shader.handle;
-        }
+        shader_program_manager->UseVertexShader(DefaultVertexShaderTag{});
+        shader_program_manager->UseGeometryShader(DefaultGeometryShaderTag{});
+        shader_program_manager->ApplyTo(state);
         state.Apply();
 
         size_t max_vertices = 3 * (VERTEX_BUFFER_SIZE / (3 * sizeof(HardwareVertex)));
@@ -1748,30 +1736,7 @@ void RasterizerOpenGL::SamplerInfo::SyncWithConfig(
 
 void RasterizerOpenGL::SetShader() {
     auto config = GLShader::PicaShaderConfig::BuildFromRegs(Pica::g_state.regs);
-
-    if (has_ARB_separate_shader_objects) {
-        shader_program_manager->UseFragmentShader(config);
-        current_shader = nullptr; // kill old path
-        return;
-    }
-
-    // Find (or generate) the GLSL shader for the current TEV state
-    auto cached_shader = shader_cache.find(config);
-    if (cached_shader != shader_cache.end()) {
-        current_shader = &cached_shader->second;
-    } else {
-        LOG_DEBUG(Render_OpenGL, "Creating new shader");
-
-        auto& shader = shader_cache.emplace(config, PicaShader{}).first->second;
-        current_shader = &shader;
-
-        shader.shader.CreateFromSource(GLShader::GenerateDefaultVertexShader(false).c_str(),
-                                       nullptr,
-                                       GLShader::GenerateFragmentShader(config, false).c_str());
-
-        SetShaderSamplerBindings(shader.shader.handle);
-        SetShaderUniformBlockBindings(shader.shader.handle);
-    }
+    shader_program_manager->UseFragmentShader(config);
 }
 
 void RasterizerOpenGL::SyncClipEnabled() {

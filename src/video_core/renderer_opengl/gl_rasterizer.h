@@ -271,12 +271,6 @@ public:
                            u32 pixel_stride, ScreenInfo& screen_info) override;
     bool AccelerateDrawBatch(bool is_indexed) override;
 
-    /// OpenGL shader generated for a given Pica register state
-    struct PicaShader {
-        /// OpenGL shader resource
-        OGLProgram shader;
-    };
-
     struct LightSrc {
         alignas(16) GLvec3 specular_0;
         alignas(16) GLvec3 specular_1;
@@ -522,8 +516,6 @@ private:
 
     std::vector<HardwareVertex> vertex_batch;
 
-    std::unordered_map<GLShader::PicaShaderConfig, PicaShader> shader_cache;
-    const PicaShader* current_shader = nullptr;
     bool shader_dirty;
 
     struct {
