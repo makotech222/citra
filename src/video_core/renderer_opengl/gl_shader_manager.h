@@ -122,11 +122,29 @@ private:
     boost::variant<OGLShader, OGLProgram> shader_or_program;
 };
 
-template <class... Ts>
+/*template <class... Ts>
 class ComposeShaderGetter : private Ts... {
 public:
     using Ts::Get...;
     ComposeShaderGetter(bool separable) : Ts(separable)... {}
+};*/
+
+template <class... Ts>
+class ComposeShaderGetter;
+
+template <>
+class ComposeShaderGetter<> {
+public:
+    ComposeShaderGetter(bool separable) {}
+    void Get() {}
+};
+
+template <class T, class... Ts>
+class ComposeShaderGetter<T, Ts...> : private T, private ComposeShaderGetter<Ts...> {
+public:
+    using T::Get;
+    using ComposeShaderGetter<Ts...>::Get;
+    ComposeShaderGetter(bool separable) : T(separable), ComposeShaderGetter<Ts...>(separable) {}
 };
 
 struct DefaultVertexShaderTag {};
