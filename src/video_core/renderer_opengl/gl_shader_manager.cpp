@@ -25,64 +25,32 @@ void SetShaderUniformBlockBindings(GLuint shader) {
     SetShaderUniformBlockBinding(shader, "gs_config", UniformBindings::GS, sizeof(GSUniformData));
 }
 
+void SetShaderSamplerBinding(GLuint shader, const char* name, TextureUnits::TextureUnit binding) {
+    GLint uniform_tex = glGetUniformLocation(shader, name);
+    if (uniform_tex != -1) {
+        glUniform1i(uniform_tex, binding.id);
+    }
+}
+
 void SetShaderSamplerBindings(GLuint shader) {
     OpenGLState cur_state = OpenGLState::GetCurState();
     GLuint old_program = std::exchange(cur_state.draw.shader_program, shader);
     cur_state.Apply();
 
     // Set the texture samplers to correspond to different texture units
-    GLint uniform_tex = glGetUniformLocation(shader, "tex0");
-    if (uniform_tex != -1) {
-        glUniform1i(uniform_tex, TextureUnits::PicaTexture(0).id);
-    }
-    uniform_tex = glGetUniformLocation(shader, "tex1");
-    if (uniform_tex != -1) {
-        glUniform1i(uniform_tex, TextureUnits::PicaTexture(1).id);
-    }
-    uniform_tex = glGetUniformLocation(shader, "tex2");
-    if (uniform_tex != -1) {
-        glUniform1i(uniform_tex, TextureUnits::PicaTexture(2).id);
-    }
-    uniform_tex = glGetUniformLocation(shader, "tex_cube");
-    if (uniform_tex != -1) {
-        glUniform1i(uniform_tex, TextureUnits::TextureCube.id);
-    }
+    SetShaderSamplerBinding(shader, "tex0", TextureUnits::PicaTexture(0));
+    SetShaderSamplerBinding(shader, "tex1", TextureUnits::PicaTexture(1));
+    SetShaderSamplerBinding(shader, "tex2", TextureUnits::PicaTexture(2));
+    SetShaderSamplerBinding(shader, "tex_cube", TextureUnits::TextureCube);
 
     // Set the texture samplers to correspond to different lookup table texture units
-    GLint uniform_lut = glGetUniformLocation(shader, "lighting_lut");
-    if (uniform_lut != -1) {
-        glUniform1i(uniform_lut, TextureUnits::LightingLUT.id);
-    }
-
-    GLint uniform_fog_lut = glGetUniformLocation(shader, "fog_lut");
-    if (uniform_fog_lut != -1) {
-        glUniform1i(uniform_fog_lut, TextureUnits::FogLUT.id);
-    }
-
-    GLint uniform_proctex_noise_lut = glGetUniformLocation(shader, "proctex_noise_lut");
-    if (uniform_proctex_noise_lut != -1) {
-        glUniform1i(uniform_proctex_noise_lut, TextureUnits::ProcTexNoiseLUT.id);
-    }
-
-    GLint uniform_proctex_color_map = glGetUniformLocation(shader, "proctex_color_map");
-    if (uniform_proctex_color_map != -1) {
-        glUniform1i(uniform_proctex_color_map, TextureUnits::ProcTexColorMap.id);
-    }
-
-    GLint uniform_proctex_alpha_map = glGetUniformLocation(shader, "proctex_alpha_map");
-    if (uniform_proctex_alpha_map != -1) {
-        glUniform1i(uniform_proctex_alpha_map, TextureUnits::ProcTexAlphaMap.id);
-    }
-
-    GLint uniform_proctex_lut = glGetUniformLocation(shader, "proctex_lut");
-    if (uniform_proctex_lut != -1) {
-        glUniform1i(uniform_proctex_lut, TextureUnits::ProcTexLUT.id);
-    }
-
-    GLint uniform_proctex_diff_lut = glGetUniformLocation(shader, "proctex_diff_lut");
-    if (uniform_proctex_diff_lut != -1) {
-        glUniform1i(uniform_proctex_diff_lut, TextureUnits::ProcTexDiffLUT.id);
-    }
+    SetShaderSamplerBinding(shader, "lighting_lut", TextureUnits::LightingLUT);
+    SetShaderSamplerBinding(shader, "fog_lut", TextureUnits::FogLUT);
+    SetShaderSamplerBinding(shader, "proctex_noise_lut", TextureUnits::ProcTexNoiseLUT);
+    SetShaderSamplerBinding(shader, "proctex_color_map", TextureUnits::ProcTexColorMap);
+    SetShaderSamplerBinding(shader, "proctex_alpha_map", TextureUnits::ProcTexAlphaMap);
+    SetShaderSamplerBinding(shader, "proctex_lut", TextureUnits::ProcTexLUT);
+    SetShaderSamplerBinding(shader, "proctex_diff_lut", TextureUnits::ProcTexDiffLUT);
 
     cur_state.draw.shader_program = old_program;
     cur_state.Apply();
