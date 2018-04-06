@@ -38,27 +38,6 @@ MICROPROFILE_DEFINE(OpenGL_CacheManagement, "OpenGL", "Cache Mgmt", MP_RGB(100, 
 RasterizerOpenGL::RasterizerOpenGL() {
     shader_dirty = true;
 
-    has_ARB_buffer_storage = false;
-    has_ARB_direct_state_access = false;
-    has_ARB_separate_shader_objects = false;
-    has_ARB_vertex_attrib_binding = false;
-
-    GLint ext_num;
-    glGetIntegerv(GL_NUM_EXTENSIONS, &ext_num);
-    for (GLint i = 0; i < ext_num; i++) {
-        std::string extension{reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, i))};
-
-        if (extension == "GL_ARB_buffer_storage") {
-            has_ARB_buffer_storage = true;
-        } else if (extension == "GL_ARB_direct_state_access") {
-            has_ARB_direct_state_access = true;
-        } else if (extension == "GL_ARB_separate_shader_objects") {
-            has_ARB_separate_shader_objects = true;
-        } else if (extension == "GL_ARB_vertex_attrib_binding") {
-            has_ARB_vertex_attrib_binding = true;
-        }
-    }
-
     // Clipping plane 0 is always enabled for PICA fixed clip plane z <= 0
     state.clip_distance[0] = true;
 
@@ -209,12 +188,12 @@ RasterizerOpenGL::RasterizerOpenGL() {
     hw_vao.Create();
     hw_vao_enabled_attributes.fill(false);
 
-    stream_buffer = OGLStreamBuffer::MakeBuffer(has_ARB_buffer_storage, GL_ARRAY_BUFFER);
+    stream_buffer = OGLStreamBuffer::MakeBuffer(GLAD_GL_ARB_buffer_storage, GL_ARRAY_BUFFER);
     stream_buffer->Create(STREAM_BUFFER_SIZE, STREAM_BUFFER_SIZE / 2);
     state.draw.vertex_buffer = stream_buffer->GetHandle();
 
     shader_program_manager =
-        std::make_unique<ShaderProgramManager>(has_ARB_separate_shader_objects);
+        std::make_unique<ShaderProgramManager>(GLAD_GL_ARB_separate_shader_objects);
     vs_input_index_min = 0;
     vs_input_index_max = 0;
     state.draw.shader_program = 0;
@@ -835,7 +814,7 @@ void RasterizerOpenGL::DrawTriangles() {
         stream_buffer->Unmap();
 
         const auto copy_buffer = [&](GLuint handle, GLintptr offset, GLsizeiptr size) {
-            if (has_ARB_direct_state_access) {
+            if (GLAD_GL_ARB_direct_state_access) {
                 glCopyNamedBufferSubData(stream_buffer->GetHandle(), handle, offset, 0, size);
             } else {
                 glBindBuffer(GL_COPY_WRITE_BUFFER, handle);

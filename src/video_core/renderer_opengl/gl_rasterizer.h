@@ -217,11 +217,6 @@ private:
     /// Syncs the specified light's distance attenuation scale to match the PICA register
     void SyncLightDistanceAttenuationScale(int light_index);
 
-    bool has_ARB_buffer_storage;
-    bool has_ARB_direct_state_access;
-    bool has_ARB_separate_shader_objects;
-    bool has_ARB_vertex_attrib_binding;
-
     OpenGLState state;
 
     RasterizerCacheOpenGL res_cache;
