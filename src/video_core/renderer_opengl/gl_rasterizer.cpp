@@ -221,13 +221,7 @@ RasterizerOpenGL::RasterizerOpenGL() {
     SyncEntireState();
 }
 
-RasterizerOpenGL::~RasterizerOpenGL() {
-    if (stream_buffer != nullptr) {
-        state.draw.vertex_buffer = stream_buffer->GetHandle();
-        state.Apply();
-        stream_buffer->Release();
-    }
-}
+RasterizerOpenGL::~RasterizerOpenGL() {}
 
 void RasterizerOpenGL::SyncEntireState() {
     // Sync fixed function OpenGL state

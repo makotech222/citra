@@ -125,6 +125,7 @@ void StorageBuffer::Release() {
     if (gl_buffer.handle == 0)
         return;
 
+    glBindBuffer(gl_target, gl_buffer.handle);
     glUnmapBuffer(gl_target);
 
     gl_buffer.Release();
