@@ -432,7 +432,7 @@ void RasterizerOpenGL::SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_
     ub_ptr->uniforms.SetFromRegs(Pica::g_state.regs.vs, Pica::g_state.vs);
 
     const GLShader::PicaVSConfig vs_config(Pica::g_state.regs, Pica::g_state.vs);
-    shader_program_manager->UseVertexShader(std::tie(vs_config, Pica::g_state.vs));
+    shader_program_manager->UseProgrammableVertexShader(vs_config, Pica::g_state.vs);
 }
 
 void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffer_offset) {
@@ -443,7 +443,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
 
     if (regs.pipeline.use_gs == Pica::PipelineRegs::UseGS::No) {
         const GLShader::PicaGSConfigCommon gs_config(regs);
-        shader_program_manager->UseGeometryShader(gs_config);
+        shader_program_manager->UseFixedGeometryShader(gs_config);
     } else {
         ub_ptr->uniforms.SetFromRegs(Pica::g_state.regs.gs, Pica::g_state.gs);
 
@@ -451,7 +451,7 @@ void RasterizerOpenGL::SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffe
         Pica::g_state.gs.uniforms.b[15] = true;
 
         const GLShader::PicaGSConfig gs_config(regs, Pica::g_state.gs);
-        shader_program_manager->UseGeometryShader(std::tie(gs_config, Pica::g_state.gs));
+        shader_program_manager->UseProgrammableGeometryShader(gs_config, Pica::g_state.gs);
     }
 }
 
@@ -834,8 +834,8 @@ void RasterizerOpenGL::DrawTriangles() {
     } else {
         state.draw.vertex_array = sw_vao.handle;
         state.draw.vertex_buffer = vertex_buffer->GetHandle();
-        shader_program_manager->UseVertexShader(DefaultVertexShaderTag{});
-        shader_program_manager->UseGeometryShader(DefaultGeometryShaderTag{});
+        shader_program_manager->UseTrivialVertexShader();
+        shader_program_manager->UseTrivialGeometryShader();
         shader_program_manager->ApplyTo(state);
         state.Apply();
 

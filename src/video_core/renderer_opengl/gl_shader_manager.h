@@ -162,16 +162,6 @@ private:
     OGLShaderStage program;
 };
 
-struct DefaultGeometryShaderTag {};
-
-class DefaultGeometryShader {
-public:
-    DefaultGeometryShader(bool) {}
-    GLuint Get(DefaultGeometryShaderTag) {
-        return 0;
-    }
-};
-
 template <typename KeyConfigType, std::string (*CodeGenerator)(const KeyConfigType&, bool),
           GLenum ShaderType>
 class ShaderCache {
@@ -239,8 +229,7 @@ using FixedGeometryShaders =
     ShaderCache<GLShader::PicaGSConfigCommon, &GLShader::GenerateDefaultGeometryShader,
                 GL_GEOMETRY_SHADER>;
 
-using GeometryShaders =
-    ComposeShaderGetter<ProgrammableGeometryShaders, FixedGeometryShaders, DefaultGeometryShader>;
+using GeometryShaders = ComposeShaderGetter<ProgrammableGeometryShaders, FixedGeometryShaders>;
 
 using FragmentShaders =
     ShaderCache<GLShader::PicaShaderConfig, &GLShader::GenerateFragmentShader, GL_FRAGMENT_SHADER>;
@@ -254,18 +243,29 @@ public:
             pipeline.Create();
     }
 
-    template <typename ConfigType>
-    void UseVertexShader(const ConfigType& config) {
-        current.vs = vertex_shaders.Get(config);
+    void UseProgrammableVertexShader(const GLShader::PicaVSConfig& config,
+                                     const Pica::Shader::ShaderSetup setup) {
+        current.vs = vertex_shaders.Get({config, setup});
     }
 
-    template <typename ConfigType>
-    void UseGeometryShader(const ConfigType& config) {
+    void UseTrivialVertexShader() {
+        current.vs = vertex_shaders.Get(DefaultVertexShaderTag{});
+    }
+
+    void UseProgrammableGeometryShader(const GLShader::PicaGSConfig& config,
+                                       const Pica::Shader::ShaderSetup setup) {
+        current.gs = geometry_shaders.Get({config, setup});
+    }
+
+    void UseFixedGeometryShader(const GLShader::PicaGSConfigCommon& config) {
         current.gs = geometry_shaders.Get(config);
     }
 
-    template <typename ConfigType>
-    void UseFragmentShader(const ConfigType& config) {
+    void UseTrivialGeometryShader() {
+        current.gs = 0;
+    }
+
+    void UseFragmentShader(const GLShader::PicaShaderConfig& config) {
         current.fs = fragment_shaders.Get(config);
     }
 
