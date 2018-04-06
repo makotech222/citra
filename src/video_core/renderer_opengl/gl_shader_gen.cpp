@@ -291,7 +291,7 @@ static std::string SampleTexture(const PicaShaderConfig& config, unsigned textur
         case TexturingRegs::TextureConfig::Projection2D:
             return "textureProj(tex0, vec3(texcoord0, texcoord0_w))";
         case TexturingRegs::TextureConfig::TextureCube:
-            return "texture(tex_cube, vec3(texcoord[0], texcoord0_w))";
+            return "texture(tex_cube, vec3(texcoord0, texcoord0_w))";
         default:
             LOG_CRITICAL(HW_GPU, "Unhandled texture type %x",
                          static_cast<int>(state.texture0_type));
@@ -1156,14 +1156,10 @@ in vec4 gl_FragCoord;
 
 out vec4 color;
 
-<<<<<<< 0a97339f9e838800cadd5c770005047f02622bc1
-uniform sampler2D tex[3];
-uniform samplerCube tex_cube;
-=======
 uniform sampler2D tex0;
 uniform sampler2D tex1;
 uniform sampler2D tex2;
->>>>>>> renderer_opengl: Prepare to use decompiled shaders
+uniform samplerCube tex_cube;
 uniform samplerBuffer lighting_lut;
 uniform samplerBuffer fog_lut;
 uniform samplerBuffer proctex_noise_lut;

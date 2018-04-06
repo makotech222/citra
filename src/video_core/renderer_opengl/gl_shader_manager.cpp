@@ -43,7 +43,7 @@ void SetShaderSamplerBindings(GLuint shader) {
     if (uniform_tex != -1) {
         glUniform1i(uniform_tex, TextureUnits::PicaTexture(2).id);
     }
-    uniform_tex = glGetUniformLocation(shader->shader.handle, "tex_cube");
+    uniform_tex = glGetUniformLocation(shader, "tex_cube");
     if (uniform_tex != -1) {
         glUniform1i(uniform_tex, TextureUnits::TextureCube.id);
     }
