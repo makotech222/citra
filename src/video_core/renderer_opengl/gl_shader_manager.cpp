@@ -2,7 +2,6 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
-#include <tuple>
 #include <unordered_map>
 #include <boost/functional/hash.hpp>
 #include <boost/variant.hpp>
@@ -107,39 +106,12 @@ private:
     boost::variant<OGLShader, OGLProgram> shader_or_program;
 };
 
-/*template <class... Ts>
-class ComposeShaderGetter : private Ts... {
-public:
-    using Ts::Get...;
-    ComposeShaderGetter(bool separable) : Ts(separable)... {}
-};*/
-
-template <class... Ts>
-class ComposeShaderGetter;
-
-template <>
-class ComposeShaderGetter<> {
-public:
-    ComposeShaderGetter(bool separable) {}
-    void Get() {}
-};
-
-template <class T, class... Ts>
-class ComposeShaderGetter<T, Ts...> : private T, private ComposeShaderGetter<Ts...> {
-public:
-    using T::Get;
-    using ComposeShaderGetter<Ts...>::Get;
-    ComposeShaderGetter(bool separable) : T(separable), ComposeShaderGetter<Ts...>(separable) {}
-};
-
-struct DefaultVertexShaderTag {};
-
 class DefaultVertexShader {
 public:
     DefaultVertexShader(bool separable) : program(separable) {
         program.Create(GLShader::GenerateDefaultVertexShader(separable).c_str(), GL_VERTEX_SHADER);
     }
-    GLuint Get(DefaultVertexShaderTag) {
+    GLuint Get() {
         return program.GetHandle();
     }
 
@@ -177,8 +149,7 @@ template <typename KeyConfigType,
 class ShaderDoubleCache {
 public:
     ShaderDoubleCache(bool separable) : separable(separable) {}
-    GLuint Get(std::tuple<const KeyConfigType&, const Pica::Shader::ShaderSetup&> config) {
-        const auto& [key, setup] = config;
+    GLuint Get(const KeyConfigType& key, const Pica::Shader::ShaderSetup& setup) {
         auto map_it = shader_map.find(key);
         if (map_it == shader_map.end()) {
             std::string program = CodeGenerator(setup, key, separable);
@@ -204,8 +175,6 @@ private:
 using ProgrammableVertexShaders =
     ShaderDoubleCache<GLShader::PicaVSConfig, &GLShader::GenerateVertexShader, GL_VERTEX_SHADER>;
 
-using VertexShaders = ComposeShaderGetter<ProgrammableVertexShaders, DefaultVertexShader>;
-
 using ProgrammableGeometryShaders =
     ShaderDoubleCache<GLShader::PicaGSConfig, &GLShader::GenerateGeometryShader,
                       GL_GEOMETRY_SHADER>;
@@ -214,16 +183,15 @@ using FixedGeometryShaders =
     ShaderCache<GLShader::PicaGSConfigCommon, &GLShader::GenerateDefaultGeometryShader,
                 GL_GEOMETRY_SHADER>;
 
-using GeometryShaders = ComposeShaderGetter<ProgrammableGeometryShaders, FixedGeometryShaders>;
-
 using FragmentShaders =
     ShaderCache<GLShader::PicaShaderConfig, &GLShader::GenerateFragmentShader, GL_FRAGMENT_SHADER>;
 
 class ShaderProgramManager::Impl {
 public:
     Impl(bool separable)
-        : separable(separable), vertex_shaders(separable), geometry_shaders(separable),
-          fragment_shaders(separable) {
+        : separable(separable), programmable_vertex_shaders(separable),
+          default_vertex_shader(separable), programmable_geometry_shaders(separable),
+          fixed_geometry_shaders(separable), fragment_shaders(separable) {
         if (separable)
             pipeline.Create();
     }
@@ -243,9 +211,15 @@ public:
             }
         };
     };
+
     ShaderTuple current;
-    VertexShaders vertex_shaders;
-    GeometryShaders geometry_shaders;
+
+    ProgrammableVertexShaders programmable_vertex_shaders;
+    DefaultVertexShader default_vertex_shader;
+
+    ProgrammableGeometryShaders programmable_geometry_shaders;
+    FixedGeometryShaders fixed_geometry_shaders;
+
     FragmentShaders fragment_shaders;
 
     bool separable;
@@ -260,20 +234,20 @@ ShaderProgramManager::~ShaderProgramManager() = default;
 
 void ShaderProgramManager::UseProgrammableVertexShader(const GLShader::PicaVSConfig& config,
                                                        const Pica::Shader::ShaderSetup setup) {
-    impl->current.vs = impl->vertex_shaders.Get({config, setup});
+    impl->current.vs = impl->programmable_vertex_shaders.Get(config, setup);
 }
 
 void ShaderProgramManager::UseTrivialVertexShader() {
-    impl->current.vs = impl->vertex_shaders.Get(DefaultVertexShaderTag{});
+    impl->current.vs = impl->default_vertex_shader.Get();
 }
 
 void ShaderProgramManager::UseProgrammableGeometryShader(const GLShader::PicaGSConfig& config,
                                                          const Pica::Shader::ShaderSetup setup) {
-    impl->current.gs = impl->geometry_shaders.Get({config, setup});
+    impl->current.gs = impl->programmable_geometry_shaders.Get(config, setup);
 }
 
 void ShaderProgramManager::UseFixedGeometryShader(const GLShader::PicaGSConfigCommon& config) {
-    impl->current.gs = impl->geometry_shaders.Get(config);
+    impl->current.gs = impl->fixed_geometry_shaders.Get(config);
 }
 
 void ShaderProgramManager::UseTrivialGeometryShader() {
