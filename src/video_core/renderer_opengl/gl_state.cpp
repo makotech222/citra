@@ -69,7 +69,6 @@ OpenGLState::OpenGLState() {
     draw.draw_framebuffer = 0;
     draw.vertex_array = 0;
     draw.vertex_buffer = 0;
-    draw.uniform_buffer = 0;
     draw.shader_program = 0;
     draw.program_pipeline = 0;
 
@@ -273,11 +272,6 @@ void OpenGLState::Apply() const {
         glBindBuffer(GL_ARRAY_BUFFER, draw.vertex_buffer);
     }
 
-    // Uniform buffer
-    if (draw.uniform_buffer != cur_state.draw.uniform_buffer) {
-        glBindBuffer(GL_UNIFORM_BUFFER, draw.uniform_buffer);
-    }
-
     // Shader program
     if (draw.shader_program != cur_state.draw.shader_program) {
         glUseProgram(draw.shader_program);
@@ -376,9 +370,6 @@ OpenGLState& OpenGLState::ResetPipeline(GLuint handle) {
 OpenGLState& OpenGLState::ResetBuffer(GLuint handle) {
     if (draw.vertex_buffer == handle) {
         draw.vertex_buffer = 0;
-    }
-    if (draw.uniform_buffer == handle) {
-        draw.uniform_buffer = 0;
     }
     return *this;
 }

@@ -57,30 +57,25 @@ RasterizerOpenGL::RasterizerOpenGL() {
     vertex_buffer = OGLStreamBuffer::MakeBuffer(GLAD_GL_ARB_buffer_storage, GL_ARRAY_BUFFER);
     vertex_buffer->Create(VERTEX_BUFFER_SIZE, VERTEX_BUFFER_SIZE / 2);
     sw_vao.Create();
-    uniform_buffer.Create();
 
     state.draw.vertex_array = sw_vao.handle;
     state.draw.vertex_buffer = vertex_buffer->GetHandle();
-    state.draw.uniform_buffer = uniform_buffer.handle;
     state.Apply();
 
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), nullptr, GL_DYNAMIC_DRAW);
+    uniform_buffer.Create();
     glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(UniformBindings::Common),
                      uniform_buffer.handle);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), nullptr, GL_DYNAMIC_DRAW);
 
     vs_uniform_buffer.Create();
-    glBindBuffer(GL_UNIFORM_BUFFER, vs_uniform_buffer.handle);
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(VSUniformData), nullptr, GL_STREAM_COPY);
     glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(UniformBindings::VS),
                      vs_uniform_buffer.handle);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(VSUniformData), nullptr, GL_STREAM_COPY);
 
     gs_uniform_buffer.Create();
-    glBindBuffer(GL_UNIFORM_BUFFER, gs_uniform_buffer.handle);
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(GSUniformData), nullptr, GL_STREAM_COPY);
     glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(UniformBindings::GS),
                      gs_uniform_buffer.handle);
-
-    glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(GSUniformData), nullptr, GL_STREAM_COPY);
 
     uniform_block_data.dirty = true;
 
@@ -701,6 +696,7 @@ void RasterizerOpenGL::DrawTriangles() {
 
     // Sync the uniform data
     if (uniform_block_data.dirty) {
+        glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
         glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(UniformData), &uniform_block_data.data);
         uniform_block_data.dirty = false;
     }
