@@ -65,7 +65,22 @@ RasterizerOpenGL::RasterizerOpenGL() {
     state.Apply();
 
     glBufferData(GL_UNIFORM_BUFFER, sizeof(UniformData), nullptr, GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_UNIFORM_BUFFER, 0, uniform_buffer.handle);
+    glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(UniformBindings::Common),
+                     uniform_buffer.handle);
+
+    vs_uniform_buffer.Create();
+    glBindBuffer(GL_UNIFORM_BUFFER, vs_uniform_buffer.handle);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(VSUniformData), nullptr, GL_STREAM_COPY);
+    glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(UniformBindings::VS),
+                     vs_uniform_buffer.handle);
+
+    gs_uniform_buffer.Create();
+    glBindBuffer(GL_UNIFORM_BUFFER, gs_uniform_buffer.handle);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(GSUniformData), nullptr, GL_STREAM_COPY);
+    glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(UniformBindings::GS),
+                     gs_uniform_buffer.handle);
+
+    glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
 
     uniform_block_data.dirty = true;
 
@@ -201,18 +216,6 @@ RasterizerOpenGL::RasterizerOpenGL() {
     state.Apply();
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, stream_buffer->GetHandle());
-
-    vs_uniform_buffer.Create();
-    glBindBuffer(GL_UNIFORM_BUFFER, vs_uniform_buffer.handle);
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(VSUniformData), nullptr, GL_STREAM_COPY);
-    glBindBufferBase(GL_UNIFORM_BUFFER, 1, vs_uniform_buffer.handle);
-
-    gs_uniform_buffer.Create();
-    glBindBuffer(GL_UNIFORM_BUFFER, gs_uniform_buffer.handle);
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(GSUniformData), nullptr, GL_STREAM_COPY);
-    glBindBufferBase(GL_UNIFORM_BUFFER, 2, gs_uniform_buffer.handle);
-
-    glBindBuffer(GL_UNIFORM_BUFFER, uniform_buffer.handle);
 
     accelerate_draw = AccelDraw::Disabled;
 
