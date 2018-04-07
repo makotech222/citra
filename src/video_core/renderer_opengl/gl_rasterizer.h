@@ -284,9 +284,9 @@ private:
     static constexpr size_t STREAM_BUFFER_SIZE = 4 * 1024 * 1024;
     std::unique_ptr<OGLStreamBuffer> stream_buffer;
 
-    GLint vs_input_index_min;
-    GLint vs_input_index_max;
-    GLsizeiptr vs_input_size;
+    GLint vs_input_index_min = 0;
+    GLint vs_input_index_max = 0;
+    GLsizeiptr vs_input_size = 0;
 
     void AnalyzeVertexArray(bool is_indexed);
     void SetupVertexArray(u8* array_ptr, GLintptr buffer_offset);

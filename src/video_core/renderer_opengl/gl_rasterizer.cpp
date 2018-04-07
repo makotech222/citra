@@ -56,11 +56,13 @@ RasterizerOpenGL::RasterizerOpenGL() {
     // Generate VBO, VAO and UBO
     vertex_buffer = OGLStreamBuffer::MakeBuffer(GLAD_GL_ARB_buffer_storage, GL_ARRAY_BUFFER);
     vertex_buffer->Create(VERTEX_BUFFER_SIZE, VERTEX_BUFFER_SIZE / 2);
-    sw_vao.Create();
 
-    state.draw.vertex_array = sw_vao.handle;
-    state.draw.vertex_buffer = vertex_buffer->GetHandle();
-    state.Apply();
+    stream_buffer = OGLStreamBuffer::MakeBuffer(GLAD_GL_ARB_buffer_storage, GL_ARRAY_BUFFER);
+    stream_buffer->Create(STREAM_BUFFER_SIZE, STREAM_BUFFER_SIZE / 2);
+
+    sw_vao.Create();
+    hw_vao.Create();
+    hw_vao_enabled_attributes.fill(false);
 
     uniform_buffer.Create();
     glBindBufferBase(GL_UNIFORM_BUFFER, static_cast<GLuint>(UniformBindings::Common),
@@ -90,6 +92,10 @@ RasterizerOpenGL::RasterizerOpenGL() {
     uniform_block_data.proctex_diff_lut_dirty = true;
 
     // Set vertex attributes
+    state.draw.vertex_array = sw_vao.handle;
+    state.draw.vertex_buffer = vertex_buffer->GetHandle();
+    state.Apply();
+
     glVertexAttribPointer(GLShader::ATTRIBUTE_POSITION, 4, GL_FLOAT, GL_FALSE,
                           sizeof(HardwareVertex), (GLvoid*)offsetof(HardwareVertex, position));
     glEnableVertexAttribArray(GLShader::ATTRIBUTE_POSITION);
@@ -195,22 +201,12 @@ RasterizerOpenGL::RasterizerOpenGL() {
     glActiveTexture(TextureUnits::ProcTexDiffLUT.Enum());
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGBA32F, proctex_diff_lut_buffer.handle);
 
-    hw_vao.Create();
-    hw_vao_enabled_attributes.fill(false);
-
-    stream_buffer = OGLStreamBuffer::MakeBuffer(GLAD_GL_ARB_buffer_storage, GL_ARRAY_BUFFER);
-    stream_buffer->Create(STREAM_BUFFER_SIZE, STREAM_BUFFER_SIZE / 2);
-    state.draw.vertex_buffer = stream_buffer->GetHandle();
+    state.draw.vertex_array = hw_vao.handle;
+    state.Apply();
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, stream_buffer->GetHandle());
 
     shader_program_manager =
         std::make_unique<ShaderProgramManager>(GLAD_GL_ARB_separate_shader_objects);
-    vs_input_index_min = 0;
-    vs_input_index_max = 0;
-    state.draw.shader_program = 0;
-    state.draw.vertex_array = hw_vao.handle;
-    state.Apply();
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, stream_buffer->GetHandle());
 
     accelerate_draw = AccelDraw::Disabled;
 
