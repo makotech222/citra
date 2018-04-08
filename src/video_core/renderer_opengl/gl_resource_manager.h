@@ -13,14 +13,16 @@
 class OGLTexture : private NonCopyable {
 public:
     OGLTexture() = default;
-    OGLTexture(OGLTexture&& o) {
-        std::swap(handle, o.handle);
-    }
+
+    OGLTexture(OGLTexture&& o) : handle(std::exchange(o.handle, 0)) {}
+
     ~OGLTexture() {
         Release();
     }
+
     OGLTexture& operator=(OGLTexture&& o) {
-        std::swap(handle, o.handle);
+        Release();
+        handle = std::exchange(o.handle, 0);
         return *this;
     }
 
@@ -46,14 +48,16 @@ public:
 class OGLSampler : private NonCopyable {
 public:
     OGLSampler() = default;
-    OGLSampler(OGLSampler&& o) {
-        std::swap(handle, o.handle);
-    }
+
+    OGLSampler(OGLSampler&& o) : handle(std::exchange(o.handle, 0)) {}
+
     ~OGLSampler() {
         Release();
     }
+
     OGLSampler& operator=(OGLSampler&& o) {
-        std::swap(handle, o.handle);
+        Release();
+        handle = std::exchange(o.handle, 0);
         return *this;
     }
 
@@ -79,14 +83,16 @@ public:
 class OGLShader : private NonCopyable {
 public:
     OGLShader() = default;
-    OGLShader(OGLShader&& o) {
-        std::swap(handle, o.handle);
-    }
+
+    OGLShader(OGLShader&& o) : handle(std::exchange(o.handle, 0)) {}
+
     ~OGLShader() {
         Release();
     }
+
     OGLShader& operator=(OGLShader&& o) {
-        std::swap(handle, o.handle);
+        Release();
+        handle = std::exchange(o.handle, 0);
         return *this;
     }
 
@@ -112,14 +118,16 @@ public:
 class OGLBuffer : private NonCopyable {
 public:
     OGLBuffer() = default;
-    OGLBuffer(OGLBuffer&& o) {
-        std::swap(handle, o.handle);
-    }
+
+    OGLBuffer(OGLBuffer&& o) : handle(std::exchange(o.handle, 0)) {}
+
     ~OGLBuffer() {
         Release();
     }
+
     OGLBuffer& operator=(OGLBuffer&& o) {
-        std::swap(handle, o.handle);
+        Release();
+        handle = std::exchange(o.handle, 0);
         return *this;
     }
 
@@ -142,17 +150,52 @@ public:
     GLuint handle = 0;
 };
 
+class OGLSync : private NonCopyable {
+public:
+    OGLSync() = default;
+
+    OGLSync(OGLSync&& o) : handle(std::exchange(o.handle, nullptr)) {}
+
+    ~OGLSync() {
+        Release();
+    }
+    OGLSync& operator=(OGLSync&& o) {
+        Release();
+        handle = std::exchange(o.handle, nullptr);
+        return *this;
+    }
+
+    /// Creates a new internal OpenGL resource and stores the handle
+    void Create() {
+        if (handle != 0)
+            return;
+        handle = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    }
+
+    /// Deletes the internal OpenGL resource
+    void Release() {
+        if (handle == 0)
+            return;
+        glDeleteSync(handle);
+        handle = 0;
+    }
+
+    GLsync handle = 0;
+};
+
 class OGLVertexArray : private NonCopyable {
 public:
     OGLVertexArray() = default;
-    OGLVertexArray(OGLVertexArray&& o) {
-        std::swap(handle, o.handle);
-    }
+
+    OGLVertexArray(OGLVertexArray&& o) : handle(std::exchange(o.handle, 0)) {}
+
     ~OGLVertexArray() {
         Release();
     }
+
     OGLVertexArray& operator=(OGLVertexArray&& o) {
-        std::swap(handle, o.handle);
+        Release();
+        handle = std::exchange(o.handle, 0);
         return *this;
     }
 
@@ -178,14 +221,16 @@ public:
 class OGLFramebuffer : private NonCopyable {
 public:
     OGLFramebuffer() = default;
-    OGLFramebuffer(OGLFramebuffer&& o) {
-        std::swap(handle, o.handle);
-    }
+
+    OGLFramebuffer(OGLFramebuffer&& o) : handle(std::exchange(o.handle, 0)) {}
+
     ~OGLFramebuffer() {
         Release();
     }
+
     OGLFramebuffer& operator=(OGLFramebuffer&& o) {
-        std::swap(handle, o.handle);
+        Release();
+        handle = std::exchange(o.handle, 0);
         return *this;
     }
 

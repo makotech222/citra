@@ -40,13 +40,20 @@ RasterizerOpenGL::RasterizerOpenGL() : shader_dirty(true) {
         state.texture_units[i].sampler = texture_samplers[i].sampler.handle;
     }
 
+    // Create cubemap texture and sampler objects
+    texture_cube_sampler.Create();
+    state.texture_cube_unit.sampler = texture_cube_sampler.sampler.handle;
+    texture_cube.Create();
+    state.texture_cube_unit.texture_cube = texture_cube.handle;
+
     // Generate VBO, VAO and UBO
-    vertex_buffer.Create();
+    vertex_buffer = OGLStreamBuffer::MakeBuffer(GLAD_GL_ARB_buffer_storage, GL_ARRAY_BUFFER);
+    vertex_buffer->Create(VERTEX_BUFFER_SIZE, VERTEX_BUFFER_SIZE / 2);
     vertex_array.Create();
     uniform_buffer.Create();
 
     state.draw.vertex_array = vertex_array.handle;
-    state.draw.vertex_buffer = vertex_buffer.handle;
+    state.draw.vertex_buffer = vertex_buffer->GetHandle();
     state.draw.uniform_buffer = uniform_buffer.handle;
     state.Apply();
 
@@ -173,9 +180,14 @@ RasterizerOpenGL::RasterizerOpenGL() : shader_dirty(true) {
 
     glEnable(GL_BLEND);
 
+    SyncEntireState();
+}
+
+RasterizerOpenGL::~RasterizerOpenGL() {}
+
+void RasterizerOpenGL::SyncEntireState() {
     // Sync fixed function OpenGL state
     SyncClipEnabled();
-    SyncClipCoef();
     SyncCullMode();
     SyncBlendEnabled();
     SyncBlendFuncs();
@@ -186,9 +198,31 @@ RasterizerOpenGL::RasterizerOpenGL() : shader_dirty(true) {
     SyncColorWriteMask();
     SyncStencilWriteMask();
     SyncDepthWriteMask();
-}
 
-RasterizerOpenGL::~RasterizerOpenGL() {}
+    // Sync uniforms
+    SyncClipCoef();
+    SyncDepthScale();
+    SyncDepthOffset();
+    SyncAlphaTest();
+    SyncCombinerColor();
+    auto& tev_stages = Pica::g_state.regs.texturing.GetTevStages();
+    for (std::size_t index = 0; index < tev_stages.size(); ++index)
+        SyncTevConstColor(index, tev_stages[index]);
+
+    SyncGlobalAmbient();
+    for (unsigned light_index = 0; light_index < 8; light_index++) {
+        SyncLightSpecular0(light_index);
+        SyncLightSpecular1(light_index);
+        SyncLightDiffuse(light_index);
+        SyncLightAmbient(light_index);
+        SyncLightPosition(light_index);
+        SyncLightDistanceAttenuationBias(light_index);
+        SyncLightDistanceAttenuationScale(light_index);
+    }
+
+    SyncFogColor();
+    SyncProcTexNoise();
+}
 
 /**
  * This is a helper function to resolve an issue when interpolating opposite quaternions. See below
@@ -352,6 +386,25 @@ void RasterizerOpenGL::DrawTriangles() {
         const auto& texture = pica_textures[texture_index];
 
         if (texture.enabled) {
+            if (texture_index == 0) {
+                using TextureType = Pica::TexturingRegs::TextureConfig::TextureType;
+                switch (texture.config.type.Value()) {
+                case TextureType::TextureCube:
+                    using CubeFace = Pica::TexturingRegs::CubeFace;
+                    res_cache.FillTextureCube(
+                        texture_cube.handle, texture,
+                        regs.texturing.GetCubePhysicalAddress(CubeFace::PositiveX),
+                        regs.texturing.GetCubePhysicalAddress(CubeFace::NegativeX),
+                        regs.texturing.GetCubePhysicalAddress(CubeFace::PositiveY),
+                        regs.texturing.GetCubePhysicalAddress(CubeFace::NegativeY),
+                        regs.texturing.GetCubePhysicalAddress(CubeFace::PositiveZ),
+                        regs.texturing.GetCubePhysicalAddress(CubeFace::NegativeZ));
+                    texture_cube_sampler.SyncWithConfig(texture.config);
+                    state.texture_units[texture_index].texture_2d = 0;
+                    continue; // Texture unit 0 setup finished. Continue to next unit
+                }
+            }
+
             texture_samplers[texture_index].SyncWithConfig(texture.config);
             Surface surface = res_cache.GetTextureSurface(texture);
             if (surface != nullptr) {
@@ -434,9 +487,15 @@ void RasterizerOpenGL::DrawTriangles() {
     state.Apply();
 
     // Draw the vertex batch
-    glBufferData(GL_ARRAY_BUFFER, vertex_batch.size() * sizeof(HardwareVertex), vertex_batch.data(),
-                 GL_STREAM_DRAW);
-    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)vertex_batch.size());
+    size_t max_vertices = 3 * (VERTEX_BUFFER_SIZE / (3 * sizeof(HardwareVertex)));
+    for (size_t base_vertex = 0; base_vertex < vertex_batch.size(); base_vertex += max_vertices) {
+        size_t vertices = std::min(max_vertices, vertex_batch.size() - base_vertex);
+        size_t vertex_size = vertices * sizeof(HardwareVertex);
+        auto map = vertex_buffer->Map(vertex_size, 1);
+        memcpy(map.first, vertex_batch.data() + base_vertex, vertex_size);
+        vertex_buffer->Unmap();
+        glDrawArrays(GL_TRIANGLES, map.second / sizeof(HardwareVertex), (GLsizei)vertices);
+    }
 
     // Disable scissor test
     state.scissor.enabled = false;
@@ -1086,7 +1145,7 @@ bool RasterizerOpenGL::AccelerateTextureCopy(const GPU::Regs::DisplayTransferCon
     Surface dst_surface;
     std::tie(dst_surface, dst_rect) =
         res_cache.GetSurfaceSubRect(dst_params, ScaleMatch::Upscale, load_gap);
-    if (src_surface == nullptr) {
+    if (dst_surface == nullptr) {
         return false;
     }
 
@@ -1225,6 +1284,10 @@ void RasterizerOpenGL::SetShader() {
         if (uniform_tex != -1) {
             glUniform1i(uniform_tex, TextureUnits::PicaTexture(2).id);
         }
+        uniform_tex = glGetUniformLocation(shader->shader.handle, "tex_cube");
+        if (uniform_tex != -1) {
+            glUniform1i(uniform_tex, TextureUnits::TextureCube.id);
+        }
 
         // Set the texture samplers to correspond to different lookup table texture units
         GLint uniform_lut = glGetUniformLocation(shader->shader.handle, "lighting_lut");
@@ -1274,32 +1337,9 @@ void RasterizerOpenGL::SetShader() {
             glGetActiveUniformBlockiv(current_shader->shader.handle, block_index,
                                       GL_UNIFORM_BLOCK_DATA_SIZE, &block_size);
             ASSERT_MSG(block_size == sizeof(UniformData),
-                       "Uniform block size did not match! Got %d, expected %zu",
+                       "Uniform block size did not match! Got {}, expected {}",
                        static_cast<int>(block_size), sizeof(UniformData));
             glUniformBlockBinding(current_shader->shader.handle, block_index, 0);
-
-            // Update uniforms
-            SyncDepthScale();
-            SyncDepthOffset();
-            SyncAlphaTest();
-            SyncCombinerColor();
-            auto& tev_stages = Pica::g_state.regs.texturing.GetTevStages();
-            for (int index = 0; index < tev_stages.size(); ++index)
-                SyncTevConstColor(index, tev_stages[index]);
-
-            SyncGlobalAmbient();
-            for (int light_index = 0; light_index < 8; light_index++) {
-                SyncLightSpecular0(light_index);
-                SyncLightSpecular1(light_index);
-                SyncLightDiffuse(light_index);
-                SyncLightAmbient(light_index);
-                SyncLightPosition(light_index);
-                SyncLightDistanceAttenuationBias(light_index);
-                SyncLightDistanceAttenuationScale(light_index);
-            }
-
-            SyncFogColor();
-            SyncProcTexNoise();
         }
     }
 }

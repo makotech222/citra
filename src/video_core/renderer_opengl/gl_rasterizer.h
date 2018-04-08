@@ -27,6 +27,7 @@
 #include "video_core/renderer_opengl/gl_resource_manager.h"
 #include "video_core/renderer_opengl/gl_shader_gen.h"
 #include "video_core/renderer_opengl/gl_state.h"
+#include "video_core/renderer_opengl/gl_stream_buffer.h"
 #include "video_core/renderer_opengl/pica_to_gl.h"
 #include "video_core/shader/shader.h"
 
@@ -161,6 +162,9 @@ private:
     static_assert(sizeof(UniformData) < 16384,
                   "UniformData structure must be less than 16kb as per the OpenGL spec");
 
+    /// Syncs entire status to match PICA registers
+    void SyncEntireState();
+
     /// Syncs the clip enabled status to match the PICA register
     void SyncClipEnabled();
 
@@ -283,9 +287,14 @@ private:
 
     std::array<SamplerInfo, 3> texture_samplers;
     OGLVertexArray vertex_array;
-    OGLBuffer vertex_buffer;
+    static constexpr size_t VERTEX_BUFFER_SIZE = 128 * 1024 * 1024;
+    std::unique_ptr<OGLStreamBuffer> vertex_buffer;
     OGLBuffer uniform_buffer;
     OGLFramebuffer framebuffer;
+
+    // TODO (wwylele): consider caching texture cube in the rasterizer cache
+    OGLTexture texture_cube;
+    SamplerInfo texture_cube_sampler;
 
     OGLBuffer lighting_lut_buffer;
     OGLTexture lighting_lut;
