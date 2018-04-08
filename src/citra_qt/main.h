@@ -74,6 +74,8 @@ signals:
     void UpdateProgress(size_t written, size_t total);
     void CIAInstallReport(Service::AM::InstallStatus status, QString filepath);
     void CIAInstallFinished();
+    // Signal that tells widgets to update icons to use the current theme
+    void UpdateThemedIcons();
 
 private:
     void InitializeWidgets();
@@ -205,6 +207,9 @@ private:
     QAction* actions_recent_files[max_recent_files_item];
 
     QTranslator translator;
+
+    // stores default icon theme search paths for the platform
+    QStringList default_theme_paths;
 
 protected:
     void dropEvent(QDropEvent* event) override;

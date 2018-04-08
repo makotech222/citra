@@ -456,11 +456,14 @@ void Module::ScanForTitles(Service::FS::MediaType media_type) {
     for (const FileUtil::FSTEntry& tid_high : entries.children) {
         for (const FileUtil::FSTEntry& tid_low : tid_high.children) {
             std::string tid_string = tid_high.virtualName + tid_low.virtualName;
-            u64 tid = std::stoull(tid_string.c_str(), nullptr, 16);
 
-            FileSys::NCCHContainer container(GetTitleContentPath(media_type, tid));
-            if (container.Load() == Loader::ResultStatus::Success)
-                am_title_list[static_cast<u32>(media_type)].push_back(tid);
+            if (tid_string.length() == TITLE_ID_VALID_LENGTH) {
+                u64 tid = std::stoull(tid_string.c_str(), nullptr, 16);
+
+                FileSys::NCCHContainer container(GetTitleContentPath(media_type, tid));
+                if (container.Load() == Loader::ResultStatus::Success)
+                    am_title_list[static_cast<u32>(media_type)].push_back(tid);
+            }
         }
     }
 }
@@ -684,9 +687,7 @@ void Module::Interface::GetProgramInfos(Kernel::HLERequestContext& ctx) {
 void Module::Interface::DeleteUserProgram(Kernel::HLERequestContext& ctx) {
     IPC::RequestParser rp(ctx, 0x0004, 3, 0);
     auto media_type = rp.PopEnum<FS::MediaType>();
-    u32 low = rp.Pop<u32>();
-    u32 high = rp.Pop<u32>();
-    u64 title_id = static_cast<u64>(low) | (static_cast<u64>(high) << 32);
+    u64 title_id = rp.Pop<u64>();
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
     u16 category = static_cast<u16>((title_id >> 32) & 0xFFFF);
     u8 variation = static_cast<u8>(title_id & 0xFF);
@@ -1173,9 +1174,7 @@ void Module::Interface::GetRequiredSizeFromCia(Kernel::HLERequestContext& ctx) {
 void Module::Interface::DeleteProgram(Kernel::HLERequestContext& ctx) {
     IPC::RequestParser rp(ctx, 0x0410, 3, 0);
     auto media_type = rp.PopEnum<FS::MediaType>();
-    u32 low = rp.Pop<u32>();
-    u32 high = rp.Pop<u32>();
-    u64 title_id = static_cast<u64>(low) | (static_cast<u64>(high) << 32);
+    u64 title_id = rp.Pop<u64>();
     LOG_INFO(Service_AM, "Deleting title 0x%016" PRIx64, title_id);
     std::string path = GetTitlePath(media_type, title_id);
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);

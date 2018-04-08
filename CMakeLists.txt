@@ -17,16 +17,6 @@ option(ENABLE_QT_TRANSLATION "Enable translations for the Qt frontend" OFF)
 CMAKE_DEPENDENT_OPTION(CITRA_USE_BUNDLED_QT "Download bundled Qt binaries" ON "ENABLE_QT;MSVC" OFF)
 
 option(ENABLE_WEB_SERVICE "Enable web services (telemetry, etc.)" ON)
-option(CITRA_USE_BUNDLED_CURL "FOR MINGW ONLY: Download curl configured against winssl instead of openssl" OFF)
-
-if (ENABLE_WEB_SERVICE AND CITRA_USE_BUNDLED_CURL AND WINDOWS AND MSVC)
-    message("Turning off use bundled curl as msvc can compile curl on cpr")
-    SET(CITRA_USE_BUNDLED_CURL OFF CACHE BOOL "" FORCE)
-endif()
-if (ENABLE_WEB_SERVICE AND NOT CITRA_USE_BUNDLED_CURL AND MINGW)
-    message(AUTHOR_WARNING "Turning on CITRA_USE_BUNDLED_CURL. Override it only if you know what you are doing.")
-    SET(CITRA_USE_BUNDLED_CURL ON CACHE BOOL "" FORCE)
-endif()
 
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/.git/hooks/pre-commit)
     message(STATUS "Copying pre-commit hook")
@@ -101,6 +91,7 @@ if (NOT MSVC)
 
     if (MINGW)
         add_definitions(-DMINGW_HAS_SECURE_API)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -gdwarf")
 
         if (MINGW_STATIC_BUILD)
             add_definitions(-DQT_STATICPLUGIN)
@@ -165,13 +156,15 @@ add_definitions(-DSINGLETHREADED)
 set_property(DIRECTORY APPEND PROPERTY
     COMPILE_DEFINITIONS $<$<CONFIG:Debug>:_DEBUG> $<$<NOT:$<CONFIG:Debug>>:NDEBUG>)
 
+math(EXPR EMU_ARCH_BITS ${CMAKE_SIZEOF_VOID_P}*8)
+add_definitions(-DEMU_ARCH_BITS=${EMU_ARCH_BITS})
 
 # System imported libraries
 # ======================
 
-find_package(Boost 1.63.0 QUIET)
+find_package(Boost 1.66.0 QUIET)
 if (NOT Boost_FOUND)
-    message(STATUS "Boost 1.63.0 or newer not found, falling back to externals")
+    message(STATUS "Boost 1.66.0 or newer not found, falling back to externals")
 
     set(BOOST_ROOT "${CMAKE_SOURCE_DIR}/externals/boost")
     set(Boost_NO_SYSTEM_PATHS OFF)

@@ -103,7 +103,7 @@ static u32 DecompressLZ11(const u8* in, u8* out) {
 
 bool Module::LoadSharedFont() {
     u8 font_region_code;
-    switch (CFG::GetRegionValue()) {
+    switch (CFG::GetCurrentModule()->GetRegionValue()) {
     case 4: // CHN
         font_region_code = 2;
         break;
@@ -653,7 +653,7 @@ void Module::Interface::Wrap(Kernel::HLERequestContext& ctx) {
     // Note: real 3DS still returns SUCCESS when the sizes don't match. It seems that it doesn't
     // check the buffer size and writes data with potential overflow.
     ASSERT_MSG(output_size == input_size + HW::AES::CCM_MAC_SIZE,
-               "input_size (%d) doesn't match to output_size (%d)", input_size, output_size);
+               "input_size ({}) doesn't match to output_size ({})", input_size, output_size);
 
     LOG_DEBUG(Service_APT, "called, output_size=%u, input_size=%u, nonce_offset=%u, nonce_size=%u",
               output_size, input_size, nonce_offset, nonce_size);
@@ -698,7 +698,7 @@ void Module::Interface::Unwrap(Kernel::HLERequestContext& ctx) {
     // Note: real 3DS still returns SUCCESS when the sizes don't match. It seems that it doesn't
     // check the buffer size and writes data with potential overflow.
     ASSERT_MSG(output_size == input_size - HW::AES::CCM_MAC_SIZE,
-               "input_size (%d) doesn't match to output_size (%d)", input_size, output_size);
+               "input_size ({}) doesn't match to output_size ({})", input_size, output_size);
 
     LOG_DEBUG(Service_APT, "called, output_size=%u, input_size=%u, nonce_offset=%u, nonce_size=%u",
               output_size, input_size, nonce_offset, nonce_size);

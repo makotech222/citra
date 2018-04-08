@@ -2,7 +2,6 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
-#include <cinttypes>
 #include <clocale>
 #include <memory>
 #include <thread>
@@ -39,7 +38,6 @@
 #include "common/logging/log.h"
 #include "common/logging/text_formatter.h"
 #include "common/microprofile.h"
-#include "common/platform.h"
 #include "common/scm_rev.h"
 #include "common/scope_exit.h"
 #include "common/string_util.h"
@@ -52,6 +50,13 @@
 
 #ifdef QT_STATICPLUGIN
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
+#endif
+
+#ifdef _WIN32
+extern "C" {
+// tells Nvidia drivers to use the dedicated GPU by default on laptops with switchable graphics
+__declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
+}
 #endif
 
 /**
@@ -107,6 +112,9 @@ GMainWindow::GMainWindow() : config(new Config()), emu_thread(nullptr) {
     ui.setupUi(this);
     statusBar()->hide();
 
+    default_theme_paths = QIcon::themeSearchPaths();
+    UpdateUITheme();
+
     InitializeWidgets();
     InitializeDebugWidgets();
     InitializeRecentFileMenuActions();
@@ -124,8 +132,6 @@ GMainWindow::GMainWindow() : config(new Config()), emu_thread(nullptr) {
     show();
 
     game_list->PopulateAsync(UISettings::values.gamedir, UISettings::values.gamedir_deepscan);
-
-    UpdateUITheme();
 
     // Show one-time "callout" messages to the user
     ShowCallouts();
@@ -464,20 +470,20 @@ void GMainWindow::OnCheckForUpdates() {
 
 void GMainWindow::CheckForUpdates() {
     if (updater->CheckForUpdates()) {
-        LOG_INFO(Frontend, "Update check started");
+        NGLOG_INFO(Frontend, "Update check started");
     } else {
-        LOG_WARNING(Frontend, "Unable to start check for updates");
+        NGLOG_WARNING(Frontend, "Unable to start check for updates");
     }
 }
 
 void GMainWindow::OnUpdateFound(bool found, bool error) {
     if (error) {
-        LOG_WARNING(Frontend, "Update check failed");
+        NGLOG_WARNING(Frontend, "Update check failed");
         return;
     }
 
     if (!found) {
-        LOG_INFO(Frontend, "No updates found");
+        NGLOG_INFO(Frontend, "No updates found");
 
         // If the user explicitly clicked the "Check for Updates" button, we are
         //  going to want to show them a prompt anyway.
@@ -489,12 +495,12 @@ void GMainWindow::OnUpdateFound(bool found, bool error) {
     }
 
     if (emulation_running && !explicit_update_check) {
-        LOG_INFO(Frontend, "Update found, deferring as game is running");
+        NGLOG_INFO(Frontend, "Update found, deferring as game is running");
         defer_update_prompt = true;
         return;
     }
 
-    LOG_INFO(Frontend, "Update found!");
+    NGLOG_INFO(Frontend, "Update found!");
     explicit_update_check = false;
 
     ShowUpdatePrompt();
@@ -546,14 +552,13 @@ bool GMainWindow::LoadROM(const QString& filename) {
     if (result != Core::System::ResultStatus::Success) {
         switch (result) {
         case Core::System::ResultStatus::ErrorGetLoader:
-            LOG_CRITICAL(Frontend, "Failed to obtain loader for %s!",
-                         filename.toStdString().c_str());
+            NGLOG_CRITICAL(Frontend, "Failed to obtain loader for {}!", filename.toStdString());
             QMessageBox::critical(this, tr("Error while loading ROM!"),
                                   tr("The ROM format is not supported."));
             break;
 
         case Core::System::ResultStatus::ErrorSystemMode:
-            LOG_CRITICAL(Frontend, "Failed to load ROM!");
+            NGLOG_CRITICAL(Frontend, "Failed to load ROM!");
             QMessageBox::critical(this, tr("Error while loading ROM!"),
                                   tr("Could not determine the system mode."));
             break;
@@ -604,7 +609,7 @@ bool GMainWindow::LoadROM(const QString& filename) {
 }
 
 void GMainWindow::BootGame(const QString& filename) {
-    LOG_INFO(Frontend, "Citra starting...");
+    NGLOG_INFO(Frontend, "Citra starting...");
     StoreRecentFile(filename); // Put the filename on top of the list
 
     if (!LoadROM(filename))
@@ -748,7 +753,7 @@ void GMainWindow::OnGameListOpenFolder(u64 program_id, GameListOpenTarget target
                "content/";
         break;
     default:
-        LOG_ERROR(Frontend, "Unexpected target %d", target);
+        NGLOG_ERROR(Frontend, "Unexpected target {}", static_cast<int>(target));
         return;
     }
 
@@ -762,8 +767,7 @@ void GMainWindow::OnGameListOpenFolder(u64 program_id, GameListOpenTarget target
         return;
     }
 
-    LOG_INFO(Frontend, "Opening %s path for program_id=%016" PRIx64, open_target.c_str(),
-             program_id);
+    NGLOG_INFO(Frontend, "Opening {} path for program_id={:016x}", open_target, program_id);
 
     QDesktopServices::openUrl(QUrl::fromLocalFile(qpath));
 }
@@ -1011,6 +1015,7 @@ void GMainWindow::ToggleScreenLayout() {
     }
 
     Settings::values.layout_option = new_layout;
+    SyncMenuUISettings();
     Settings::Apply();
 }
 
@@ -1222,21 +1227,29 @@ void GMainWindow::filterBarSetChecked(bool state) {
 }
 
 void GMainWindow::UpdateUITheme() {
-    if (UISettings::values.theme != UISettings::themes[0].second) {
+    QStringList theme_paths(default_theme_paths);
+    if (UISettings::values.theme != UISettings::themes[0].second &&
+        !UISettings::values.theme.isEmpty()) {
         QString theme_uri(":" + UISettings::values.theme + "/style.qss");
         QFile f(theme_uri);
         if (!f.exists()) {
-            LOG_ERROR(Frontend, "Unable to set style, stylesheet file not found");
+            NGLOG_ERROR(Frontend, "Unable to set style, stylesheet file not found");
         } else {
             f.open(QFile::ReadOnly | QFile::Text);
             QTextStream ts(&f);
             qApp->setStyleSheet(ts.readAll());
             GMainWindow::setStyleSheet(ts.readAll());
         }
+        theme_paths.append(QStringList{":/icons/default", ":/icons/" + UISettings::values.theme});
+        QIcon::setThemeName(":/icons/" + UISettings::values.theme);
     } else {
         qApp->setStyleSheet("");
         GMainWindow::setStyleSheet("");
+        theme_paths.append(QStringList{":/icons/default"});
+        QIcon::setThemeName(":/icons/default");
     }
+    QIcon::setThemeSearchPaths(theme_paths);
+    emit UpdateThemedIcons();
 }
 
 void GMainWindow::LoadTranslation() {

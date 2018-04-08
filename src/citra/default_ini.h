@@ -60,6 +60,7 @@ c_stick=
 #  - "motion_emu" (default) for emulating motion input from mouse input. Required parameters:
 #      - "update_period": update period in milliseconds (default to 100)
 #      - "sensitivity": the coefficient converting mouse movement to tilting angle (default to 0.01)
+#      - "tilt_clamp": the max value of the tilt angle in degrees (default to 90)
 motion_device=
 
 # for touch input, the following devices are available:
@@ -105,7 +106,7 @@ bg_green =
 
 [Layout]
 # Layout for the screen inside the render window.
-# 0 (default): Default Top Bottom Screen, 1: Single Screen Only, 2: Large Screen Small Screen
+# 0 (default): Default Top Bottom Screen, 1: Single Screen Only, 2: Large Screen Small Screen, 3: Side by Side
 layout_option =
 
 # Toggle custom layout (using the settings below) on or off.
