@@ -9,6 +9,11 @@
 #include "video_core/renderer_opengl/gl_state.h"
 #include "video_core/renderer_opengl/gl_stream_buffer.h"
 
+// a workaround for the strange AMD crash
+size_t HackBufferSize(size_t size) {
+    return size * 2;
+}
+
 class OrphanBuffer : public OGLStreamBuffer {
 public:
     explicit OrphanBuffer(GLenum target) : OGLStreamBuffer(target) {}
@@ -75,7 +80,7 @@ void OrphanBuffer::Create(size_t size, size_t /*sync_subdivide*/) {
         glBindBuffer(gl_target, gl_buffer.handle);
     }
 
-    glBufferData(gl_target, static_cast<GLsizeiptr>(buffer_size), nullptr, GL_STREAM_DRAW);
+    glBufferData(gl_target, HackBufferSize(buffer_size), nullptr, GL_STREAM_DRAW);
 }
 
 void OrphanBuffer::Release() {
@@ -114,7 +119,7 @@ void StorageBuffer::Create(size_t size, size_t sync_subdivide) {
     gl_buffer.Create();
     glBindBuffer(gl_target, gl_buffer.handle);
 
-    glBufferStorage(gl_target, static_cast<GLsizeiptr>(buffer_size), nullptr,
+    glBufferStorage(gl_target, HackBufferSize(buffer_size), nullptr,
                     GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT);
     mapped_ptr = reinterpret_cast<u8*>(
         glMapBufferRange(gl_target, 0, static_cast<GLsizeiptr>(buffer_size),
