@@ -9,7 +9,9 @@
 #include <functional>
 #include <string>
 #include <type_traits>
+#include "common/hash.h"
 #include "video_core/regs.h"
+#include "video_core/shader/shader.h"
 
 namespace GLShader {
 
@@ -122,11 +124,90 @@ struct PicaShaderConfig : Common::HashableStruct<PicaShaderConfigState> {
     }
 };
 
+struct PicaShaderConfigCommon {
+    void Init(const Pica::ShaderRegs& regs, Pica::Shader::ShaderSetup& setup);
+
+    u64 program_hash;
+    u64 swizzle_hash;
+    u32 main_offset;
+    bool sanitize_mul;
+
+    u32 num_outputs;
+    // reg to attribute
+    std::array<u32, 16> output_map;
+};
+
+struct PicaVSConfig : Common::HashableStruct<PicaShaderConfigCommon> {
+    explicit PicaVSConfig(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setup) {
+        state.Init(regs.vs, setup);
+    }
+};
+
+struct PicaGSConfigCommonRaw {
+    void Init(const Pica::Regs& regs);
+
+    u32 vs_output_attributes;
+    u32 gs_output_attributes;
+
+    struct SemanticMap {
+        u32 attribute_index;
+        u32 component_index;
+    };
+
+    std::array<SemanticMap, 24> semantic_maps;
+};
+
+struct PicaGSConfigCommon : Common::HashableStruct<PicaGSConfigCommonRaw> {
+    explicit PicaGSConfigCommon(const Pica::Regs& regs) {
+        state.Init(regs);
+    }
+};
+
+static_assert(std::is_trivial<PicaShaderConfigCommon>(), "!");
+static_assert(std::is_trivial<PicaGSConfigCommonRaw>(), "!");
+
+struct PicaGSConfigRaw : PicaShaderConfigCommon, PicaGSConfigCommonRaw {
+    void Init(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setup);
+
+    u32 num_inputs;
+    // reg to attribute
+    std::array<u32, 16> input_map;
+
+    u32 attributes_per_vertex;
+};
+
+struct PicaGSConfig : Common::HashableStruct<PicaGSConfigRaw> {
+    explicit PicaGSConfig(const Pica::Regs& regs, Pica::Shader::ShaderSetup& setups) {
+        state.Init(regs, setups);
+    }
+};
+
 /**
- * Generates the GLSL vertex shader program source code for the current Pica state
+ * Generates the GLSL default vertex shader program source code for the SW pipeline
  * @returns String of the shader source code
  */
-std::string GenerateVertexShader();
+std::string GenerateDefaultVertexShader(bool separable_shader);
+
+/**
+ * Generates the GLSL vertex shader program source code for the given VS program and its main offset
+ * @returns String of the shader source code
+ */
+std::string GenerateVertexShader(const Pica::Shader::ShaderSetup& setup, const PicaVSConfig& config,
+                                 bool separable_shader);
+
+/**
+ * Generates the GLSL default geometry shader program source code for the HW pipeline
+ * @returns String of the shader source code
+ */
+std::string GenerateDefaultGeometryShader(const PicaGSConfigCommon& config, bool separable_shader);
+
+/**
+ * Generates the GLSL geometry shader program source code for the given GS program and its
+ * configuration
+ * @returns String of the shader source code
+ */
+std::string GenerateGeometryShader(const Pica::Shader::ShaderSetup& setup,
+                                   const PicaGSConfig& config, bool separable_shader);
 
 /**
  * Generates the GLSL fragment shader program source code for the current Pica state
@@ -134,7 +215,7 @@ std::string GenerateVertexShader();
  *               configuration (NOTE: Use state in this struct only, not the Pica registers!)
  * @returns String of the shader source code
  */
-std::string GenerateFragmentShader(const PicaShaderConfig& config);
+std::string GenerateFragmentShader(const PicaShaderConfig& config, bool separable_shader);
 
 } // namespace GLShader
 
@@ -142,6 +223,26 @@ namespace std {
 template <>
 struct hash<GLShader::PicaShaderConfig> {
     size_t operator()(const GLShader::PicaShaderConfig& k) const {
+        return k.Hash();
+    }
+};
+
+template <>
+struct hash<GLShader::PicaVSConfig> {
+    size_t operator()(const GLShader::PicaVSConfig& k) const {
+        return k.Hash();
+    }
+};
+template <>
+struct hash<GLShader::PicaGSConfigCommon> {
+    size_t operator()(const GLShader::PicaGSConfigCommon& k) const {
+        return k.Hash();
+    }
+};
+
+template <>
+struct hash<GLShader::PicaGSConfig> {
+    size_t operator()(const GLShader::PicaGSConfig& k) const {
         return k.Hash();
     }
 };

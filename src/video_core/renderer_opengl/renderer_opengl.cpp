@@ -238,7 +238,7 @@ void RendererOpenGL::InitOpenGLObjects() {
                  0.0f);
 
     // Link shaders and get variable locations
-    shader.Create(vertex_shader, fragment_shader);
+    shader.CreateFromSource(vertex_shader, nullptr, fragment_shader);
     state.draw.shader_program = shader.handle;
     state.Apply();
     uniform_modelview_matrix = glGetUniformLocation(shader.handle, "modelview_matrix");
@@ -254,7 +254,6 @@ void RendererOpenGL::InitOpenGLObjects() {
 
     state.draw.vertex_array = vertex_array.handle;
     state.draw.vertex_buffer = vertex_buffer.handle;
-    state.draw.uniform_buffer = 0;
     state.Apply();
 
     // Attach vertex data to VAO

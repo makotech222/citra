@@ -8,12 +8,10 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
-#include <unordered_map>
 #include <vector>
 #include <glad/glad.h>
 #include "common/bit_field.h"
 #include "common/common_types.h"
-#include "common/hash.h"
 #include "common/vector_math.h"
 #include "core/hw/gpu.h"
 #include "video_core/pica_state.h"
@@ -25,13 +23,14 @@
 #include "video_core/regs_texturing.h"
 #include "video_core/renderer_opengl/gl_rasterizer_cache.h"
 #include "video_core/renderer_opengl/gl_resource_manager.h"
-#include "video_core/renderer_opengl/gl_shader_gen.h"
+#include "video_core/renderer_opengl/gl_shader_manager.h"
 #include "video_core/renderer_opengl/gl_state.h"
 #include "video_core/renderer_opengl/gl_stream_buffer.h"
 #include "video_core/renderer_opengl/pica_to_gl.h"
 #include "video_core/shader/shader.h"
 
 struct ScreenInfo;
+class ShaderProgramManager;
 
 class RasterizerOpenGL : public VideoCore::RasterizerInterface {
 public:
@@ -51,12 +50,7 @@ public:
     bool AccelerateFill(const GPU::Regs::MemoryFillConfig& config) override;
     bool AccelerateDisplay(const GPU::Regs::FramebufferConfig& config, PAddr framebuffer_addr,
                            u32 pixel_stride, ScreenInfo& screen_info) override;
-
-    /// OpenGL shader generated for a given Pica register state
-    struct PicaShader {
-        /// OpenGL shader resource
-        OGLShader shader;
-    };
+    bool AccelerateDrawBatch(bool is_indexed) override;
 
 private:
     struct SamplerInfo {
@@ -80,6 +74,7 @@ private:
 
     /// Structure that the hardware rendered vertices are composed of
     struct HardwareVertex {
+        HardwareVertex() = default;
         HardwareVertex(const Pica::Shader::OutputVertex& v, bool flip_quaternion) {
             position[0] = v.pos.x.ToFloat32();
             position[1] = v.pos.y.ToFloat32();
@@ -111,56 +106,15 @@ private:
             }
         }
 
-        GLfloat position[4];
-        GLfloat color[4];
-        GLfloat tex_coord0[2];
-        GLfloat tex_coord1[2];
-        GLfloat tex_coord2[2];
+        GLvec4 position;
+        GLvec4 color;
+        GLvec2 tex_coord0;
+        GLvec2 tex_coord1;
+        GLvec2 tex_coord2;
         GLfloat tex_coord0_w;
-        GLfloat normquat[4];
-        GLfloat view[3];
+        GLvec4 normquat;
+        GLvec3 view;
     };
-
-    struct LightSrc {
-        alignas(16) GLvec3 specular_0;
-        alignas(16) GLvec3 specular_1;
-        alignas(16) GLvec3 diffuse;
-        alignas(16) GLvec3 ambient;
-        alignas(16) GLvec3 position;
-        alignas(16) GLvec3 spot_direction; // negated
-        GLfloat dist_atten_bias;
-        GLfloat dist_atten_scale;
-    };
-
-    /// Uniform structure for the Uniform Buffer Object, all vectors must be 16-byte aligned
-    // NOTE: Always keep a vec4 at the end. The GL spec is not clear wether the alignment at
-    //       the end of a uniform block is included in UNIFORM_BLOCK_DATA_SIZE or not.
-    //       Not following that rule will cause problems on some AMD drivers.
-    struct UniformData {
-        GLint framebuffer_scale;
-        GLint alphatest_ref;
-        GLfloat depth_scale;
-        GLfloat depth_offset;
-        GLint scissor_x1;
-        GLint scissor_y1;
-        GLint scissor_x2;
-        GLint scissor_y2;
-        alignas(16) GLvec3 fog_color;
-        alignas(8) GLvec2 proctex_noise_f;
-        alignas(8) GLvec2 proctex_noise_a;
-        alignas(8) GLvec2 proctex_noise_p;
-        alignas(16) GLvec3 lighting_global_ambient;
-        LightSrc light_src[8];
-        alignas(16) GLvec4 const_color[6]; // A vec4 color for each of the six tev stages
-        alignas(16) GLvec4 tev_combiner_buffer_color;
-        alignas(16) GLvec4 clip_coef;
-    };
-
-    static_assert(
-        sizeof(UniformData) == 0x460,
-        "The size of the UniformData structure has changed, update the structure in the shader");
-    static_assert(sizeof(UniformData) < 16384,
-                  "UniformData structure must be less than 16kb as per the OpenGL spec");
 
     /// Syncs entire status to match PICA registers
     void SyncEntireState();
@@ -269,8 +223,6 @@ private:
 
     std::vector<HardwareVertex> vertex_batch;
 
-    std::unordered_map<GLShader::PicaShaderConfig, std::unique_ptr<PicaShader>> shader_cache;
-    const PicaShader* current_shader = nullptr;
     bool shader_dirty;
 
     struct {
@@ -285,8 +237,13 @@ private:
         bool dirty;
     } uniform_block_data = {};
 
+    // OGLPipeline pipeline;
+    std::unique_ptr<ShaderProgramManager> shader_program_manager;
+    OGLVertexArray sw_vao;
+    OGLVertexArray hw_vao;
+    std::array<bool, 16> hw_vao_enabled_attributes;
+
     std::array<SamplerInfo, 3> texture_samplers;
-    OGLVertexArray vertex_array;
     static constexpr size_t VERTEX_BUFFER_SIZE = 128 * 1024 * 1024;
     std::unique_ptr<OGLStreamBuffer> vertex_buffer;
     OGLBuffer uniform_buffer;
@@ -323,4 +280,25 @@ private:
     OGLBuffer proctex_diff_lut_buffer;
     OGLTexture proctex_diff_lut;
     std::array<GLvec4, 256> proctex_diff_lut_data{};
+
+    static constexpr size_t STREAM_BUFFER_SIZE = 4 * 1024 * 1024;
+    std::unique_ptr<OGLStreamBuffer> stream_buffer;
+
+    GLint vs_input_index_min = 0;
+    GLint vs_input_index_max = 0;
+    GLsizeiptr vs_input_size = 0;
+
+    void AnalyzeVertexArray(bool is_indexed);
+    void SetupVertexArray(u8* array_ptr, GLintptr buffer_offset);
+
+    OGLBuffer vs_uniform_buffer;
+
+    void SetupVertexShader(VSUniformData* ub_ptr, GLintptr buffer_offset);
+
+    OGLBuffer gs_uniform_buffer;
+
+    void SetupGeometryShader(GSUniformData* ub_ptr, GLintptr buffer_offset);
+
+    enum class AccelDraw { Disabled, Arrays, Indexed };
+    AccelDraw accelerate_draw;
 };
