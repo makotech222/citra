@@ -28,7 +28,6 @@
 #include "video_core/pica_state.h"
 #include "video_core/renderer_opengl/gl_rasterizer_cache.h"
 #include "video_core/renderer_opengl/gl_state.h"
-#include "video_core/texture/texture_decode.h"
 #include "video_core/utils.h"
 #include "video_core/video_core.h"
 
@@ -231,19 +230,39 @@ static void AllocateSurfaceTexture(GLuint texture, const FormatTuple& format_tup
     cur_state.Apply();
 }
 
+static void AllocateTextureCube(GLuint texture, const FormatTuple& format_tuple, u32 width) {
+    OpenGLState cur_state = OpenGLState::GetCurState();
+
+    // Keep track of previous texture bindings
+    GLuint old_tex = cur_state.texture_cube_unit.texture_cube;
+    cur_state.texture_cube_unit.texture_cube = texture;
+    cur_state.Apply();
+    glActiveTexture(TextureUnits::TextureCube.Enum());
+
+    for (auto faces : {
+             GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+             GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+             GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+             GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+             GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+             GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
+         }) {
+        glTexImage2D(faces, 0, format_tuple.internal_format, width, width, 0, format_tuple.format,
+                     format_tuple.type, nullptr);
+    }
+
+    // Restore previous texture bindings
+    cur_state.texture_cube_unit.texture_cube = old_tex;
+    cur_state.Apply();
+}
+
 static bool BlitTextures(GLuint src_tex, const MathUtil::Rectangle<u32>& src_rect, GLuint dst_tex,
                          const MathUtil::Rectangle<u32>& dst_rect, SurfaceType type,
                          GLuint read_fb_handle, GLuint draw_fb_handle) {
-    OpenGLState state = OpenGLState::GetCurState();
-
-    OpenGLState prev_state = state;
+    OpenGLState prev_state = OpenGLState::GetCurState();
     SCOPE_EXIT({ prev_state.Apply(); });
 
-    // Make sure textures aren't bound to texture units, since going to bind them to framebuffer
-    // components
-    state.ResetTexture(src_tex);
-    state.ResetTexture(dst_tex);
-
+    OpenGLState state;
     state.draw.read_framebuffer = read_fb_handle;
     state.draw.draw_framebuffer = draw_fb_handle;
     state.Apply();
@@ -293,13 +312,10 @@ static bool BlitTextures(GLuint src_tex, const MathUtil::Rectangle<u32>& src_rec
 
 static bool FillSurface(const Surface& surface, const u8* fill_data,
                         const MathUtil::Rectangle<u32>& fill_rect, GLuint draw_fb_handle) {
-    OpenGLState state = OpenGLState::GetCurState();
-
-    OpenGLState prev_state = state;
+    OpenGLState prev_state = OpenGLState::GetCurState();
     SCOPE_EXIT({ prev_state.Apply(); });
 
-    state.ResetTexture(surface->texture.handle);
-
+    OpenGLState state;
     state.scissor.enabled = true;
     state.scissor.x = static_cast<GLint>(fill_rect.left);
     state.scissor.y = static_cast<GLint>(fill_rect.bottom);
@@ -761,6 +777,8 @@ void CachedSurface::UploadGLTexture(const MathUtil::Rectangle<u32>& rect, GLuint
         BlitTextures(unscaled_tex.handle, {0, rect.GetHeight(), rect.GetWidth(), 0}, texture.handle,
                      scaled_rect, type, read_fb_handle, draw_fb_handle);
     }
+
+    InvalidateAllWatcher();
 }
 
 MICROPROFILE_DEFINE(OpenGL_TextureDL, "OpenGL", "Texture Download", MP_RGB(128, 192, 64));
@@ -1193,14 +1211,13 @@ SurfaceRect_Tuple RasterizerCacheOpenGL::GetSurfaceSubRect(const SurfaceParams& 
 }
 
 Surface RasterizerCacheOpenGL::GetTextureSurface(
-    const Pica::TexturingRegs::FullTextureConfig& config, PAddr addr_override) {
+    const Pica::TexturingRegs::FullTextureConfig& config) {
     Pica::Texture::TextureInfo info =
         Pica::Texture::TextureInfo::FromPicaRegister(config.config, config.format);
+    return GetTextureSurface(info);
+}
 
-    if (addr_override != 0) {
-        info.physical_address = addr_override;
-    }
-
+Surface RasterizerCacheOpenGL::GetTextureSurface(const Pica::Texture::TextureInfo& info) {
     SurfaceParams params;
     params.addr = info.physical_address;
     params.width = info.width;
@@ -1228,76 +1245,93 @@ Surface RasterizerCacheOpenGL::GetTextureSurface(
     return GetSurface(params, ScaleMatch::Ignore, true);
 }
 
-void RasterizerCacheOpenGL::FillTextureCube(GLuint dest_handle,
-                                            const Pica::TexturingRegs::FullTextureConfig& config,
-                                            PAddr px, PAddr nx, PAddr py, PAddr ny, PAddr pz,
-                                            PAddr nz) {
-    ASSERT(config.config.width == config.config.height);
-    struct FaceTuple {
+const CachedTextureCube& RasterizerCacheOpenGL::GetTextureCube(const TextureCubeConfig& config) {
+    auto& cube = texture_cube_cache[config];
+
+    struct Face {
+        Face(std::shared_ptr<SurfaceWatcher>& watcher, PAddr address, GLenum gl_face)
+            : watcher(watcher), address(address), gl_face(gl_face) {}
+        std::shared_ptr<SurfaceWatcher>& watcher;
         PAddr address;
         GLenum gl_face;
-        Surface surface;
     };
-    std::array<FaceTuple, 6> faces{{
-        {px, GL_TEXTURE_CUBE_MAP_POSITIVE_X},
-        {nx, GL_TEXTURE_CUBE_MAP_NEGATIVE_X},
-        {py, GL_TEXTURE_CUBE_MAP_POSITIVE_Y},
-        {ny, GL_TEXTURE_CUBE_MAP_NEGATIVE_Y},
-        {pz, GL_TEXTURE_CUBE_MAP_POSITIVE_Z},
-        {nz, GL_TEXTURE_CUBE_MAP_NEGATIVE_Z},
+
+    const std::array<Face, 6> faces{{
+        {cube.px, config.px, GL_TEXTURE_CUBE_MAP_POSITIVE_X},
+        {cube.nx, config.nx, GL_TEXTURE_CUBE_MAP_NEGATIVE_X},
+        {cube.py, config.py, GL_TEXTURE_CUBE_MAP_POSITIVE_Y},
+        {cube.ny, config.ny, GL_TEXTURE_CUBE_MAP_NEGATIVE_Y},
+        {cube.pz, config.pz, GL_TEXTURE_CUBE_MAP_POSITIVE_Z},
+        {cube.nz, config.nz, GL_TEXTURE_CUBE_MAP_NEGATIVE_Z},
     }};
 
-    u16 res_scale = 1;
-    for (auto& face : faces) {
-        face.surface = GetTextureSurface(config, face.address);
-        res_scale = std::max(res_scale, face.surface->res_scale);
-    }
-
-    u32 scaled_size = res_scale * config.config.width;
-
-    OpenGLState state = OpenGLState::GetCurState();
-
-    OpenGLState prev_state = state;
-    SCOPE_EXIT({ prev_state.Apply(); });
-
-    state.texture_cube_unit.texture_cube = dest_handle;
-    state.Apply();
-    glActiveTexture(TextureUnits::TextureCube.Enum());
-    FormatTuple format_tuple = GetFormatTuple(faces[0].surface->pixel_format);
-
-    GLint cur_size, cur_format;
-    glGetTexLevelParameteriv(GL_TEXTURE_CUBE_MAP_POSITIVE_X, 0, GL_TEXTURE_WIDTH, &cur_size);
-    glGetTexLevelParameteriv(GL_TEXTURE_CUBE_MAP_POSITIVE_X, 0, GL_TEXTURE_INTERNAL_FORMAT,
-                             &cur_format);
-
-    if (cur_size != scaled_size || cur_format != format_tuple.internal_format) {
-        for (auto& face : faces) {
-            glTexImage2D(face.gl_face, 0, format_tuple.internal_format, scaled_size, scaled_size, 0,
-                         format_tuple.format, format_tuple.type, nullptr);
+    for (const Face& face : faces) {
+        if (!face.watcher || !face.watcher->Get()) {
+            Pica::Texture::TextureInfo info;
+            info.physical_address = face.address;
+            info.height = info.width = config.width;
+            info.format = config.format;
+            info.SetDefaultStride();
+            auto surface = GetTextureSurface(info);
+            if (surface) {
+                face.watcher = surface->CreateWatcher();
+            } else {
+                // Can occur when texture address is invalid. We mark the watcher with nullptr in
+                // this case and the content of the face wouldn't get updated. These are usually
+                // leftover setup in the texture unit and games are not supposed to draw using them.
+                face.watcher = nullptr;
+            }
         }
     }
 
+    if (cube.texture.handle == 0) {
+        for (const Face& face : faces) {
+            if (face.watcher) {
+                auto surface = face.watcher->Get();
+                cube.res_scale = std::max(cube.res_scale, surface->res_scale);
+            }
+        }
+
+        cube.texture.Create();
+        AllocateTextureCube(
+            cube.texture.handle,
+            GetFormatTuple(CachedSurface::PixelFormatFromTextureFormat(config.format)),
+            cube.res_scale * config.width);
+    }
+
+    u32 scaled_size = cube.res_scale * config.width;
+
+    OpenGLState prev_state = OpenGLState::GetCurState();
+    SCOPE_EXIT({ prev_state.Apply(); });
+
+    OpenGLState state;
     state.draw.read_framebuffer = read_framebuffer.handle;
     state.draw.draw_framebuffer = draw_framebuffer.handle;
-    state.ResetTexture(dest_handle);
+    state.ResetTexture(cube.texture.handle);
 
-    for (auto& face : faces) {
-        state.ResetTexture(face.surface->texture.handle);
-        state.Apply();
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
-                               face.surface->texture.handle, 0);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0,
-                               0);
+    for (const Face& face : faces) {
+        if (face.watcher && !face.watcher->IsValid()) {
+            auto surface = face.watcher->Get();
+            state.ResetTexture(surface->texture.handle);
+            state.Apply();
+            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                                   surface->texture.handle, 0);
+            glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D,
+                                   0, 0);
 
-        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, face.gl_face, dest_handle,
-                               0);
-        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D, 0,
-                               0);
+            glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, face.gl_face,
+                                   cube.texture.handle, 0);
+            glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_TEXTURE_2D,
+                                   0, 0);
 
-        auto src_rect = face.surface->GetScaledRect();
-        glBlitFramebuffer(src_rect.left, src_rect.bottom, src_rect.right, src_rect.top, 0, 0,
-                          scaled_size, scaled_size, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+            auto src_rect = surface->GetScaledRect();
+            glBlitFramebuffer(src_rect.left, src_rect.bottom, src_rect.right, src_rect.top, 0, 0,
+                              scaled_size, scaled_size, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+            face.watcher->Validate();
+        }
     }
+
+    return cube;
 }
 
 SurfaceSurfaceRect_Tuple RasterizerCacheOpenGL::GetFramebufferSurfaces(
@@ -1312,6 +1346,7 @@ SurfaceSurfaceRect_Tuple RasterizerCacheOpenGL::GetFramebufferSurfaces(
         FlushAll();
         while (!surface_cache.empty())
             UnregisterSurface(*surface_cache.begin()->second.begin());
+        texture_cube_cache.clear();
     }
 
     MathUtil::Rectangle<u32> viewport_clamped{

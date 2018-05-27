@@ -40,6 +40,22 @@ function(check_submodules_present)
 endfunction()
 check_submodules_present()
 
+
+configure_file(${CMAKE_SOURCE_DIR}/dist/compatibility_list/compatibility_list.qrc
+               ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
+               COPYONLY)
+
+if (ENABLE_COMPATIBILITY_LIST_DOWNLOAD AND NOT EXISTS ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
+    message(STATUS "Downloading compatibility list for citra...")
+    file(DOWNLOAD
+        https://api.citra-emu.org/gamedb/
+        "${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json" SHOW_PROGRESS)
+endif()
+
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
+    file(WRITE ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json "")
+endif()
+
 # Detect current compilation architecture and create standard definitions
 # =======================================================================
 
@@ -209,7 +225,7 @@ endif()
 if (ENABLE_QT)
     if (CITRA_USE_BUNDLED_QT)
         if (MSVC14 AND ARCHITECTURE_x86_64)
-            set(QT_VER qt-5.7-msvc2015_64)
+            set(QT_VER qt-5.10.0-msvc2017_64)
         else()
             message(FATAL_ERROR "No bundled Qt binaries for your toolchain. Disable CITRA_USE_BUNDLED_QT and provide your own.")
         endif()
@@ -225,7 +241,7 @@ if (ENABLE_QT)
         set(QT_PREFIX_HINT)
     endif()
 
-    find_package(Qt5 REQUIRED COMPONENTS Widgets OpenGL ${QT_PREFIX_HINT})
+    find_package(Qt5 REQUIRED COMPONENTS Widgets OpenGL Multimedia ${QT_PREFIX_HINT})
 
     if (ENABLE_QT_TRANSLATION)
         find_package(Qt5 REQUIRED COMPONENTS LinguistTools ${QT_PREFIX_HINT})

@@ -7,6 +7,7 @@
 #include "citra_qt/ui_settings.h"
 #include "common/file_util.h"
 #include "input_common/main.h"
+#include "network/network.h"
 
 Config::Config() {
     // TODO: Don't hardcode the path; let the frontend decide where to put the config files.
@@ -82,6 +83,10 @@ void Config::ReadValues() {
 
     qt_config->beginGroup("Renderer");
     Settings::values.use_hw_renderer = qt_config->value("use_hw_renderer", true).toBool();
+    Settings::values.use_hw_shader = qt_config->value("use_hw_shader", true).toBool();
+    Settings::values.shaders_accurate_gs = qt_config->value("shaders_accurate_gs", true).toBool();
+    Settings::values.shaders_accurate_mul =
+        qt_config->value("shaders_accurate_mul", false).toBool();
     Settings::values.use_shader_jit = qt_config->value("use_shader_jit", true).toBool();
     Settings::values.resolution_factor =
         static_cast<u16>(qt_config->value("resolution_factor", 1).toInt());
@@ -162,6 +167,12 @@ void Config::ReadValues() {
         qt_config->value("verify_endpoint_url", "https://services.citra-emu.org/api/profile")
             .toString()
             .toStdString();
+    Settings::values.announce_multiplayer_room_endpoint_url =
+        qt_config
+            ->value("announce_multiplayer_room_endpoint_url",
+                    "https://services.citra-emu.org/api/multiplayer/rooms")
+            .toString()
+            .toStdString();
     Settings::values.citra_username = qt_config->value("citra_username").toString().toStdString();
     Settings::values.citra_token = qt_config->value("citra_token").toString().toStdString();
     qt_config->endGroup();
@@ -224,6 +235,23 @@ void Config::ReadValues() {
     UISettings::values.confirm_before_closing = qt_config->value("confirmClose", true).toBool();
     UISettings::values.first_start = qt_config->value("firstStart", true).toBool();
     UISettings::values.callout_flags = qt_config->value("calloutFlags", 0).toUInt();
+    UISettings::values.show_console = qt_config->value("showConsole", false).toBool();
+
+    qt_config->beginGroup("Multiplayer");
+    UISettings::values.nickname = qt_config->value("nickname", "").toString();
+    UISettings::values.ip = qt_config->value("ip", "").toString();
+    UISettings::values.port = qt_config->value("port", Network::DefaultRoomPort).toString();
+    UISettings::values.room_nickname = qt_config->value("room_nickname", "").toString();
+    UISettings::values.room_name = qt_config->value("room_name", "").toString();
+    UISettings::values.room_port = qt_config->value("room_port", "24872").toString();
+    bool ok;
+    UISettings::values.host_type = qt_config->value("host_type", 0).toUInt(&ok);
+    if (!ok) {
+        UISettings::values.host_type = 0;
+    }
+    UISettings::values.max_player = qt_config->value("max_player", 8).toUInt();
+    UISettings::values.game_id = qt_config->value("game_id", 0).toULongLong();
+    qt_config->endGroup();
 
     qt_config->endGroup();
 }
@@ -248,6 +276,9 @@ void Config::SaveValues() {
 
     qt_config->beginGroup("Renderer");
     qt_config->setValue("use_hw_renderer", Settings::values.use_hw_renderer);
+    qt_config->setValue("use_hw_shader", Settings::values.use_hw_shader);
+    qt_config->setValue("shaders_accurate_gs", Settings::values.shaders_accurate_gs);
+    qt_config->setValue("shaders_accurate_mul", Settings::values.shaders_accurate_mul);
     qt_config->setValue("use_shader_jit", Settings::values.use_shader_jit);
     qt_config->setValue("resolution_factor", Settings::values.resolution_factor);
     qt_config->setValue("use_vsync", Settings::values.use_vsync);
@@ -320,6 +351,9 @@ void Config::SaveValues() {
                         QString::fromStdString(Settings::values.telemetry_endpoint_url));
     qt_config->setValue("verify_endpoint_url",
                         QString::fromStdString(Settings::values.verify_endpoint_url));
+    qt_config->setValue(
+        "announce_multiplayer_room_endpoint_url",
+        QString::fromStdString(Settings::values.announce_multiplayer_room_endpoint_url));
     qt_config->setValue("citra_username", QString::fromStdString(Settings::values.citra_username));
     qt_config->setValue("citra_token", QString::fromStdString(Settings::values.citra_token));
     qt_config->endGroup();
@@ -365,6 +399,19 @@ void Config::SaveValues() {
     qt_config->setValue("confirmClose", UISettings::values.confirm_before_closing);
     qt_config->setValue("firstStart", UISettings::values.first_start);
     qt_config->setValue("calloutFlags", UISettings::values.callout_flags);
+    qt_config->setValue("showConsole", UISettings::values.show_console);
+
+    qt_config->beginGroup("Multiplayer");
+    qt_config->setValue("nickname", UISettings::values.nickname);
+    qt_config->setValue("ip", UISettings::values.ip);
+    qt_config->setValue("port", UISettings::values.port);
+    qt_config->setValue("room_nickname", UISettings::values.room_nickname);
+    qt_config->setValue("room_name", UISettings::values.room_name);
+    qt_config->setValue("room_port", UISettings::values.room_port);
+    qt_config->setValue("host_type", UISettings::values.host_type);
+    qt_config->setValue("max_player", UISettings::values.max_player);
+    qt_config->setValue("game_id", UISettings::values.game_id);
+    qt_config->endGroup();
 
     qt_config->endGroup();
 }

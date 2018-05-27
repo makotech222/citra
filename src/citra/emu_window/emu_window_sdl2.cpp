@@ -58,7 +58,28 @@ void EmuWindow_SDL2::OnResize() {
     UpdateCurrentFramebufferLayout(width, height);
 }
 
-EmuWindow_SDL2::EmuWindow_SDL2() {
+void EmuWindow_SDL2::Fullscreen() {
+    if (SDL_SetWindowFullscreen(render_window, SDL_WINDOW_FULLSCREEN) == 0) {
+        return;
+    }
+
+    NGLOG_ERROR(Frontend, "Fullscreening failed: {}", SDL_GetError());
+
+    // Try a different fullscreening method
+    NGLOG_INFO(Frontend, "Attempting to use borderless fullscreen...");
+    if (SDL_SetWindowFullscreen(render_window, SDL_WINDOW_FULLSCREEN_DESKTOP) == 0) {
+        return;
+    }
+
+    NGLOG_ERROR(Frontend, "Borderless fullscreening failed: {}", SDL_GetError());
+
+    // Fallback algorithm: Maximise window.
+    // Works on all systems (unless something is seriously wrong), so no fallback for this one.
+    NGLOG_INFO(Frontend, "Falling back on a maximised window...");
+    SDL_MaximizeWindow(render_window);
+}
+
+EmuWindow_SDL2::EmuWindow_SDL2(bool fullscreen) {
     InputCommon::Init();
     Network::Init();
 
@@ -93,6 +114,10 @@ EmuWindow_SDL2::EmuWindow_SDL2() {
         exit(1);
     }
 
+    if (fullscreen) {
+        Fullscreen();
+    }
+
     gl_context = SDL_GL_CreateContext(render_window);
 
     if (gl_context == nullptr) {
@@ -109,6 +134,8 @@ EmuWindow_SDL2::EmuWindow_SDL2() {
     OnMinimalClientAreaChangeRequest(GetActiveConfig().min_client_area_size);
     SDL_PumpEvents();
     SDL_GL_SetSwapInterval(Settings::values.use_vsync);
+    NGLOG_INFO(Frontend, "Citra Version: {} | {}-{}", Common::g_build_name, Common::g_scm_branch,
+               Common::g_scm_desc);
 
     DoneCurrent();
 }

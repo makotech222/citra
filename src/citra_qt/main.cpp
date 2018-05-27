@@ -7,6 +7,7 @@
 #include <thread>
 #include <glad/glad.h>
 #define QT_NO_OPENGL
+#include <cinttypes>
 #include <QDesktopWidget>
 #include <QFileDialog>
 #include <QFutureWatcher>
@@ -16,9 +17,12 @@
 #include <QtWidgets>
 #include "citra_qt/aboutdialog.h"
 #include "citra_qt/bootmanager.h"
+#include "citra_qt/camera/qt_multimedia_camera.h"
+#include "citra_qt/camera/still_image_camera.h"
 #include "citra_qt/compatdb.h"
 #include "citra_qt/configuration/config.h"
 #include "citra_qt/configuration/configure_dialog.h"
+#include "citra_qt/debugger/console.h"
 #include "citra_qt/debugger/graphics/graphics.h"
 #include "citra_qt/debugger/graphics/graphics_breakpoints.h"
 #include "citra_qt/debugger/graphics/graphics_cmdlists.h"
@@ -31,8 +35,11 @@
 #include "citra_qt/game_list.h"
 #include "citra_qt/hotkeys.h"
 #include "citra_qt/main.h"
+#include "citra_qt/multiplayer/state.h"
 #include "citra_qt/ui_settings.h"
 #include "citra_qt/updater/updater.h"
+#include "citra_qt/util/clickable_label.h"
+#include "common/common_paths.h"
 #include "common/logging/backend.h"
 #include "common/logging/filter.h"
 #include "common/logging/log.h"
@@ -115,6 +122,8 @@ GMainWindow::GMainWindow() : config(new Config()), emu_thread(nullptr) {
     default_theme_paths = QIcon::themeSearchPaths();
     UpdateUITheme();
 
+    Network::Init();
+
     InitializeWidgets();
     InitializeDebugWidgets();
     InitializeRecentFileMenuActions();
@@ -128,9 +137,12 @@ GMainWindow::GMainWindow() : config(new Config()), emu_thread(nullptr) {
     ConnectWidgetEvents();
 
     SetupUIStrings();
+    NGLOG_INFO(Frontend, "Citra Version: {} | {}-{}", Common::g_build_name, Common::g_scm_branch,
+               Common::g_scm_desc);
 
     show();
 
+    game_list->LoadCompatibilityList();
     game_list->PopulateAsync(UISettings::values.gamedir, UISettings::values.gamedir_deepscan);
 
     // Show one-time "callout" messages to the user
@@ -152,6 +164,7 @@ GMainWindow::~GMainWindow() {
         delete render_window;
 
     Pica::g_debug_context.reset();
+    Network::Shutdown();
 }
 
 void GMainWindow::InitializeWidgets() {
@@ -163,6 +176,10 @@ void GMainWindow::InitializeWidgets() {
 
     game_list = new GameList(this);
     ui.horizontalLayout->addWidget(game_list);
+
+    multiplayer_state = new MultiplayerState(this, game_list->GetModel(), ui.action_Leave_Room,
+                                             ui.action_Show_Room);
+    multiplayer_state->setVisible(false);
 
     // Setup updater
     updater = new Updater(this);
@@ -198,6 +215,8 @@ void GMainWindow::InitializeWidgets() {
         label->setContentsMargins(4, 0, 4, 0);
         statusBar()->addPermanentWidget(label, 0);
     }
+    statusBar()->addPermanentWidget(multiplayer_state->GetStatusText(), 0);
+    statusBar()->addPermanentWidget(multiplayer_state->GetStatusIcon(), 0);
     statusBar()->setVisible(true);
 
     // Removes an ugly inner border from the status bar widgets under Linux
@@ -285,8 +304,8 @@ void GMainWindow::InitializeRecentFileMenuActions() {
 void GMainWindow::InitializeHotkeys() {
     RegisterHotkey("Main Window", "Load File", QKeySequence::Open);
     RegisterHotkey("Main Window", "Start Emulation");
-    RegisterHotkey("Main Window", "Swap Screens", QKeySequence(tr("F9")));
-    RegisterHotkey("Main Window", "Toggle Screen Layout", QKeySequence(tr("F10")));
+    RegisterHotkey("Main Window", "Swap Screens", QKeySequence("F9"));
+    RegisterHotkey("Main Window", "Toggle Screen Layout", QKeySequence("F10"));
     RegisterHotkey("Main Window", "Fullscreen", QKeySequence::FullScreen);
     RegisterHotkey("Main Window", "Exit Fullscreen", QKeySequence(Qt::Key_Escape),
                    Qt::ApplicationShortcut);
@@ -375,11 +394,14 @@ void GMainWindow::RestoreUIState() {
 
     ui.action_Show_Status_Bar->setChecked(UISettings::values.show_status_bar);
     statusBar()->setVisible(ui.action_Show_Status_Bar->isChecked());
+    Debugger::ToggleConsole();
 }
 
 void GMainWindow::ConnectWidgetEvents() {
     connect(game_list, &GameList::GameChosen, this, &GMainWindow::OnGameListLoadFile);
     connect(game_list, &GameList::OpenFolderRequested, this, &GMainWindow::OnGameListOpenFolder);
+    connect(game_list, &GameList::NavigateToGamedbEntryRequested, this,
+            &GMainWindow::OnGameListNavigateToGamedbEntry);
 
     connect(this, &GMainWindow::EmulationStarting, render_window,
             &GRenderWindow::OnEmulationStarting);
@@ -417,6 +439,19 @@ void GMainWindow::ConnectMenuEvents() {
     ui.action_Show_Filter_Bar->setShortcut(tr("CTRL+F"));
     connect(ui.action_Show_Filter_Bar, &QAction::triggered, this, &GMainWindow::OnToggleFilterBar);
     connect(ui.action_Show_Status_Bar, &QAction::triggered, statusBar(), &QStatusBar::setVisible);
+
+    // Multiplayer
+    connect(ui.action_View_Lobby, &QAction::triggered, multiplayer_state,
+            &MultiplayerState::OnViewLobby);
+    connect(ui.action_Start_Room, &QAction::triggered, multiplayer_state,
+            &MultiplayerState::OnCreateRoom);
+    connect(ui.action_Leave_Room, &QAction::triggered, multiplayer_state,
+            &MultiplayerState::OnCloseRoom);
+    connect(ui.action_Connect_To_Room, &QAction::triggered, multiplayer_state,
+            &MultiplayerState::OnDirectConnectToRoom);
+    connect(ui.action_Show_Room, &QAction::triggered, multiplayer_state,
+            &MultiplayerState::OnOpenNetworkRoom);
+
     ui.action_Fullscreen->setShortcut(GetHotkey("Main Window", "Fullscreen", this)->key());
     ui.action_Screen_Layout_Swap_Screens->setShortcut(
         GetHotkey("Main Window", "Swap Screens", this)->key());
@@ -666,6 +701,8 @@ void GMainWindow::ShutdownGame() {
     emu_thread->wait();
     emu_thread = nullptr;
 
+    Camera::QtMultimediaCameraHandler::ReleaseHandlers();
+
     // The emulation is stopped, so closing the window or not does not matter anymore
     disconnect(render_window, &GRenderWindow::Closed, this, &GMainWindow::OnStopGame);
 
@@ -770,6 +807,25 @@ void GMainWindow::OnGameListOpenFolder(u64 program_id, GameListOpenTarget target
     NGLOG_INFO(Frontend, "Opening {} path for program_id={:016x}", open_target, program_id);
 
     QDesktopServices::openUrl(QUrl::fromLocalFile(qpath));
+}
+
+void GMainWindow::OnGameListNavigateToGamedbEntry(
+    u64 program_id,
+    std::unordered_map<std::string, std::pair<QString, QString>>& compatibility_list) {
+
+    auto it = std::find_if(
+        compatibility_list.begin(), compatibility_list.end(),
+        [program_id](const std::pair<std::string, std::pair<QString, QString>>& element) {
+            std::string pid = Common::StringFromFormat("%016" PRIX64, program_id);
+            return element.first == pid;
+        });
+
+    QString directory = "";
+
+    if (it != compatibility_list.end())
+        directory = it->second.second;
+
+    QDesktopServices::openUrl(QUrl("https://citra-emu.org/game/" + directory));
 }
 
 void GMainWindow::OnMenuLoadFile() {
@@ -880,6 +936,7 @@ void GMainWindow::OnMenuRecentFile() {
 }
 
 void GMainWindow::OnStartGame() {
+    Camera::QtMultimediaCameraHandler::ResumeCameras();
     emu_thread->SetRunning(true);
     qRegisterMetaType<Core::System::ResultStatus>("Core::System::ResultStatus");
     qRegisterMetaType<std::string>("std::string");
@@ -895,7 +952,7 @@ void GMainWindow::OnStartGame() {
 
 void GMainWindow::OnPauseGame() {
     emu_thread->SetRunning(false);
-
+    Camera::QtMultimediaCameraHandler::StopCameras();
     ui.action_Start->setEnabled(true);
     ui.action_Pause->setEnabled(false);
     ui.action_Stop->setEnabled(true);
@@ -1161,9 +1218,11 @@ void GMainWindow::closeEvent(QCloseEvent* event) {
         return;
     }
 
-    UISettings::values.geometry = saveGeometry();
+    if (!ui.action_Fullscreen->isChecked()) {
+        UISettings::values.geometry = saveGeometry();
+        UISettings::values.renderwindow_geometry = render_window->saveGeometry();
+    }
     UISettings::values.state = saveState();
-    UISettings::values.renderwindow_geometry = render_window->saveGeometry();
 #if MICROPROFILE_ENABLED
     UISettings::values.microprofile_geometry = microProfileDialog->saveGeometry();
     UISettings::values.microprofile_visible = microProfileDialog->isVisible();
@@ -1183,7 +1242,7 @@ void GMainWindow::closeEvent(QCloseEvent* event) {
         ShutdownGame();
 
     render_window->close();
-
+    multiplayer_state->Close();
     QWidget::closeEvent(event);
 }
 
@@ -1308,9 +1367,6 @@ void GMainWindow::SyncMenuUISettings() {
 #endif
 
 int main(int argc, char* argv[]) {
-    Log::Filter log_filter(Log::Level::Info);
-    Log::SetFilter(&log_filter);
-
     MicroProfileOnThreadCreate("Frontend");
     SCOPE_EXIT({ MicroProfileShutdown(); });
 
@@ -1327,7 +1383,17 @@ int main(int argc, char* argv[]) {
 
     GMainWindow main_window;
     // After settings have been loaded by GMainWindow, apply the filter
+    Log::Filter log_filter;
     log_filter.ParseFilterString(Settings::values.log_filter);
+    Log::SetGlobalFilter(log_filter);
+    FileUtil::CreateFullPath(FileUtil::GetUserPath(D_LOGS_IDX));
+    Log::AddBackend(
+        std::make_unique<Log::FileBackend>(FileUtil::GetUserPath(D_LOGS_IDX) + LOG_FILE));
+
+    // Register CameraFactory
+    Camera::RegisterFactory("image", std::make_unique<Camera::StillImageCameraFactory>());
+    Camera::RegisterFactory("qt", std::make_unique<Camera::QtMultimediaCameraFactory>());
+    Camera::QtMultimediaCameraHandler::Init();
 
     main_window.show();
     return app.exec();
