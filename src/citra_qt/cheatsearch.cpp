@@ -23,6 +23,13 @@ CheatSearch::CheatSearch(QWidget *parent) :
     ui->btnNextScan->setEnabled(false);
     ui->lblTo->setVisible(false);
     ui->txtSearchTo->setVisible(false);
+    auto ss = stringstream();
+    ss << (void*)Memory::_baseMemoryAddress;
+    ui->txtBaseMemoryAddress->setText(QString::fromStdString("Base Address: " + ss.str()));
+    ss = stringstream();
+    ss << (void*)&Memory::_baseMemoryAddress;
+    ui->txtPointerAddress->setText(QString::fromStdString("Pointer Address(for CE): " + ss.str()));
+
     ui->tableFound->setEditTriggers(QAbstractItemView::NoEditTriggers);
     ui->tableFound->setSelectionBehavior(QAbstractItemView::SelectRows);
     previous_found = make_shared<std::vector<FoundItems>>();
