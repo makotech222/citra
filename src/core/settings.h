@@ -107,6 +107,9 @@ struct Values {
 
     // Renderer
     bool use_hw_renderer;
+    bool use_hw_shader;
+    bool shaders_accurate_gs;
+    bool shaders_accurate_mul;
     bool use_shader_jit;
     u16 resolution_factor;
     bool use_vsync;
@@ -129,8 +132,6 @@ struct Values {
     float bg_green;
     float bg_blue;
 
-    std::string log_filter;
-
     // Audio
     std::string sink_id;
     bool enable_audio_stretching;
@@ -143,6 +144,7 @@ struct Values {
     // Debugging
     bool use_gdbstub;
     u16 gdbstub_port;
+    std::string log_filter;
 
     // Movie
     std::string movie_play;

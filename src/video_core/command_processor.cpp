@@ -286,6 +286,38 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
         if (g_debug_context)
             g_debug_context->OnEvent(DebugContext::Event::IncomingPrimitiveBatch, nullptr);
 
+        PrimitiveAssembler<Shader::OutputVertex>& primitive_assembler = g_state.primitive_assembler;
+
+        bool accelerate_draw = VideoCore::g_hw_shader_enabled && primitive_assembler.IsEmpty();
+
+        if (regs.pipeline.use_gs == PipelineRegs::UseGS::No) {
+            auto topology = primitive_assembler.GetTopology();
+            if (topology == PipelineRegs::TriangleTopology::Shader ||
+                topology == PipelineRegs::TriangleTopology::List) {
+                accelerate_draw = accelerate_draw && (regs.pipeline.num_vertices % 3) == 0;
+            }
+            // TODO (wwylele): for Strip/Fan topology, if the primitive assember is not restarted
+            // after this draw call, the buffered vertex from this draw should "leak" to the next
+            // draw, in which case we should buffer the vertex into the software primitive assember,
+            // or disable accelerate draw completely. However, there is not game found yet that does
+            // this, so this is left unimplemented for now. Revisit this when an issue is found in
+            // games.
+        } else {
+            if (VideoCore::g_hw_shader_accurate_gs) {
+                accelerate_draw = false;
+            }
+        }
+
+        bool is_indexed = (id == PICA_REG_INDEX(pipeline.trigger_draw_indexed));
+
+        if (accelerate_draw &&
+            VideoCore::g_renderer->Rasterizer()->AccelerateDrawBatch(is_indexed)) {
+            if (g_debug_context) {
+                g_debug_context->OnEvent(DebugContext::Event::FinishedPrimitiveBatch, nullptr);
+            }
+            break;
+        }
+
         // Processes information about internal vertex attributes to figure out how a vertex is
         // loaded.
         // Later, these can be compiled and cached.
@@ -294,14 +326,10 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
         Shader::OutputVertex::ValidateSemantics(regs.rasterizer);
 
         // Load vertices
-        bool is_indexed = (id == PICA_REG_INDEX(pipeline.trigger_draw_indexed));
-
         const auto& index_info = regs.pipeline.index_array;
         const u8* index_address_8 = Memory::GetPhysicalPointer(base_address + index_info.offset);
         const u16* index_address_16 = reinterpret_cast<const u16*>(index_address_8);
         bool index_u16 = index_info.format != 0;
-
-        PrimitiveAssembler<Shader::OutputVertex>& primitive_assembler = g_state.primitive_assembler;
 
         if (g_debug_context && g_debug_context->recorder) {
             for (int i = 0; i < 3; ++i) {
@@ -451,6 +479,7 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
             LOG_ERROR(HW_GPU, "Invalid GS program offset %u", offset);
         } else {
             g_state.gs.program_code[offset] = value;
+            g_state.gs.MarkProgramCodeDirty();
             offset++;
         }
         break;
@@ -469,6 +498,7 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
             LOG_ERROR(HW_GPU, "Invalid GS swizzle pattern offset %u", offset);
         } else {
             g_state.gs.swizzle_data[offset] = value;
+            g_state.gs.MarkSwizzleDataDirty();
             offset++;
         }
         break;
@@ -518,8 +548,10 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
             LOG_ERROR(HW_GPU, "Invalid VS program offset %u", offset);
         } else {
             g_state.vs.program_code[offset] = value;
+            g_state.vs.MarkProgramCodeDirty();
             if (!g_state.regs.pipeline.gs_unit_exclusive_configuration) {
                 g_state.gs.program_code[offset] = value;
+                g_state.gs.MarkProgramCodeDirty();
             }
             offset++;
         }
@@ -539,8 +571,10 @@ static void WritePicaReg(u32 id, u32 value, u32 mask) {
             LOG_ERROR(HW_GPU, "Invalid VS swizzle pattern offset %u", offset);
         } else {
             g_state.vs.swizzle_data[offset] = value;
+            g_state.vs.MarkSwizzleDataDirty();
             if (!g_state.regs.pipeline.gs_unit_exclusive_configuration) {
                 g_state.gs.swizzle_data[offset] = value;
+                g_state.gs.MarkSwizzleDataDirty();
             }
             offset++;
         }

@@ -2,11 +2,15 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <cinttypes>
 #include <QApplication>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -227,6 +231,8 @@ GameList::GameList(GMainWindow* parent) : QWidget{parent} {
 
     item_model->insertColumns(0, COLUMN_COUNT);
     item_model->setHeaderData(COLUMN_NAME, Qt::Horizontal, "Name");
+    item_model->setHeaderData(COLUMN_COMPATIBILITY, Qt::Horizontal, "Compatibility");
+    item_model->setHeaderData(COLUMN_REGION, Qt::Horizontal, "Region");
     item_model->setHeaderData(COLUMN_FILE_TYPE, Qt::Horizontal, "File type");
     item_model->setHeaderData(COLUMN_SIZE, Qt::Horizontal, "Size");
 
@@ -320,12 +326,20 @@ void GameList::PopupContextMenu(const QPoint& menu_location) {
     QAction* open_save_location = context_menu.addAction(tr("Open Save Data Location"));
     QAction* open_application_location = context_menu.addAction(tr("Open Application Location"));
     QAction* open_update_location = context_menu.addAction(tr("Open Update Data Location"));
+    QAction* navigate_to_gamedb_entry = context_menu.addAction(tr("Navigate to GameDB entry"));
 
     open_save_location->setEnabled(program_id != 0);
     open_application_location->setVisible(FileUtil::Exists(
         Service::AM::GetTitleContentPath(Service::FS::MediaType::SDMC, program_id)));
     open_update_location->setEnabled(0x00040000'00000000 <= program_id &&
                                      program_id <= 0x00040000'FFFFFFFF);
+    auto it = std::find_if(
+        compatibility_list.begin(), compatibility_list.end(),
+        [program_id](const std::pair<std::string, std::pair<QString, QString>>& element) {
+            std::string pid = Common::StringFromFormat("%016" PRIX64, program_id);
+            return element.first == pid;
+        });
+    navigate_to_gamedb_entry->setVisible(it != compatibility_list.end());
 
     connect(open_save_location, &QAction::triggered,
             [&]() { emit OpenFolderRequested(program_id, GameListOpenTarget::SAVE_DATA); });
@@ -333,8 +347,56 @@ void GameList::PopupContextMenu(const QPoint& menu_location) {
             [&]() { emit OpenFolderRequested(program_id, GameListOpenTarget::APPLICATION); });
     connect(open_update_location, &QAction::triggered,
             [&]() { emit OpenFolderRequested(program_id, GameListOpenTarget::UPDATE_DATA); });
+    connect(navigate_to_gamedb_entry, &QAction::triggered,
+            [&]() { emit NavigateToGamedbEntryRequested(program_id, compatibility_list); });
 
     context_menu.exec(tree_view->viewport()->mapToGlobal(menu_location));
+}
+
+void GameList::LoadCompatibilityList() {
+    QFile compat_list{":compatibility_list/compatibility_list.json"};
+
+    if (!compat_list.open(QFile::ReadOnly | QFile::Text)) {
+        NGLOG_ERROR(Frontend, "Unable to open game compatibility list");
+        return;
+    }
+
+    if (compat_list.size() == 0) {
+        NGLOG_ERROR(Frontend, "Game compatibility list is empty");
+        return;
+    }
+
+    const QByteArray content = compat_list.readAll();
+    if (content.isEmpty()) {
+        NGLOG_ERROR(Frontend, "Unable to completely read game compatibility list");
+        return;
+    }
+
+    const QString string_content = content;
+    QJsonDocument json = QJsonDocument::fromJson(string_content.toUtf8());
+    QJsonArray arr = json.array();
+
+    for (const QJsonValue& value : arr) {
+        QJsonObject game = value.toObject();
+
+        if (game.contains("compatibility") && game["compatibility"].isDouble()) {
+            int compatibility = game["compatibility"].toInt();
+            QString directory = game["directory"].toString();
+            QJsonArray ids = game["releases"].toArray();
+
+            for (const QJsonValue& value : ids) {
+                QJsonObject object = value.toObject();
+                QString id = object["id"].toString();
+                compatibility_list.insert(
+                    std::make_pair(id.toUpper().toStdString(),
+                                   std::make_pair(QString::number(compatibility), directory)));
+            }
+        }
+    }
+}
+
+QStandardItemModel* GameList::GetModel() const {
+    return item_model;
 }
 
 void GameList::PopulateAsync(const QString& dir_path, bool deep_scan) {
@@ -351,7 +413,7 @@ void GameList::PopulateAsync(const QString& dir_path, bool deep_scan) {
 
     emit ShouldCancelWorker();
 
-    GameListWorker* worker = new GameListWorker(dir_path, deep_scan);
+    GameListWorker* worker = new GameListWorker(dir_path, deep_scan, compatibility_list);
 
     connect(worker, &GameListWorker::EntryReady, this, &GameList::AddEntry, Qt::QueuedConnection);
     connect(worker, &GameListWorker::Finished, this, &GameList::DonePopulating,
@@ -436,8 +498,22 @@ void GameListWorker::AddFstEntriesToGameList(const std::string& dir_path, unsign
                 return update_smdh;
             }();
 
+            auto it = std::find_if(
+                compatibility_list.begin(), compatibility_list.end(),
+                [program_id](const std::pair<std::string, std::pair<QString, QString>>& element) {
+                    std::string pid = Common::StringFromFormat("%016" PRIX64, program_id);
+                    return element.first == pid;
+                });
+
+            // The game list uses this as compatibility number for untested games
+            QString compatibility("99");
+            if (it != compatibility_list.end())
+                compatibility = it->second.first;
+
             emit EntryReady({
                 new GameListItemPath(QString::fromStdString(physical_name), smdh, program_id),
+                new GameListItemCompat(compatibility),
+                new GameListItemRegion(smdh),
                 new GameListItem(
                     QString::fromStdString(Loader::GetFileTypeString(loader->GetFileType()))),
                 new GameListItemSize(FileUtil::GetSize(physical_name)),

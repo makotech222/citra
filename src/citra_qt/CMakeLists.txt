@@ -13,11 +13,21 @@ add_executable(citra-qt
     cheat_gui.cpp
     cheatsearch.h
     cheat_gui.h
+    camera/camera_util.cpp
+    camera/camera_util.h
+    camera/still_image_camera.cpp
+    camera/still_image_camera.h
+    camera/qt_camera_factory.cpp
+    camera/qt_camera_factory.h
+    camera/qt_multimedia_camera.cpp
+    camera/qt_multimedia_camera.h
     citra-qt.rc
     configuration/config.cpp
     configuration/config.h
     configuration/configure_audio.cpp
     configuration/configure_audio.h
+    configuration/configure_camera.cpp
+    configuration/configure_camera.h
     configuration/configure_debug.cpp
     configuration/configure_debug.h
     configuration/configure_dialog.cpp
@@ -32,6 +42,8 @@ add_executable(citra-qt
     configuration/configure_system.h
     configuration/configure_web.cpp
     configuration/configure_web.h
+    debugger/console.h
+    debugger/console.cpp
     debugger/graphics/graphics.cpp
     debugger/graphics/graphics.h
     debugger/graphics/graphics_breakpoint_observer.cpp
@@ -60,11 +72,29 @@ add_executable(citra-qt
     hotkeys.h
     main.cpp
     main.h
+    multiplayer/chat_room.h
+    multiplayer/chat_room.cpp
+    multiplayer/client_room.h
+    multiplayer/client_room.cpp
+    multiplayer/direct_connect.h
+    multiplayer/direct_connect.cpp
+    multiplayer/host_room.h
+    multiplayer/host_room.cpp
+    multiplayer/lobby.h
+    multiplayer/lobby_p.h
+    multiplayer/lobby.cpp
+    multiplayer/message.h
+    multiplayer/message.cpp
+    multiplayer/state.cpp
+    multiplayer/state.h
+    multiplayer/validation.h
     ui_settings.cpp
     ui_settings.h
     updater/updater.cpp
     updater/updater.h
     updater/updater_p.h
+    util/clickable_label.h
+    util/clickable_label.cpp
     util/spinbox.cpp
     util/spinbox.h
     util/util.cpp
@@ -78,6 +108,7 @@ set(UIS
     cheat_gui.ui
     configuration/configure.ui
     configuration/configure_audio.ui
+    configuration/configure_camera.ui
     configuration/configure_debug.ui
     configuration/configure_general.ui
     configuration/configure_graphics.ui
@@ -85,12 +116,20 @@ set(UIS
     configuration/configure_system.ui
     configuration/configure_web.ui
     debugger/registers.ui
+    multiplayer/direct_connect.ui
+    multiplayer/lobby.ui
+    multiplayer/chat_room.ui
+    multiplayer/client_room.ui
+    multiplayer/host_room.ui
     aboutdialog.ui
     hotkeys.ui
     main.ui
     compatdb.ui
 )
 
+file(GLOB COMPAT_LIST
+            ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
+            ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
 file(GLOB_RECURSE ICONS ${CMAKE_SOURCE_DIR}/dist/icons/*)
 file(GLOB_RECURSE THEMES ${CMAKE_SOURCE_DIR}/dist/qt_themes/*)
 
@@ -131,6 +170,7 @@ endif()
 
 target_sources(citra-qt
     PRIVATE
+        ${COMPAT_LIST}
         ${ICONS}
         ${THEMES}
         ${UI_HDRS}
@@ -144,12 +184,20 @@ if (APPLE)
     target_sources(citra-qt PRIVATE ${MACOSX_ICON})
     set_target_properties(citra-qt PROPERTIES MACOSX_BUNDLE TRUE)
     set_target_properties(citra-qt PROPERTIES MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/Info.plist)
+elseif(WIN32)
+    # compile as a win32 gui application instead of a console application
+    target_link_libraries(citra-qt PRIVATE Qt5::WinMain)
+    if(MSVC)
+        set_target_properties(citra-qt PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS")
+    elseif(MINGW)
+        set_target_properties(citra-qt PROPERTIES LINK_FLAGS_RELEASE "-mwindows")
+    endif()
 endif()
 
 create_target_directory_groups(citra-qt)
 
 target_link_libraries(citra-qt PRIVATE audio_core common core input_common network video_core)
-target_link_libraries(citra-qt PRIVATE Boost::boost glad nihstro-headers Qt5::OpenGL Qt5::Widgets)
+target_link_libraries(citra-qt PRIVATE Boost::boost glad nihstro-headers Qt5::OpenGL Qt5::Widgets Qt5::Multimedia)
 target_link_libraries(citra-qt PRIVATE ${PLATFORM_LIBRARIES} Threads::Threads)
 
 if(UNIX AND NOT APPLE)
