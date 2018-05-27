@@ -178,6 +178,8 @@ enum : VAddr {
 
 /// Currently active page table
 void SetCurrentPageTable(PageTable* page_table);
+u8* GetStartMemAddress();
+extern u8* _baseMemoryAddress;
 PageTable* GetCurrentPageTable();
 
 /// Determines if the given VAddr is valid for the specified process.

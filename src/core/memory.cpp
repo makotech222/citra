@@ -20,7 +20,6 @@
 #include "video_core/video_core.h"
 
 namespace Memory {
-
 static std::array<u8, Memory::VRAM_SIZE> vram;
 static std::array<u8, Memory::N3DS_EXTRA_RAM_SIZE> n3ds_extra_ram;
 
@@ -31,8 +30,20 @@ void SetCurrentPageTable(PageTable* page_table) {
     if (Core::System::GetInstance().IsPoweredOn()) {
         Core::CPU().PageTableChanged();
     }
+    _baseMemoryAddress = GetStartMemAddress() - 0x0000000000100000;
+}
+u8* GetStartMemAddress() {
+    u32 start_address = 0x00000000;
+    u32 end_address = 0x08000000 + 0x08000000;
+    for (u32 i = start_address; i < end_address; i += 4096) {
+        if (Memory::IsValidVirtualAddress(i)) {
+            return current_page_table->pointers[i >> PAGE_BITS];
+        }
+    }
+    return 0;
 }
 
+u8* _baseMemoryAddress = 0;
 PageTable* GetCurrentPageTable() {
     return current_page_table;
 }
