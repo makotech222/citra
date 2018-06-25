@@ -303,6 +303,11 @@ static bool BlitTextures(GLuint src_tex, const MathUtil::Rectangle<u32>& src_rec
         buffers = GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT;
     }
 
+    // TODO (wwylele): use GL_NEAREST for shadow map texture
+    // Note: shadow map is treated as RGBA8 format in PICA, as well as in the rasterizer cache, but
+    // doing linear intepolation componentwise would cause incorrect value. However, for a
+    // well-programmed game this code path should be rarely executed for shadow map with
+    // inconsistent scale.
     glBlitFramebuffer(src_rect.left, src_rect.bottom, src_rect.right, src_rect.top, dst_rect.left,
                       dst_rect.bottom, dst_rect.right, dst_rect.top, buffers,
                       buffers == GL_COLOR_BUFFER_BIT ? GL_LINEAR : GL_NEAREST);
@@ -324,6 +329,8 @@ static bool FillSurface(const Surface& surface, const u8* fill_data,
 
     state.draw.draw_framebuffer = draw_fb_handle;
     state.Apply();
+
+    surface->InvalidateAllWatcher();
 
     if (surface->type == SurfaceType::Color || surface->type == SurfaceType::Texture) {
         glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
@@ -1020,6 +1027,8 @@ bool RasterizerCacheOpenGL::BlitSurfaces(const Surface& src_surface,
     if (!SurfaceParams::CheckFormatsBlittable(src_surface->pixel_format, dst_surface->pixel_format))
         return false;
 
+    dst_surface->InvalidateAllWatcher();
+
     return BlitTextures(src_surface->texture.handle, src_rect, dst_surface->texture.handle,
                         dst_rect, src_surface->type, read_framebuffer.handle,
                         draw_framebuffer.handle);
@@ -1417,10 +1426,12 @@ SurfaceSurfaceRect_Tuple RasterizerCacheOpenGL::GetFramebufferSurfaces(
     if (color_surface != nullptr) {
         ValidateSurface(color_surface, boost::icl::first(color_vp_interval),
                         boost::icl::length(color_vp_interval));
+        color_surface->InvalidateAllWatcher();
     }
     if (depth_surface != nullptr) {
         ValidateSurface(depth_surface, boost::icl::first(depth_vp_interval),
                         boost::icl::length(depth_vp_interval));
+        depth_surface->InvalidateAllWatcher();
     }
 
     return std::make_tuple(color_surface, depth_surface, fb_rect);

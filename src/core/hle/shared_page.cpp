@@ -8,6 +8,7 @@
 #include "core/core_timing.h"
 #include "core/hle/service/ptm/ptm.h"
 #include "core/hle/shared_page.h"
+#include "core/settings.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -83,6 +84,10 @@ void Init() {
     update_time_event =
         CoreTiming::RegisterEvent("SharedPage::UpdateTimeCallback", UpdateTimeCallback);
     CoreTiming::ScheduleEvent(0, update_time_event);
+
+    float slidestate =
+        Settings::values.toggle_3d ? (float_le)Settings::values.factor_3d / 100 : 0.0f;
+    shared_page.sliderstate_3d = slidestate;
 }
 
 void SetMacAddress(const MacAddress& addr) {
@@ -91,6 +96,10 @@ void SetMacAddress(const MacAddress& addr) {
 
 void SetWifiLinkLevel(WifiLinkLevel level) {
     shared_page.wifi_link_level = static_cast<u8>(level);
+}
+
+void Set3DLed(u8 state) {
+    shared_page.ledstate_3d = state;
 }
 
 } // namespace SharedPage

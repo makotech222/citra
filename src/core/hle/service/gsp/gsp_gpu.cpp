@@ -13,6 +13,7 @@
 #include "core/hle/kernel/shared_memory.h"
 #include "core/hle/result.h"
 #include "core/hle/service/gsp/gsp_gpu.h"
+#include "core/hle/shared_page.h"
 #include "core/hw/gpu.h"
 #include "core/hw/hw.h"
 #include "core/hw/lcd.h"
@@ -119,13 +120,14 @@ static ResultCode WriteHWRegs(u32 base_address, u32 size_in_bytes, const std::ve
     const u32 max_size_in_bytes = 0x80;
 
     if (base_address & 3 || base_address >= 0x420000) {
-        LOG_ERROR(Service_GSP,
-                  "Write address was out of range or misaligned! (address=0x%08x, size=0x%08x)",
-                  base_address, size_in_bytes);
+        NGLOG_ERROR(
+            Service_GSP,
+            "Write address was out of range or misaligned! (address=0x{:08x}, size=0x{:08x})",
+            base_address, size_in_bytes);
         return ERR_REGS_OUTOFRANGE_OR_MISALIGNED;
     } else if (size_in_bytes <= max_size_in_bytes) {
         if (size_in_bytes & 3) {
-            LOG_ERROR(Service_GSP, "Misaligned size 0x%08x", size_in_bytes);
+            NGLOG_ERROR(Service_GSP, "Misaligned size 0x{:08x}", size_in_bytes);
             return ERR_REGS_MISALIGNED;
         } else {
             size_t offset = 0;
@@ -142,7 +144,7 @@ static ResultCode WriteHWRegs(u32 base_address, u32 size_in_bytes, const std::ve
         }
 
     } else {
-        LOG_ERROR(Service_GSP, "Out of range size 0x%08x", size_in_bytes);
+        NGLOG_ERROR(Service_GSP, "Out of range size 0x{:08x}", size_in_bytes);
         return ERR_REGS_INVALID_SIZE;
     }
 }
@@ -163,13 +165,14 @@ static ResultCode WriteHWRegsWithMask(u32 base_address, u32 size_in_bytes,
     const u32 max_size_in_bytes = 0x80;
 
     if (base_address & 3 || base_address >= 0x420000) {
-        LOG_ERROR(Service_GSP,
-                  "Write address was out of range or misaligned! (address=0x%08x, size=0x%08x)",
-                  base_address, size_in_bytes);
+        NGLOG_ERROR(
+            Service_GSP,
+            "Write address was out of range or misaligned! (address=0x{:08x}, size=0x{:08x})",
+            base_address, size_in_bytes);
         return ERR_REGS_OUTOFRANGE_OR_MISALIGNED;
     } else if (size_in_bytes <= max_size_in_bytes) {
         if (size_in_bytes & 3) {
-            LOG_ERROR(Service_GSP, "Misaligned size 0x%08x", size_in_bytes);
+            NGLOG_ERROR(Service_GSP, "Misaligned size 0x{:08x}", size_in_bytes);
             return ERR_REGS_MISALIGNED;
         } else {
             size_t offset = 0;
@@ -196,7 +199,7 @@ static ResultCode WriteHWRegsWithMask(u32 base_address, u32 size_in_bytes,
         }
 
     } else {
-        LOG_ERROR(Service_GSP, "Out of range size 0x%08x", size_in_bytes);
+        NGLOG_ERROR(Service_GSP, "Out of range size 0x{:08x}", size_in_bytes);
         return ERR_REGS_INVALID_SIZE;
     }
 }
@@ -234,7 +237,7 @@ void GSP_GPU::ReadHWRegs(Kernel::HLERequestContext& ctx) {
     if ((reg_addr % 4) != 0 || reg_addr >= 0x420000) {
         IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
         rb.Push(ERR_REGS_OUTOFRANGE_OR_MISALIGNED);
-        LOG_ERROR(Service_GSP, "Invalid address 0x%08x", reg_addr);
+        NGLOG_ERROR(Service_GSP, "Invalid address 0x{:08x}", reg_addr);
         return;
     }
 
@@ -242,7 +245,7 @@ void GSP_GPU::ReadHWRegs(Kernel::HLERequestContext& ctx) {
     if ((size % 4) != 0) {
         IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
         rb.Push(ERR_REGS_MISALIGNED);
-        LOG_ERROR(Service_GSP, "Invalid size 0x%08x", size);
+        NGLOG_ERROR(Service_GSP, "Invalid size 0x{:08x}", size);
         return;
     }
 
@@ -316,8 +319,8 @@ void GSP_GPU::FlushDataCache(Kernel::HLERequestContext& ctx) {
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
     rb.Push(RESULT_SUCCESS);
 
-    LOG_DEBUG(Service_GSP, "(STUBBED) called address=0x%08X, size=0x%08X, process=%u", address,
-              size, process->process_id);
+    NGLOG_DEBUG(Service_GSP, "(STUBBED) called address=0x{:08X}, size=0x{:08X}, process={}",
+                address, size, process->process_id);
 }
 
 void GSP_GPU::SetAxiConfigQoSMode(Kernel::HLERequestContext& ctx) {
@@ -327,7 +330,7 @@ void GSP_GPU::SetAxiConfigQoSMode(Kernel::HLERequestContext& ctx) {
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
     rb.Push(RESULT_SUCCESS);
 
-    LOG_DEBUG(Service_GSP, "(STUBBED) called mode=0x%08X", mode);
+    NGLOG_DEBUG(Service_GSP, "(STUBBED) called mode=0x{:08X}", mode);
 }
 
 void GSP_GPU::RegisterInterruptRelayQueue(Kernel::HLERequestContext& ctx) {
@@ -357,7 +360,7 @@ void GSP_GPU::RegisterInterruptRelayQueue(Kernel::HLERequestContext& ctx) {
     rb.Push(session_data->thread_id);
     rb.PushCopyObjects(shared_memory);
 
-    LOG_DEBUG(Service_GSP, "called, flags=0x%08X", flags);
+    NGLOG_DEBUG(Service_GSP, "called, flags=0x{:08X}", flags);
 }
 
 void GSP_GPU::UnregisterInterruptRelayQueue(Kernel::HLERequestContext& ctx) {
@@ -370,7 +373,7 @@ void GSP_GPU::UnregisterInterruptRelayQueue(Kernel::HLERequestContext& ctx) {
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
     rb.Push(RESULT_SUCCESS);
 
-    LOG_DEBUG(Service_GSP, "called");
+    NGLOG_DEBUG(Service_GSP, "called");
 }
 
 void GSP_GPU::SignalInterruptForThread(InterruptId interrupt_id, u32 thread_id) {
@@ -380,7 +383,7 @@ void GSP_GPU::SignalInterruptForThread(InterruptId interrupt_id, u32 thread_id) 
 
     auto interrupt_event = session_data->interrupt_event;
     if (interrupt_event == nullptr) {
-        LOG_WARNING(Service_GSP, "cannot synchronize until GSP event has been created!");
+        NGLOG_WARNING(Service_GSP, "cannot synchronize until GSP event has been created!");
         return;
     }
     InterruptRelayQueue* interrupt_relay_queue = GetInterruptRelayQueue(shared_memory, thread_id);
@@ -418,7 +421,7 @@ void GSP_GPU::SignalInterruptForThread(InterruptId interrupt_id, u32 thread_id) 
  */
 void GSP_GPU::SignalInterrupt(InterruptId interrupt_id) {
     if (nullptr == shared_memory) {
-        LOG_WARNING(Service_GSP, "cannot synchronize until GSP shared memory has been created!");
+        NGLOG_WARNING(Service_GSP, "cannot synchronize until GSP shared memory has been created!");
         return;
     }
 
@@ -565,7 +568,7 @@ static void ExecuteCommand(const Command& command, u32 thread_id) {
     }
 
     default:
-        LOG_ERROR(Service_GSP, "unknown command 0x%08X", (int)command.id.Value());
+        NGLOG_ERROR(Service_GSP, "unknown command 0x{:08X}", (int)command.id.Value());
     }
 
     if (Pica::g_debug_context)
@@ -650,7 +653,7 @@ void GSP_GPU::ImportDisplayCaptureInfo(Kernel::HLERequestContext& ctx) {
     rb.PushRaw(top_entry);
     rb.PushRaw(bottom_entry);
 
-    LOG_WARNING(Service_GSP, "called");
+    NGLOG_WARNING(Service_GSP, "called");
 }
 
 void GSP_GPU::AcquireRight(Kernel::HLERequestContext& ctx) {
@@ -661,8 +664,8 @@ void GSP_GPU::AcquireRight(Kernel::HLERequestContext& ctx) {
 
     SessionData* session_data = GetSessionData(ctx.Session());
 
-    LOG_WARNING(Service_GSP, "called flag=%08X process=%u thread_id=%u", flag, process->process_id,
-                session_data->thread_id);
+    NGLOG_WARNING(Service_GSP, "called flag={:08X} process={} thread_id={}", flag,
+                  process->process_id, session_data->thread_id);
 
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
 
@@ -695,7 +698,7 @@ void GSP_GPU::ReleaseRight(Kernel::HLERequestContext& ctx) {
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
     rb.Push(RESULT_SUCCESS);
 
-    LOG_WARNING(Service_GSP, "called");
+    NGLOG_WARNING(Service_GSP, "called");
 }
 
 void GSP_GPU::StoreDataCache(Kernel::HLERequestContext& ctx) {
@@ -708,8 +711,19 @@ void GSP_GPU::StoreDataCache(Kernel::HLERequestContext& ctx) {
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
     rb.Push(RESULT_SUCCESS);
 
-    LOG_DEBUG(Service_GSP, "(STUBBED) called address=0x%08X, size=0x%08X, process=%u", address,
-              size, process->process_id);
+    NGLOG_DEBUG(Service_GSP, "(STUBBED) called address=0x{:08X}, size=0x{:08X}, process={}",
+                address, size, process->process_id);
+}
+
+void GSP_GPU::SetLedForceOff(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x1C, 1, 0);
+
+    u8 state = rp.Pop<u8>();
+    SharedPage::Set3DLed(state);
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
+    rb.Push(RESULT_SUCCESS);
+    NGLOG_DEBUG(Service_GSP, "(STUBBED) called");
 }
 
 SessionData* GSP_GPU::FindRegisteredThreadData(u32 thread_id) {
@@ -752,7 +766,7 @@ GSP_GPU::GSP_GPU() : ServiceFramework("gsp::Gpu", 2) {
         {0x00190000, nullptr, "SaveVramSysArea"},
         {0x001A0000, nullptr, "RestoreVramSysArea"},
         {0x001B0000, nullptr, "ResetGpuCore"},
-        {0x001C0040, nullptr, "SetLedForceOff"},
+        {0x001C0040, &GSP_GPU::SetLedForceOff, "SetLedForceOff"},
         {0x001D0040, nullptr, "SetTestCommand"},
         {0x001E0080, nullptr, "SetInternalPriorities"},
         {0x001F0082, &GSP_GPU::StoreDataCache, "StoreDataCache"},

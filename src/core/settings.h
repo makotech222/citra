@@ -132,6 +132,9 @@ struct Values {
     float bg_green;
     float bg_blue;
 
+    bool toggle_3d;
+    u8 factor_3d;
+
     // Audio
     std::string sink_id;
     bool enable_audio_stretching;
@@ -140,6 +143,7 @@ struct Values {
     // Camera
     std::array<std::string, Service::CAM::NumCameras> camera_name;
     std::array<std::string, Service::CAM::NumCameras> camera_config;
+    std::array<int, Service::CAM::NumCameras> camera_flip;
 
     // Debugging
     bool use_gdbstub;
