@@ -108,6 +108,10 @@ void Config::ReadValues() {
     Settings::values.frame_limit =
         static_cast<u16>(sdl2_config->GetInteger("Renderer", "frame_limit", 100));
 
+    Settings::values.toggle_3d = sdl2_config->GetBoolean("Renderer", "toggle_3d", false);
+    Settings::values.factor_3d =
+        static_cast<u8>(sdl2_config->GetInteger("Renderer", "factor_3d", 0));
+
     Settings::values.bg_red = (float)sdl2_config->GetReal("Renderer", "bg_red", 0.0);
     Settings::values.bg_green = (float)sdl2_config->GetReal("Renderer", "bg_green", 0.0);
     Settings::values.bg_blue = (float)sdl2_config->GetReal("Renderer", "bg_blue", 0.0);
@@ -155,14 +159,20 @@ void Config::ReadValues() {
         sdl2_config->Get("Camera", "camera_outer_right_name", "blank");
     Settings::values.camera_config[OuterRightCamera] =
         sdl2_config->Get("Camera", "camera_outer_right_config", "");
+    Settings::values.camera_flip[OuterRightCamera] =
+        sdl2_config->GetInteger("Camera", "camera_outer_right_flip", 0);
     Settings::values.camera_name[InnerCamera] =
         sdl2_config->Get("Camera", "camera_inner_name", "blank");
     Settings::values.camera_config[InnerCamera] =
         sdl2_config->Get("Camera", "camera_inner_config", "");
+    Settings::values.camera_flip[InnerCamera] =
+        sdl2_config->GetInteger("Camera", "camera_inner_flip", 0);
     Settings::values.camera_name[OuterLeftCamera] =
         sdl2_config->Get("Camera", "camera_outer_left_name", "blank");
     Settings::values.camera_config[OuterLeftCamera] =
         sdl2_config->Get("Camera", "camera_outer_left_config", "");
+    Settings::values.camera_flip[OuterLeftCamera] =
+        sdl2_config->GetInteger("Camera", "camera_outer_left_flip", 0);
 
     // Miscellaneous
     Settings::values.log_filter = sdl2_config->Get("Miscellaneous", "log_filter", "*:Info");

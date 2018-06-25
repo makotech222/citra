@@ -116,6 +116,14 @@ bg_red =
 bg_blue =
 bg_green =
 
+# Toggles Stereoscopic 3D
+# 0 (default): Off, 1: On
+toggle_3d =
+
+# Change 3D Intensity
+# 0 - 100: Intensity. 0 (default)
+factor_3d =
+
 [Layout]
 # Layout for the screen inside the render window.
 # 0 (default): Default Top Bottom Screen, 1: Single Screen Only, 2: Large Screen Small Screen, 3: Side by Side
@@ -178,13 +186,19 @@ camera_outer_right_name =
 # A config string for the right outer camera. Its meaning is defined by the camera engine
 camera_outer_right_config =
 
+# The image flip to apply
+# 0: None (default), 1: Horizontal, 2: Vertical, 3: Reverse
+camera_outer_right_flip =
+
 # ... for the left outer camera
 camera_outer_left_name =
 camera_outer_left_config =
+camera_outer_left_flip =
 
 # ... for the inner camera
 camera_inner_name =
 camera_inner_config =
+camera_inner_flip =
 
 [Miscellaneous]
 # A filter which removes logs below a certain logging level.

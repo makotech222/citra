@@ -139,13 +139,13 @@ GMainWindow::GMainWindow() : config(new Config()), emu_thread(nullptr) {
     ConnectWidgetEvents();
 
     SetupUIStrings();
-    NGLOG_INFO(Frontend, "Citra Version: {} | {}-{}", Common::g_build_name, Common::g_scm_branch,
-               Common::g_scm_desc);
+    NGLOG_INFO(Frontend, "Citra Version: {} | {}-{}", Common::g_build_fullname,
+               Common::g_scm_branch, Common::g_scm_desc);
 
     show();
 
     game_list->LoadCompatibilityList();
-    game_list->PopulateAsync(UISettings::values.gamedir, UISettings::values.gamedir_deepscan);
+    game_list->PopulateAsync(UISettings::values.game_dirs);
 
     // Show one-time "callout" messages to the user
     ShowCallouts();
@@ -178,6 +178,10 @@ void GMainWindow::InitializeWidgets() {
 
     game_list = new GameList(this);
     ui.horizontalLayout->addWidget(game_list);
+
+    game_list_placeholder = new GameListPlaceholder(this);
+    ui.horizontalLayout->addWidget(game_list_placeholder);
+    game_list_placeholder->setVisible(false);
 
     multiplayer_state = new MultiplayerState(this, game_list->GetModel(), ui.action_Leave_Room,
                                              ui.action_Show_Room);
@@ -306,10 +310,13 @@ void GMainWindow::InitializeRecentFileMenuActions() {
 void GMainWindow::InitializeHotkeys() {
     RegisterHotkey("Main Window", "Load File", QKeySequence::Open);
     RegisterHotkey("Main Window", "Start Emulation");
-    RegisterHotkey("Main Window", "Swap Screens", QKeySequence("F9"));
-    RegisterHotkey("Main Window", "Toggle Screen Layout", QKeySequence("F10"));
+    RegisterHotkey("Main Window", "Continue/Pause", QKeySequence(Qt::Key_F4));
+    RegisterHotkey("Main Window", "Swap Screens", QKeySequence(tr("F9")));
+    RegisterHotkey("Main Window", "Toggle Screen Layout", QKeySequence(tr("F10")));
     RegisterHotkey("Main Window", "Fullscreen", QKeySequence::FullScreen);
     RegisterHotkey("Main Window", "Exit Fullscreen", QKeySequence(Qt::Key_Escape),
+                   Qt::ApplicationShortcut);
+    RegisterHotkey("Main Window", "Toggle Speed Limit", QKeySequence("CTRL+Z"),
                    Qt::ApplicationShortcut);
     RegisterHotkey("Main Window", "Increase Speed Limit", QKeySequence("+"),
                    Qt::ApplicationShortcut);
@@ -321,6 +328,15 @@ void GMainWindow::InitializeHotkeys() {
             &GMainWindow::OnMenuLoadFile);
     connect(GetHotkey("Main Window", "Start Emulation", this), &QShortcut::activated, this,
             &GMainWindow::OnStartGame);
+    connect(GetHotkey("Main Window", "Continue/Pause", this), &QShortcut::activated, this, [&] {
+        if (emulation_running) {
+            if (emu_thread->IsRunning()) {
+                OnPauseGame();
+            } else {
+                OnStartGame();
+            }
+        }
+    });
     connect(GetHotkey("Main Window", "Swap Screens", render_window), &QShortcut::activated,
             ui.action_Screen_Layout_Swap_Screens, &QAction::trigger);
     connect(GetHotkey("Main Window", "Toggle Screen Layout", render_window), &QShortcut::activated,
@@ -334,6 +350,10 @@ void GMainWindow::InitializeHotkeys() {
             ui.action_Fullscreen->setChecked(false);
             ToggleFullscreen();
         }
+    });
+    connect(GetHotkey("Main Window", "Toggle Speed Limit", this), &QShortcut::activated, this, [&] {
+        Settings::values.use_frame_limit = !Settings::values.use_frame_limit;
+        UpdateStatusBar();
     });
     constexpr u16 SPEED_LIMIT_STEP = 5;
     connect(GetHotkey("Main Window", "Increase Speed Limit", this), &QShortcut::activated, this,
@@ -403,9 +423,14 @@ void GMainWindow::RestoreUIState() {
 
 void GMainWindow::ConnectWidgetEvents() {
     connect(game_list, &GameList::GameChosen, this, &GMainWindow::OnGameListLoadFile);
+    connect(game_list, &GameList::OpenDirectory, this, &GMainWindow::OnGameListOpenDirectory);
     connect(game_list, &GameList::OpenFolderRequested, this, &GMainWindow::OnGameListOpenFolder);
     connect(game_list, &GameList::NavigateToGamedbEntryRequested, this,
             &GMainWindow::OnGameListNavigateToGamedbEntry);
+    connect(game_list, &GameList::AddDirectory, this, &GMainWindow::OnGameListAddDirectory);
+    connect(game_list_placeholder, &GameListPlaceholder::AddDirectory, this,
+            &GMainWindow::OnGameListAddDirectory);
+    connect(game_list, &GameList::ShowList, this, &GMainWindow::OnGameListShowList);
 
     connect(this, &GMainWindow::EmulationStarting, render_window,
             &GRenderWindow::OnEmulationStarting);
@@ -423,8 +448,6 @@ void GMainWindow::ConnectMenuEvents() {
     // File
     connect(ui.action_Load_File, &QAction::triggered, this, &GMainWindow::OnMenuLoadFile);
     connect(ui.action_Install_CIA, &QAction::triggered, this, &GMainWindow::OnMenuInstallCIA);
-    connect(ui.action_Select_Game_List_Root, &QAction::triggered, this,
-            &GMainWindow::OnMenuSelectGameListRoot);
     connect(ui.action_Exit, &QAction::triggered, this, &QMainWindow::close);
 
     // Emulation
@@ -589,6 +612,10 @@ bool GMainWindow::LoadROM(const QString& filename) {
     Core::System& system{Core::System::GetInstance()};
 
     const Core::System::ResultStatus result{system.Load(render_window, filename.toStdString())};
+    std::string title;
+    system.GetAppLoader().ReadTitle(title);
+    game_title = QString::fromStdString(title);
+    SetupUIStrings();
 
     if (result != Core::System::ResultStatus::Success) {
         switch (result) {
@@ -678,6 +705,7 @@ void GMainWindow::BootGame(const QString& filename) {
     registersWidget->OnDebugModeEntered();
     if (ui.action_Single_Window_Mode->isChecked()) {
         game_list->hide();
+        game_list_placeholder->hide();
     }
     status_bar_update_timer.start(2000);
 
@@ -721,7 +749,10 @@ void GMainWindow::ShutdownGame() {
     ui.action_CheatSearch->setEnabled(false);
     ui.action_Report_Compatibility->setEnabled(false);
     render_window->hide();
-    game_list->show();
+    if (game_list->isEmpty())
+        game_list_placeholder->show();
+    else
+        game_list->show();
     game_list->setFilterFocus();
 
     // Disable status bar updates
@@ -736,6 +767,9 @@ void GMainWindow::ShutdownGame() {
     if (defer_update_prompt) {
         ShowUpdatePrompt();
     }
+
+    game_title.clear();
+    SetupUIStrings();
 }
 
 void GMainWindow::StoreRecentFile(const QString& filename) {
@@ -836,6 +870,48 @@ void GMainWindow::OnGameListNavigateToGamedbEntry(
     QDesktopServices::openUrl(QUrl("https://citra-emu.org/game/" + directory));
 }
 
+void GMainWindow::OnGameListOpenDirectory(QString directory) {
+    QString path;
+    if (directory == "INSTALLED") {
+        path =
+            QString::fromStdString(FileUtil::GetUserPath(D_SDMC_IDX).c_str() +
+                                   std::string("Nintendo "
+                                               "3DS/00000000000000000000000000000000/"
+                                               "00000000000000000000000000000000/title/00040000"));
+    } else if (directory == "SYSTEM") {
+        path =
+            QString::fromStdString(FileUtil::GetUserPath(D_NAND_IDX).c_str() +
+                                   std::string("00000000000000000000000000000000/title/00040010"));
+    } else {
+        path = directory;
+    }
+    if (!QFileInfo::exists(path)) {
+        QMessageBox::critical(this, tr("Error Opening %1").arg(path), tr("Folder does not exist!"));
+        return;
+    }
+    QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+}
+
+void GMainWindow::OnGameListAddDirectory() {
+    QString dir_path = QFileDialog::getExistingDirectory(this, tr("Select Directory"));
+    if (dir_path.isEmpty())
+        return;
+    UISettings::GameDir game_dir{dir_path, false, true};
+    if (!UISettings::values.game_dirs.contains(game_dir)) {
+        UISettings::values.game_dirs.append(game_dir);
+        game_list->PopulateAsync(UISettings::values.game_dirs);
+    } else {
+        NGLOG_WARNING(Frontend, "Selected directory is already in the game list");
+    }
+}
+
+void GMainWindow::OnGameListShowList(bool show) {
+    if (emulation_running && ui.action_Single_Window_Mode->isChecked())
+        return;
+    game_list->setVisible(show);
+    game_list_placeholder->setVisible(!show);
+};
+
 void GMainWindow::OnMenuLoadFile() {
     QString extensions;
     for (const auto& piece : game_list->supported_file_extensions)
@@ -850,14 +926,6 @@ void GMainWindow::OnMenuLoadFile() {
         UISettings::values.roms_path = QFileInfo(filename).path();
 
         BootGame(filename);
-    }
-}
-
-void GMainWindow::OnMenuSelectGameListRoot() {
-    QString dir_path = QFileDialog::getExistingDirectory(this, tr("Select Directory"));
-    if (!dir_path.isEmpty()) {
-        UISettings::values.gamedir = dir_path;
-        game_list->PopulateAsync(dir_path, UISettings::values.gamedir_deepscan);
     }
 }
 
@@ -1099,6 +1167,7 @@ void GMainWindow::OnConfigure() {
     if (result == QDialog::Accepted) {
         configureDialog.applyConfiguration();
         UpdateUITheme();
+        emit UpdateThemedIcons();
         SyncMenuUISettings();
         config->Save();
     }
@@ -1334,7 +1403,6 @@ void GMainWindow::UpdateUITheme() {
         QIcon::setThemeName(":/icons/default");
     }
     QIcon::setThemeSearchPaths(theme_paths);
-    emit UpdateThemedIcons();
 }
 
 void GMainWindow::LoadTranslation() {
@@ -1372,8 +1440,11 @@ void GMainWindow::OnLanguageChanged(const QString& locale) {
 }
 
 void GMainWindow::SetupUIStrings() {
-    setWindowTitle(
-        tr("Citra %1| %2-%3").arg(Common::g_build_name, Common::g_scm_branch, Common::g_scm_desc));
+    if (game_title.isEmpty()) {
+        setWindowTitle(tr("Citra %1").arg(Common::g_build_fullname));
+    } else {
+        setWindowTitle(tr("Citra %1| %2").arg(Common::g_build_fullname, game_title));
+    }
 }
 
 void GMainWindow::SyncMenuUISettings() {

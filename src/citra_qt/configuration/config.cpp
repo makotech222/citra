@@ -100,6 +100,8 @@ void Config::ReadValues() {
     qt_config->endGroup();
 
     qt_config->beginGroup("Layout");
+    Settings::values.toggle_3d = qt_config->value("toggle_3d", false).toBool();
+    Settings::values.factor_3d = qt_config->value("factor_3d", 0).toInt();
     Settings::values.layout_option =
         static_cast<Settings::LayoutOption>(qt_config->value("layout_option").toInt());
     Settings::values.swap_screen = qt_config->value("swap_screen", false).toBool();
@@ -128,14 +130,19 @@ void Config::ReadValues() {
         qt_config->value("camera_outer_right_name", "blank").toString().toStdString();
     Settings::values.camera_config[OuterRightCamera] =
         qt_config->value("camera_outer_right_config", "").toString().toStdString();
+    Settings::values.camera_flip[OuterRightCamera] =
+        qt_config->value("camera_outer_right_flip", "0").toInt();
     Settings::values.camera_name[InnerCamera] =
         qt_config->value("camera_inner_name", "blank").toString().toStdString();
     Settings::values.camera_config[InnerCamera] =
         qt_config->value("camera_inner_config", "").toString().toStdString();
+    Settings::values.camera_flip[InnerCamera] = qt_config->value("camera_inner_flip", "").toInt();
     Settings::values.camera_name[OuterLeftCamera] =
         qt_config->value("camera_outer_left_name", "blank").toString().toStdString();
     Settings::values.camera_config[OuterLeftCamera] =
         qt_config->value("camera_outer_left_config", "").toString().toStdString();
+    Settings::values.camera_flip[OuterLeftCamera] =
+        qt_config->value("camera_outer_left_flip", "").toInt();
     qt_config->endGroup();
 
     qt_config->beginGroup("Data Storage");
@@ -202,8 +209,34 @@ void Config::ReadValues() {
     qt_config->beginGroup("Paths");
     UISettings::values.roms_path = qt_config->value("romsPath").toString();
     UISettings::values.symbols_path = qt_config->value("symbolsPath").toString();
-    UISettings::values.gamedir = qt_config->value("gameListRootDir", ".").toString();
-    UISettings::values.gamedir_deepscan = qt_config->value("gameListDeepScan", false).toBool();
+    UISettings::values.game_dir_deprecated = qt_config->value("gameListRootDir", ".").toString();
+    UISettings::values.game_dir_deprecated_deepscan =
+        qt_config->value("gameListDeepScan", false).toBool();
+    int size = qt_config->beginReadArray("gamedirs");
+    for (int i = 0; i < size; ++i) {
+        qt_config->setArrayIndex(i);
+        UISettings::GameDir game_dir;
+        game_dir.path = qt_config->value("path").toString();
+        game_dir.deep_scan = qt_config->value("deep_scan", false).toBool();
+        game_dir.expanded = qt_config->value("expanded", true).toBool();
+        UISettings::values.game_dirs.append(game_dir);
+    }
+    qt_config->endArray();
+    // create NAND and SD card directories if empty, these are not removable through the UI, also
+    // carries over old game list settings if present
+    if (UISettings::values.game_dirs.isEmpty()) {
+        UISettings::GameDir game_dir;
+        game_dir.path = "INSTALLED";
+        game_dir.expanded = true;
+        UISettings::values.game_dirs.append(game_dir);
+        game_dir.path = "SYSTEM";
+        UISettings::values.game_dirs.append(game_dir);
+        if (UISettings::values.game_dir_deprecated != ".") {
+            game_dir.path = UISettings::values.game_dir_deprecated;
+            game_dir.deep_scan = UISettings::values.game_dir_deprecated_deepscan;
+            UISettings::values.game_dirs.append(game_dir);
+        }
+    }
     UISettings::values.recent_files = qt_config->value("recentFiles").toStringList();
     UISettings::values.language = qt_config->value("language", "").toString();
     qt_config->endGroup();
@@ -292,6 +325,8 @@ void Config::SaveValues() {
     qt_config->endGroup();
 
     qt_config->beginGroup("Layout");
+    qt_config->setValue("toggle_3d", Settings::values.toggle_3d);
+    qt_config->setValue("factor_3d", Settings::values.factor_3d);
     qt_config->setValue("layout_option", static_cast<int>(Settings::values.layout_option));
     qt_config->setValue("swap_screen", Settings::values.swap_screen);
     qt_config->setValue("custom_layout", Settings::values.custom_layout);
@@ -317,14 +352,17 @@ void Config::SaveValues() {
                         QString::fromStdString(Settings::values.camera_name[OuterRightCamera]));
     qt_config->setValue("camera_outer_right_config",
                         QString::fromStdString(Settings::values.camera_config[OuterRightCamera]));
+    qt_config->setValue("camera_outer_right_flip", Settings::values.camera_flip[OuterRightCamera]);
     qt_config->setValue("camera_inner_name",
                         QString::fromStdString(Settings::values.camera_name[InnerCamera]));
     qt_config->setValue("camera_inner_config",
                         QString::fromStdString(Settings::values.camera_config[InnerCamera]));
+    qt_config->setValue("camera_inner_flip", Settings::values.camera_flip[InnerCamera]);
     qt_config->setValue("camera_outer_left_name",
                         QString::fromStdString(Settings::values.camera_name[OuterLeftCamera]));
     qt_config->setValue("camera_outer_left_config",
                         QString::fromStdString(Settings::values.camera_config[OuterLeftCamera]));
+    qt_config->setValue("camera_outer_left_flip", Settings::values.camera_flip[OuterLeftCamera]);
     qt_config->endGroup();
 
     qt_config->beginGroup("Data Storage");
@@ -378,8 +416,15 @@ void Config::SaveValues() {
     qt_config->beginGroup("Paths");
     qt_config->setValue("romsPath", UISettings::values.roms_path);
     qt_config->setValue("symbolsPath", UISettings::values.symbols_path);
-    qt_config->setValue("gameListRootDir", UISettings::values.gamedir);
-    qt_config->setValue("gameListDeepScan", UISettings::values.gamedir_deepscan);
+    qt_config->beginWriteArray("gamedirs");
+    for (int i = 0; i < UISettings::values.game_dirs.size(); ++i) {
+        qt_config->setArrayIndex(i);
+        const auto& game_dir = UISettings::values.game_dirs.at(i);
+        qt_config->setValue("path", game_dir.path);
+        qt_config->setValue("deep_scan", game_dir.deep_scan);
+        qt_config->setValue("expanded", game_dir.expanded);
+    }
+    qt_config->endArray();
     qt_config->setValue("recentFiles", UISettings::values.recent_files);
     qt_config->setValue("language", UISettings::values.language);
     qt_config->endGroup();
