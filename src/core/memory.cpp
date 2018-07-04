@@ -49,8 +49,8 @@ PageTable* GetCurrentPageTable() {
 }
 
 static void MapPages(PageTable& page_table, u32 base, u32 size, u8* memory, PageType type) {
-    NGLOG_DEBUG(HW_Memory, "Mapping {} onto {:08X}-{:08X}", (void*)memory, base * PAGE_SIZE,
-                (base + size) * PAGE_SIZE);
+    LOG_DEBUG(HW_Memory, "Mapping {} onto {:08X}-{:08X}", (void*)memory, base * PAGE_SIZE,
+              (base + size) * PAGE_SIZE);
 
     RasterizerFlushVirtualRegion(base << PAGE_BITS, size * PAGE_SIZE,
                                  FlushMode::FlushAndInvalidate);
@@ -162,7 +162,7 @@ T Read(const VAddr vaddr) {
     PageType type = current_page_table->attributes[vaddr >> PAGE_BITS];
     switch (type) {
     case PageType::Unmapped:
-        NGLOG_ERROR(HW_Memory, "unmapped Read{} @ 0x{:08X}", sizeof(T) * 8, vaddr);
+        LOG_ERROR(HW_Memory, "unmapped Read{} @ 0x{:08X}", sizeof(T) * 8, vaddr);
         return 0;
     case PageType::Memory:
         ASSERT_MSG(false, "Mapped memory page without a pointer @ {:08X}", vaddr);
@@ -199,8 +199,8 @@ void Write(const VAddr vaddr, const T data) {
     PageType type = current_page_table->attributes[vaddr >> PAGE_BITS];
     switch (type) {
     case PageType::Unmapped:
-        NGLOG_ERROR(HW_Memory, "unmapped Write{} 0x{:08X} @ 0x{:08X}", sizeof(data) * 8, (u32)data,
-                    vaddr);
+        LOG_ERROR(HW_Memory, "unmapped Write{} 0x{:08X} @ 0x{:08X}", sizeof(data) * 8, (u32)data,
+                  vaddr);
         return;
     case PageType::Memory:
         ASSERT_MSG(false, "Mapped memory page without a pointer @ {:08X}", vaddr);
@@ -257,7 +257,7 @@ u8* GetPointer(const VAddr vaddr) {
         return GetPointerFromVMA(vaddr);
     }
 
-    NGLOG_ERROR(HW_Memory, "unknown GetPointer @ 0x{:08x}", vaddr);
+    LOG_ERROR(HW_Memory, "unknown GetPointer @ 0x{:08x}", vaddr);
     return nullptr;
 }
 
@@ -295,12 +295,12 @@ u8* GetPhysicalPointer(PAddr address) {
         });
 
     if (area == std::end(memory_areas)) {
-        NGLOG_ERROR(HW_Memory, "unknown GetPhysicalPointer @ 0x{:08X}", address);
+        LOG_ERROR(HW_Memory, "unknown GetPhysicalPointer @ 0x{:08X}", address);
         return nullptr;
     }
 
     if (area->paddr_base == IO_AREA_PADDR) {
-        NGLOG_ERROR(HW_Memory, "MMIO mappings are not supported yet. phys_addr=0x{:08X}", address);
+        LOG_ERROR(HW_Memory, "MMIO mappings are not supported yet. phys_addr=0x{:08X}", address);
         return nullptr;
     }
 
@@ -350,9 +350,9 @@ void RasterizerMarkRegionCached(PAddr start, u32 size, bool cached) {
         // the end address of VRAM, causing the Virtual->Physical translation to fail when flushing
         // parts of the texture.
         if (!maybe_vaddr) {
-            NGLOG_ERROR(HW_Memory,
-                        "Trying to flush a cached region to an invalid physical address {:08X}",
-                        paddr);
+            LOG_ERROR(HW_Memory,
+                      "Trying to flush a cached region to an invalid physical address {:08X}",
+                      paddr);
             continue;
         }
         VAddr vaddr = *maybe_vaddr;
@@ -496,9 +496,9 @@ void ReadBlock(const Kernel::Process& process, const VAddr src_addr, void* dest_
 
         switch (page_table.attributes[page_index]) {
         case PageType::Unmapped: {
-            NGLOG_ERROR(HW_Memory,
-                        "unmapped ReadBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
-                        current_vaddr, src_addr, size);
+            LOG_ERROR(HW_Memory,
+                      "unmapped ReadBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
+                      current_vaddr, src_addr, size);
             std::memset(dest_buffer, 0, copy_amount);
             break;
         }
@@ -565,9 +565,9 @@ void WriteBlock(const Kernel::Process& process, const VAddr dest_addr, const voi
 
         switch (page_table.attributes[page_index]) {
         case PageType::Unmapped: {
-            NGLOG_ERROR(HW_Memory,
-                        "unmapped WriteBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
-                        current_vaddr, dest_addr, size);
+            LOG_ERROR(HW_Memory,
+                      "unmapped WriteBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
+                      current_vaddr, dest_addr, size);
             break;
         }
         case PageType::Memory: {
@@ -618,9 +618,9 @@ void ZeroBlock(const Kernel::Process& process, const VAddr dest_addr, const size
 
         switch (page_table.attributes[page_index]) {
         case PageType::Unmapped: {
-            NGLOG_ERROR(HW_Memory,
-                        "unmapped ZeroBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
-                        current_vaddr, dest_addr, size);
+            LOG_ERROR(HW_Memory,
+                      "unmapped ZeroBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
+                      current_vaddr, dest_addr, size);
             break;
         }
         case PageType::Memory: {
@@ -668,9 +668,9 @@ void CopyBlock(const Kernel::Process& process, VAddr dest_addr, VAddr src_addr, 
 
         switch (page_table.attributes[page_index]) {
         case PageType::Unmapped: {
-            NGLOG_ERROR(HW_Memory,
-                        "unmapped CopyBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
-                        current_vaddr, src_addr, size);
+            LOG_ERROR(HW_Memory,
+                      "unmapped CopyBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
+                      current_vaddr, src_addr, size);
             ZeroBlock(process, dest_addr, copy_amount);
             break;
         }
@@ -773,7 +773,7 @@ boost::optional<PAddr> TryVirtualToPhysicalAddress(const VAddr addr) {
 PAddr VirtualToPhysicalAddress(const VAddr addr) {
     auto paddr = TryVirtualToPhysicalAddress(addr);
     if (!paddr) {
-        NGLOG_ERROR(HW_Memory, "Unknown virtual address @ 0x{:08X}", addr);
+        LOG_ERROR(HW_Memory, "Unknown virtual address @ 0x{:08X}", addr);
         // To help with debugging, set bit on address so that it's obviously invalid.
         return addr | 0x80000000;
     }

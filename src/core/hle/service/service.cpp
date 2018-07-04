@@ -30,7 +30,7 @@
 #include "core/hle/service/fs/archive.h"
 #include "core/hle/service/fs/fs_user.h"
 #include "core/hle/service/gsp/gsp.h"
-#include "core/hle/service/gsp_lcd.h"
+#include "core/hle/service/gsp/gsp_lcd.h"
 #include "core/hle/service/hid/hid.h"
 #include "core/hle/service/http_c.h"
 #include "core/hle/service/ir/ir.h"
@@ -43,7 +43,7 @@
 #include "core/hle/service/nim/nim.h"
 #include "core/hle/service/ns/ns.h"
 #include "core/hle/service/nwm/nwm.h"
-#include "core/hle/service/pm_app.h"
+#include "core/hle/service/pm/pm.h"
 #include "core/hle/service/ptm/ptm.h"
 #include "core/hle/service/pxi/pxi.h"
 #include "core/hle/service/qtm/qtm.h"
@@ -94,15 +94,14 @@ void Interface::HandleSyncRequest(SharedPtr<ServerSession> server_session) {
         std::string function_name = (itr == m_functions.end())
                                         ? Common::StringFromFormat("0x%08X", cmd_buff[0])
                                         : itr->second.name;
-        NGLOG_ERROR(Service, "unknown / unimplemented {}",
-                    MakeFunctionString(function_name.c_str(), GetPortName().c_str(), cmd_buff));
+        LOG_ERROR(Service, "unknown / unimplemented {}",
+                  MakeFunctionString(function_name.c_str(), GetPortName().c_str(), cmd_buff));
 
         // TODO(bunnei): Hack - ignore error
         cmd_buff[1] = 0;
         return;
     }
-    NGLOG_TRACE(Service, "{}",
-                MakeFunctionString(itr->second.name, GetPortName().c_str(), cmd_buff));
+    LOG_TRACE(Service, "{}", MakeFunctionString(itr->second.name, GetPortName().c_str(), cmd_buff));
 
     itr->second.func(this);
 }
@@ -159,7 +158,7 @@ void ServiceFrameworkBase::ReportUnimplementedFunction(u32* cmd_buf, const Funct
     }
     buf.push_back('}');
 
-    NGLOG_ERROR(Service, "unknown / unimplemented {}", fmt::to_string(buf));
+    LOG_ERROR(Service, "unknown / unimplemented {}", fmt::to_string(buf));
     // TODO(bunnei): Hack - ignore error
     cmd_buf[1] = 0;
 }
@@ -180,7 +179,7 @@ void ServiceFrameworkBase::HandleSyncRequest(SharedPtr<ServerSession> server_ses
     context.PopulateFromIncomingCommandBuffer(cmd_buf, *Kernel::g_current_process,
                                               Kernel::g_handle_table);
 
-    NGLOG_TRACE(Service, "{}", MakeFunctionString(info->name, GetServiceName().c_str(), cmd_buf));
+    LOG_TRACE(Service, "{}", MakeFunctionString(info->name, GetServiceName().c_str(), cmd_buf));
     handler_invoker(this, info->handler_callback, context);
 
     auto thread = Kernel::GetCurrentThread();
@@ -242,40 +241,38 @@ void Init(std::shared_ptr<SM::ServiceManager>& sm) {
     CAM::InstallInterfaces(*sm);
     CECD::Init();
     CFG::InstallInterfaces(*sm);
-    DLP::Init();
+    DLP::InstallInterfaces(*sm);
     FRD::InstallInterfaces(*sm);
     GSP::InstallInterfaces(*sm);
     HID::InstallInterfaces(*sm);
     IR::InstallInterfaces(*sm);
-    MVD::Init();
+    MVD::InstallInterfaces(*sm);
     NDM::InstallInterfaces(*sm);
     NEWS::InstallInterfaces(*sm);
     NFC::InstallInterfaces(*sm);
     NIM::InstallInterfaces(*sm);
     NWM::Init();
     PTM::InstallInterfaces(*sm);
-    QTM::Init();
+    QTM::InstallInterfaces(*sm);
 
     AddService(new CSND::CSND_SND);
     AddService(new DSP_DSP::Interface);
-    AddService(new GSP::GSP_LCD);
     AddService(new HTTP::HTTP_C);
-    AddService(new PM::PM_APP);
+    PM::InstallInterfaces(*sm);
     AddService(new SOC::SOC_U);
-    AddService(new SSL::SSL_C);
+    SSL::InstallInterfaces(*sm);
     Y2R::InstallInterfaces(*sm);
 
-    NGLOG_DEBUG(Service, "initialized OK");
+    LOG_DEBUG(Service, "initialized OK");
 }
 
 /// Shutdown ServiceManager
 void Shutdown() {
-    DLP::Shutdown();
     CECD::Shutdown();
     BOSS::Shutdown();
     FS::ArchiveShutdown();
 
     g_kernel_named_ports.clear();
-    NGLOG_DEBUG(Service, "shutdown OK");
+    LOG_DEBUG(Service, "shutdown OK");
 }
 } // namespace Service
