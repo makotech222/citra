@@ -16,7 +16,7 @@ static void SetShaderUniformBlockBinding(GLuint shader, const char* name, Unifor
     }
     GLint ub_size = 0;
     glGetActiveUniformBlockiv(shader, ub_index, GL_UNIFORM_BLOCK_DATA_SIZE, &ub_size);
-    ASSERT_MSG(ub_size == expected_size, "Uniform block size did not match! Got %d, expected %zu",
+    ASSERT_MSG(ub_size == expected_size, "Uniform block size did not match! Got {}, expected {}",
                static_cast<int>(ub_size), expected_size);
     glUniformBlockBinding(shader, ub_index, static_cast<GLuint>(binding));
 }
@@ -55,13 +55,8 @@ static void SetShaderSamplerBindings(GLuint shader) {
     SetShaderSamplerBinding(shader, "tex_cube", TextureUnits::TextureCube);
 
     // Set the texture samplers to correspond to different lookup table texture units
-    SetShaderSamplerBinding(shader, "lighting_lut", TextureUnits::LightingLUT);
-    SetShaderSamplerBinding(shader, "fog_lut", TextureUnits::FogLUT);
-    SetShaderSamplerBinding(shader, "proctex_noise_lut", TextureUnits::ProcTexNoiseLUT);
-    SetShaderSamplerBinding(shader, "proctex_color_map", TextureUnits::ProcTexColorMap);
-    SetShaderSamplerBinding(shader, "proctex_alpha_map", TextureUnits::ProcTexAlphaMap);
-    SetShaderSamplerBinding(shader, "proctex_lut", TextureUnits::ProcTexLUT);
-    SetShaderSamplerBinding(shader, "proctex_diff_lut", TextureUnits::ProcTexDiffLUT);
+    SetShaderSamplerBinding(shader, "texture_buffer_lut_rg", TextureUnits::TextureBufferLUT_RG);
+    SetShaderSamplerBinding(shader, "texture_buffer_lut_rgba", TextureUnits::TextureBufferLUT_RGBA);
 
     SetShaderImageBinding(shader, "shadow_buffer", ImageUnits::ShadowBuffer);
     SetShaderImageBinding(shader, "shadow_texture_px", ImageUnits::ShadowTexturePX);

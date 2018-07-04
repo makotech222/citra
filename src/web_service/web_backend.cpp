@@ -31,16 +31,14 @@ std::unique_ptr<httplib::Client> GetClientFor(const LUrlParser::clParseURL& pars
         if (!parsedUrl.GetPort(&port)) {
             port = HTTP_PORT;
         }
-        return std::make_unique<hl::Client>(parsedUrl.m_Host.c_str(), port, TIMEOUT_SECONDS,
-                                            hl::HttpVersion::v1_1);
+        return std::make_unique<hl::Client>(parsedUrl.m_Host.c_str(), port, TIMEOUT_SECONDS);
     } else if (parsedUrl.m_Scheme == "https") {
         if (!parsedUrl.GetPort(&port)) {
             port = HTTPS_PORT;
         }
-        return std::make_unique<hl::SSLClient>(parsedUrl.m_Host.c_str(), port, TIMEOUT_SECONDS,
-                                               hl::HttpVersion::v1_1);
+        return std::make_unique<hl::SSLClient>(parsedUrl.m_Host.c_str(), port, TIMEOUT_SECONDS);
     } else {
-        NGLOG_ERROR(WebService, "Bad URL scheme {}", parsedUrl.m_Scheme);
+        LOG_ERROR(WebService, "Bad URL scheme {}", parsedUrl.m_Scheme);
         return nullptr;
     }
 }
@@ -54,7 +52,7 @@ std::future<Common::WebResult> PostJson(const std::string& url, const std::strin
     lup parsedUrl = lup::ParseURL(url);
 
     if (url.empty() || !parsedUrl.IsValid()) {
-        NGLOG_ERROR(WebService, "URL is invalid");
+        LOG_ERROR(WebService, "URL is invalid");
         return std::async(std::launch::deferred, []() {
             return Common::WebResult{Common::WebResult::Code::InvalidURL, "URL is invalid"};
         });
@@ -62,7 +60,7 @@ std::future<Common::WebResult> PostJson(const std::string& url, const std::strin
 
     const bool are_credentials_provided{!token.empty() && !username.empty()};
     if (!allow_anonymous && !are_credentials_provided) {
-        NGLOG_ERROR(WebService, "Credentials must be provided for authenticated requests");
+        LOG_ERROR(WebService, "Credentials must be provided for authenticated requests");
         return std::async(std::launch::deferred, []() {
             return Common::WebResult{Common::WebResult::Code::CredentialsMissing,
                                      "Credentials needed"};
@@ -100,13 +98,13 @@ std::future<Common::WebResult> PostJson(const std::string& url, const std::strin
         hl::Response response;
 
         if (!cli->send(request, response)) {
-            NGLOG_ERROR(WebService, "POST to {} returned null", url);
+            LOG_ERROR(WebService, "POST to {} returned null", url);
             return Common::WebResult{Common::WebResult::Code::LibError, "Null response"};
         }
 
         if (response.status >= 400) {
-            NGLOG_ERROR(WebService, "POST to {} returned error status code: {}", url,
-                        response.status);
+            LOG_ERROR(WebService, "POST to {} returned error status code: {}", url,
+                      response.status);
             return Common::WebResult{Common::WebResult::Code::HttpError,
                                      std::to_string(response.status)};
         }
@@ -115,8 +113,8 @@ std::future<Common::WebResult> PostJson(const std::string& url, const std::strin
 
         if (content_type == response.headers.end() ||
             content_type->second.find("application/json") == std::string::npos) {
-            NGLOG_ERROR(WebService, "POST to {} returned wrong content: {}", url,
-                        content_type->second);
+            LOG_ERROR(WebService, "POST to {} returned wrong content: {}", url,
+                      content_type->second);
             return Common::WebResult{Common::WebResult::Code::WrongContent, content_type->second};
         }
 
@@ -134,13 +132,13 @@ std::future<T> GetJson(std::function<T(const std::string&)> func, const std::str
     lup parsedUrl = lup::ParseURL(url);
 
     if (url.empty() || !parsedUrl.IsValid()) {
-        NGLOG_ERROR(WebService, "URL is invalid");
+        LOG_ERROR(WebService, "URL is invalid");
         return std::async(std::launch::deferred, [func{std::move(func)}]() { return func(""); });
     }
 
     const bool are_credentials_provided{!token.empty() && !username.empty()};
     if (!allow_anonymous && !are_credentials_provided) {
-        NGLOG_ERROR(WebService, "Credentials must be provided for authenticated requests");
+        LOG_ERROR(WebService, "Credentials must be provided for authenticated requests");
         return std::async(std::launch::deferred, [func{std::move(func)}]() { return func(""); });
     }
 
@@ -172,13 +170,12 @@ std::future<T> GetJson(std::function<T(const std::string&)> func, const std::str
         hl::Response response;
 
         if (!cli->send(request, response)) {
-            NGLOG_ERROR(WebService, "GET to {} returned null", url);
+            LOG_ERROR(WebService, "GET to {} returned null", url);
             return func("");
         }
 
         if (response.status >= 400) {
-            NGLOG_ERROR(WebService, "GET to {} returned error status code: {}", url,
-                        response.status);
+            LOG_ERROR(WebService, "GET to {} returned error status code: {}", url, response.status);
             return func("");
         }
 
@@ -186,8 +183,8 @@ std::future<T> GetJson(std::function<T(const std::string&)> func, const std::str
 
         if (content_type == response.headers.end() ||
             content_type->second.find("application/json") == std::string::npos) {
-            NGLOG_ERROR(WebService, "GET to {} returned wrong content: {}", url,
-                        content_type->second);
+            LOG_ERROR(WebService, "GET to {} returned wrong content: {}", url,
+                      content_type->second);
             return func("");
         }
 
@@ -211,13 +208,13 @@ void DeleteJson(const std::string& url, const std::string& data, const std::stri
     lup parsedUrl = lup::ParseURL(url);
 
     if (url.empty() || !parsedUrl.IsValid()) {
-        NGLOG_ERROR(WebService, "URL is invalid");
+        LOG_ERROR(WebService, "URL is invalid");
         return;
     }
 
     const bool are_credentials_provided{!token.empty() && !username.empty()};
     if (!are_credentials_provided) {
-        NGLOG_ERROR(WebService, "Credentials must be provided for authenticated requests");
+        LOG_ERROR(WebService, "Credentials must be provided for authenticated requests");
         return;
     }
 
@@ -244,13 +241,13 @@ void DeleteJson(const std::string& url, const std::string& data, const std::stri
         hl::Response response;
 
         if (!cli->send(request, response)) {
-            NGLOG_ERROR(WebService, "DELETE to {} returned null", url);
+            LOG_ERROR(WebService, "DELETE to {} returned null", url);
             return;
         }
 
         if (response.status >= 400) {
-            NGLOG_ERROR(WebService, "DELETE to {} returned error status code: {}", url,
-                        response.status);
+            LOG_ERROR(WebService, "DELETE to {} returned error status code: {}", url,
+                      response.status);
             return;
         }
 
@@ -258,8 +255,8 @@ void DeleteJson(const std::string& url, const std::string& data, const std::stri
 
         if (content_type == response.headers.end() ||
             content_type->second.find("application/json") == std::string::npos) {
-            NGLOG_ERROR(WebService, "DELETE to {} returned wrong content: {}", url,
-                        content_type->second);
+            LOG_ERROR(WebService, "DELETE to {} returned wrong content: {}", url,
+                      content_type->second);
             return;
         }
 

@@ -178,7 +178,8 @@ void DumpShader(const std::string& filename, const ShaderRegs& config,
                 }
             } catch (const std::out_of_range&) {
                 DEBUG_ASSERT_MSG(false, "Unknown output attribute mapping");
-                LOG_ERROR(HW_GPU, "Unknown output attribute mapping: %03x, %03x, %03x, %03x",
+                LOG_ERROR(HW_GPU,
+                          "Unknown output attribute mapping: {:03x}, {:03x}, {:03x}, {:03x}",
                           (int)output_attributes[i].map_x.Value(),
                           (int)output_attributes[i].map_y.Value(),
                           (int)output_attributes[i].map_z.Value(),
@@ -456,7 +457,7 @@ void DumpTevStageConfig(const std::array<TexturingRegs::TevStageConfig, 6>& stag
                       GetTevStageConfigColorCombinerString(tev_stage) + "   " +
                       GetTevStageConfigAlphaCombinerString(tev_stage) + "\n";
     }
-    LOG_TRACE(HW_GPU, "%s", stage_info.c_str());
+    LOG_TRACE(HW_GPU, "{}", stage_info);
 }
 
 } // namespace DebugUtils

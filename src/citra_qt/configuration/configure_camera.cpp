@@ -139,7 +139,7 @@ void ConfigureCamera::updateImageSourceUI() {
         }
         break;
     default:
-        NGLOG_ERROR(Service_CAM, "Unknown image source {}", image_source);
+        LOG_ERROR(Service_CAM, "Unknown image source {}", image_source);
     }
     ui->system_camera_label->setHidden(image_source != 2);
     ui->system_camera->setHidden(image_source != 2);
@@ -267,16 +267,12 @@ void ConfigureCamera::setConfiguration() {
 
 void ConfigureCamera::onToolButtonClicked() {
     stopPreviewing();
-    int camera_selection = getSelectedCameraIndex();
-    QString filter;
-    if (camera_name[camera_selection] == "image") {
-        QList<QByteArray> types = QImageReader::supportedImageFormats();
-        QList<QString> temp_filters;
-        for (const QByteArray& type : types) {
-            temp_filters << QString("*." + QString(type));
-        }
-        filter = tr("Supported image files (%1)").arg(temp_filters.join(" "));
+    QList<QByteArray> types = QImageReader::supportedImageFormats();
+    QList<QString> temp_filters;
+    for (const QByteArray& type : types) {
+        temp_filters << QString("*." + QString(type));
     }
+    QString filter = tr("Supported image files (%1)").arg(temp_filters.join(" "));
     QString path = QFileDialog::getOpenFileName(this, tr("Open File"), ".", filter);
     if (!path.isEmpty()) {
         ui->camera_file->setText(path);
@@ -306,7 +302,7 @@ ConfigureCamera::CameraPosition ConfigureCamera::getCameraSelection() {
                                                               : CameraPosition::RearRight;
         }
     default:
-        NGLOG_ERROR(Frontend, "Unknown camera selection");
+        LOG_ERROR(Frontend, "Unknown camera selection");
         return CameraPosition::Front;
     }
 }
