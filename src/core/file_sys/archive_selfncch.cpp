@@ -36,7 +36,7 @@ class ExeFSSectionFile final : public FileBackend {
 public:
     explicit ExeFSSectionFile(std::shared_ptr<std::vector<u8>> data_) : data(std::move(data_)) {}
 
-    ResultVal<size_t> Read(u64 offset, size_t length, u8* buffer) const override {
+    ResultVal<std::size_t> Read(u64 offset, std::size_t length, u8* buffer) const override {
         if (offset != 0) {
             LOG_ERROR(Service_FS, "offset must be zero!");
             return ERROR_UNSUPPORTED_OPEN_FLAGS;
@@ -48,10 +48,11 @@ public:
         }
 
         std::memcpy(buffer, data->data(), data->size());
-        return MakeResult<size_t>(data->size());
+        return MakeResult<std::size_t>(data->size());
     }
 
-    ResultVal<size_t> Write(u64 offset, size_t length, bool flush, const u8* buffer) override {
+    ResultVal<std::size_t> Write(u64 offset, std::size_t length, bool flush,
+                                 const u8* buffer) override {
         LOG_ERROR(Service_FS, "The file is read-only!");
         return ERROR_UNSUPPORTED_OPEN_FLAGS;
     }
@@ -174,8 +175,7 @@ private:
             std::unique_ptr<DelayGenerator> delay_generator =
                 std::make_unique<RomFSDelayGenerator>();
             return MakeResult<std::unique_ptr<FileBackend>>(
-                std::make_unique<IVFCFile>(ncch_data.romfs_file, ncch_data.romfs_offset,
-                                           ncch_data.romfs_size, std::move(delay_generator)));
+                std::make_unique<IVFCFile>(ncch_data.romfs_file, std::move(delay_generator)));
         } else {
             LOG_INFO(Service_FS, "Unable to read RomFS");
             return ERROR_ROMFS_NOT_FOUND;
@@ -187,8 +187,7 @@ private:
             std::unique_ptr<DelayGenerator> delay_generator =
                 std::make_unique<RomFSDelayGenerator>();
             return MakeResult<std::unique_ptr<FileBackend>>(std::make_unique<IVFCFile>(
-                ncch_data.update_romfs_file, ncch_data.update_romfs_offset,
-                ncch_data.update_romfs_size, std::move(delay_generator)));
+                ncch_data.update_romfs_file, std::move(delay_generator)));
         } else {
             LOG_INFO(Service_FS, "Unable to read update RomFS");
             return ERROR_ROMFS_NOT_FOUND;
@@ -252,17 +251,14 @@ void ArchiveFactory_SelfNCCH::Register(Loader::AppLoader& app_loader) {
 
     NCCHData& data = ncch_data[program_id];
 
-    std::shared_ptr<FileUtil::IOFile> romfs_file_;
-    if (Loader::ResultStatus::Success ==
-        app_loader.ReadRomFS(romfs_file_, data.romfs_offset, data.romfs_size)) {
+    std::shared_ptr<RomFSReader> romfs_file_;
+    if (Loader::ResultStatus::Success == app_loader.ReadRomFS(romfs_file_)) {
 
         data.romfs_file = std::move(romfs_file_);
     }
 
-    std::shared_ptr<FileUtil::IOFile> update_romfs_file;
-    if (Loader::ResultStatus::Success == app_loader.ReadUpdateRomFS(update_romfs_file,
-                                                                    data.update_romfs_offset,
-                                                                    data.update_romfs_size)) {
+    std::shared_ptr<RomFSReader> update_romfs_file;
+    if (Loader::ResultStatus::Success == app_loader.ReadUpdateRomFS(update_romfs_file)) {
 
         data.update_romfs_file = std::move(update_romfs_file);
     }

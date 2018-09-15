@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <array>
 #include <bitset>
 #include <cstddef>
 #include <memory>
@@ -12,7 +13,7 @@
 #include <boost/container/static_vector.hpp>
 #include "common/bit_field.h"
 #include "common/common_types.h"
-#include "core/hle/kernel/kernel.h"
+#include "core/hle/kernel/object.h"
 #include "core/hle/kernel/vm_manager.h"
 
 namespace Kernel {
@@ -55,6 +56,12 @@ class ResourceLimit;
 struct MemoryRegionInfo;
 
 struct CodeSet final : public Object {
+    struct Segment {
+        std::size_t offset = 0;
+        VAddr addr = 0;
+        u32 size = 0;
+    };
+
     static SharedPtr<CodeSet> Create(std::string name, u64 program_id);
 
     std::string GetTypeName() const override {
@@ -69,21 +76,39 @@ struct CodeSet final : public Object {
         return HANDLE_TYPE;
     }
 
+    Segment& CodeSegment() {
+        return segments[0];
+    }
+
+    const Segment& CodeSegment() const {
+        return segments[0];
+    }
+
+    Segment& RODataSegment() {
+        return segments[1];
+    }
+
+    const Segment& RODataSegment() const {
+        return segments[1];
+    }
+
+    Segment& DataSegment() {
+        return segments[2];
+    }
+
+    const Segment& DataSegment() const {
+        return segments[2];
+    }
+
+    std::shared_ptr<std::vector<u8>> memory;
+
+    std::array<Segment, 3> segments;
+    VAddr entrypoint;
+
     /// Name of the process
     std::string name;
     /// Title ID corresponding to the process
     u64 program_id;
-
-    std::shared_ptr<std::vector<u8>> memory;
-
-    struct Segment {
-        size_t offset = 0;
-        VAddr addr = 0;
-        u32 size = 0;
-    };
-
-    Segment code, rodata, data;
-    VAddr entrypoint;
 
 private:
     CodeSet();
@@ -134,7 +159,7 @@ public:
      * Parses a list of kernel capability descriptors (as found in the ExHeader) and applies them
      * to this process.
      */
-    void ParseKernelCaps(const u32* kernel_caps, size_t len);
+    void ParseKernelCaps(const u32* kernel_caps, std::size_t len);
 
     /**
      * Applies address space changes and launches the process main thread.

@@ -7,11 +7,13 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <vector>
 #include "common/common_types.h"
 #include "common/file_util.h"
 #include "core/file_sys/archive_backend.h"
 #include "core/file_sys/directory_backend.h"
 #include "core/file_sys/file_backend.h"
+#include "core/file_sys/romfs_reader.h"
 #include "core/hle/result.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,7 +22,7 @@
 namespace FileSys {
 
 class IVFCDelayGenerator : public DelayGenerator {
-    u64 GetReadDelayNs(size_t length) override {
+    u64 GetReadDelayNs(std::size_t length) override {
         // This is the delay measured for a romfs read.
         // For now we will take that as a default
         static constexpr u64 slope(94);
@@ -33,7 +35,7 @@ class IVFCDelayGenerator : public DelayGenerator {
 
 class RomFSDelayGenerator : public DelayGenerator {
 public:
-    u64 GetReadDelayNs(size_t length) override {
+    u64 GetReadDelayNs(std::size_t length) override {
         // The delay was measured on O3DS and O2DS with
         // https://gist.github.com/B3n30/ac40eac20603f519ff106107f4ac9182
         // from the results the average of each length was taken.
@@ -47,7 +49,7 @@ public:
 
 class ExeFSDelayGenerator : public DelayGenerator {
 public:
-    u64 GetReadDelayNs(size_t length) override {
+    u64 GetReadDelayNs(std::size_t length) override {
         // The delay was measured on O3DS and O2DS with
         // https://gist.github.com/B3n30/ac40eac20603f519ff106107f4ac9182
         // from the results the average of each length was taken.
@@ -66,7 +68,7 @@ public:
  */
 class IVFCArchive : public ArchiveBackend {
 public:
-    IVFCArchive(std::shared_ptr<FileUtil::IOFile> file, u64 offset, u64 size);
+    IVFCArchive(std::shared_ptr<RomFSReader> file);
 
     std::string GetName() const override;
 
@@ -83,18 +85,16 @@ public:
     u64 GetFreeBytes() const override;
 
 protected:
-    std::shared_ptr<FileUtil::IOFile> romfs_file;
-    u64 data_offset;
-    u64 data_size;
+    std::shared_ptr<RomFSReader> romfs_file;
 };
 
 class IVFCFile : public FileBackend {
 public:
-    IVFCFile(std::shared_ptr<FileUtil::IOFile> file, u64 offset, u64 size,
-             std::unique_ptr<DelayGenerator> delay_generator_);
+    IVFCFile(std::shared_ptr<RomFSReader> file, std::unique_ptr<DelayGenerator> delay_generator_);
 
-    ResultVal<size_t> Read(u64 offset, size_t length, u8* buffer) const override;
-    ResultVal<size_t> Write(u64 offset, size_t length, bool flush, const u8* buffer) override;
+    ResultVal<std::size_t> Read(u64 offset, std::size_t length, u8* buffer) const override;
+    ResultVal<std::size_t> Write(u64 offset, std::size_t length, bool flush,
+                                 const u8* buffer) override;
     u64 GetSize() const override;
     bool SetSize(u64 size) const override;
     bool Close() const override {
@@ -103,9 +103,7 @@ public:
     void Flush() const override {}
 
 private:
-    std::shared_ptr<FileUtil::IOFile> romfs_file;
-    u64 data_offset;
-    u64 data_size;
+    std::shared_ptr<RomFSReader> romfs_file;
 };
 
 class IVFCDirectory : public DirectoryBackend {
@@ -116,6 +114,27 @@ public:
     bool Close() const override {
         return false;
     }
+};
+
+class IVFCFileInMemory : public FileBackend {
+public:
+    IVFCFileInMemory(std::vector<u8> bytes, u64 offset, u64 size,
+                     std::unique_ptr<DelayGenerator> delay_generator_);
+
+    ResultVal<std::size_t> Read(u64 offset, std::size_t length, u8* buffer) const override;
+    ResultVal<std::size_t> Write(u64 offset, std::size_t length, bool flush,
+                                 const u8* buffer) override;
+    u64 GetSize() const override;
+    bool SetSize(u64 size) const override;
+    bool Close() const override {
+        return false;
+    }
+    void Flush() const override {}
+
+private:
+    std::vector<u8> romfs_file;
+    u64 data_offset;
+    u64 data_size;
 };
 
 } // namespace FileSys

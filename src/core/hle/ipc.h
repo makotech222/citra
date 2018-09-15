@@ -28,27 +28,15 @@ inline u32* GetCommandBuffer(const int offset = 0) {
                                     offset);
 }
 
-/// Offset into static buffers, relative to command buffer header
-static const int kStaticBuffersOffset = 0x100;
-
-/**
- * Returns a pointer to the static buffers area in the current thread's TLS
- * TODO(Subv): cf. GetCommandBuffer
- * @param offset Optional offset into static buffers area (in bytes)
- * @return Pointer to static buffers area
- */
-inline u32* GetStaticBuffers(const int offset = 0) {
-    return GetCommandBuffer(kStaticBuffersOffset + offset);
-}
 } // namespace Kernel
 
 namespace IPC {
 
 /// Size of the command buffer area, in 32-bit words.
-constexpr size_t COMMAND_BUFFER_LENGTH = 0x100 / sizeof(u32);
+constexpr std::size_t COMMAND_BUFFER_LENGTH = 0x100 / sizeof(u32);
 
 // Maximum number of static buffers per thread.
-constexpr size_t MAX_STATIC_BUFFERS = 16;
+constexpr std::size_t MAX_STATIC_BUFFERS = 16;
 
 // These errors are commonly returned by invalid IPC translations, so alias them here for
 // convenience.
@@ -57,7 +45,7 @@ using Kernel::ERR_INVALID_BUFFER_DESCRIPTOR;
 constexpr auto ERR_INVALID_HANDLE = Kernel::ERR_INVALID_HANDLE_OS;
 
 enum DescriptorType : u32 {
-    // Buffer related desciptors types (mask : 0x0F)
+    // Buffer related descriptors types (mask : 0x0F)
     StaticBuffer = 0x02,
     PXIBuffer = 0x04,
     MappedBuffer = 0x08,
@@ -125,7 +113,7 @@ union StaticBufferDescInfo {
     BitField<14, 18, u32> size;
 };
 
-inline u32 StaticBufferDesc(size_t size, u8 buffer_id) {
+inline u32 StaticBufferDesc(std::size_t size, u8 buffer_id) {
     StaticBufferDescInfo info{};
     info.descriptor_type.Assign(StaticBuffer);
     info.buffer_id.Assign(buffer_id);
@@ -163,7 +151,7 @@ union MappedBufferDescInfo {
     BitField<4, 28, u32> size;
 };
 
-inline u32 MappedBufferDesc(size_t size, MappedBufferPermissions perms) {
+inline u32 MappedBufferDesc(std::size_t size, MappedBufferPermissions perms) {
     MappedBufferDescInfo info{};
     info.flags.Assign(MappedBuffer);
     info.perms.Assign(perms);

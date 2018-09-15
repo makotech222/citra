@@ -7,6 +7,7 @@
 #pragma once
 
 #include "common/common_types.h"
+#include "core/hle/kernel/thread.h"
 
 namespace GDBStub {
 
@@ -20,7 +21,7 @@ enum class BreakpointType {
 };
 
 struct BreakpointAddress {
-    PAddr address;
+    VAddr address;
     BreakpointType type;
 };
 
@@ -69,7 +70,7 @@ void HandlePacket();
  * @param addr Address to search from.
  * @param type Type of breakpoint.
  */
-BreakpointAddress GetNextBreakpointFromAddress(u32 addr, GDBStub::BreakpointType type);
+BreakpointAddress GetNextBreakpointFromAddress(VAddr addr, GDBStub::BreakpointType type);
 
 /**
  * Check if a breakpoint of the specified type exists at the given address.
@@ -77,7 +78,7 @@ BreakpointAddress GetNextBreakpointFromAddress(u32 addr, GDBStub::BreakpointType
  * @param addr Address of breakpoint.
  * @param type Type of breakpoint.
  */
-bool CheckBreakpoint(u32 addr, GDBStub::BreakpointType type);
+bool CheckBreakpoint(VAddr addr, GDBStub::BreakpointType type);
 
 // If set to true, the CPU will halt at the beginning of the next CPU loop.
 bool GetCpuHaltFlag();
@@ -91,4 +92,12 @@ bool GetCpuStepFlag();
  * @param is_step
  */
 void SetCpuStepFlag(bool is_step);
+
+/**
+ * Send trap signal from thread back to the gdbstub server.
+ *
+ * @param thread Sending thread.
+ * @param trap Trap no.
+ */
+void SendTrap(Kernel::Thread* thread, int trap);
 } // namespace GDBStub

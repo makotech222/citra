@@ -9,6 +9,8 @@
 
 namespace AudioCore {
 
+constexpr char auto_device_name[] = "auto";
+
 /**
  * This class is an interface for an audio sink. An audio sink accepts samples in stereo signed
  * PCM16 format to be output. Sinks *do not* handle resampling and expect the correct sample rate.
@@ -27,19 +29,10 @@ public:
      * @param samples Samples in interleaved stereo PCM16 format.
      * @param sample_count Number of samples.
      */
-    virtual void EnqueueSamples(const s16* samples, size_t sample_count) = 0;
+    virtual void EnqueueSamples(const s16* samples, std::size_t sample_count) = 0;
 
     /// Samples enqueued that have not been played yet.
     virtual std::size_t SamplesInQueue() const = 0;
-
-    /**
-     * Sets the desired output device.
-     * @param device_id ID of the desired device.
-     */
-    virtual void SetDevice(int device_id) = 0;
-
-    /// Returns the list of available devices.
-    virtual std::vector<std::string> GetDeviceList() const = 0;
 };
 
 } // namespace AudioCore

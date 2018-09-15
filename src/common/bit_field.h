@@ -111,12 +111,6 @@
 template <std::size_t Position, std::size_t Bits, typename T>
 struct BitField {
 private:
-    // We hide the copy assigment operator here, because the default copy
-    // assignment would copy the full storage value, rather than just the bits
-    // relevant to this particular bit field.
-    // We don't delete it because we want BitField to be trivially copyable.
-    BitField& operator=(const BitField&) = default;
-
     // StorageType is T for non-enum types and the underlying type of T if
     // T is an enumeration. Note that T is wrapped within an enable_if in the
     // former case to workaround compile errors which arise when using
@@ -128,9 +122,11 @@ private:
     using StorageTypeU = std::make_unsigned_t<StorageType>;
 
 public:
+    BitField& operator=(const BitField&) = default;
+
     /// Constants to allow limited introspection of fields if needed
-    static constexpr size_t position = Position;
-    static constexpr size_t bits = Bits;
+    static constexpr std::size_t position = Position;
+    static constexpr std::size_t bits = Bits;
     static constexpr StorageType mask = (((StorageTypeU)~0) >> (8 * sizeof(T) - bits)) << position;
 
     /**
@@ -178,8 +174,7 @@ public:
         return ExtractValue(storage);
     }
 
-    // TODO: we may want to change this to explicit operator bool() if it's bug-free in VS2015
-    FORCE_INLINE bool ToBool() const {
+    constexpr explicit operator bool() const {
         return Value() != 0;
     }
 

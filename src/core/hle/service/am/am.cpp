@@ -6,6 +6,7 @@
 #include <cinttypes>
 #include <cstddef>
 #include <cstring>
+#include <fmt/format.h>
 #include "common/file_util.h"
 #include "common/logging/log.h"
 #include "common/string_util.h"
@@ -49,12 +50,16 @@ struct TitleInfo {
 
 static_assert(sizeof(TitleInfo) == 0x18, "Title info structure size is wrong");
 
+constexpr u8 OWNERSHIP_DOWNLOADED = 0x01;
+constexpr u8 OWNERSHIP_OWNED = 0x02;
+
 struct ContentInfo {
     u16_le index;
     u16_le type;
     u32_le content_id;
     u64_le size;
-    u64_le romfs_size;
+    u8 ownership;
+    INSERT_PADDING_BYTES(0x7);
 };
 
 static_assert(sizeof(ContentInfo) == 0x18, "Content info structure size is wrong");
@@ -69,12 +74,13 @@ struct TicketInfo {
 
 static_assert(sizeof(TicketInfo) == 0x18, "Ticket info structure size is wrong");
 
-ResultVal<size_t> CIAFile::Read(u64 offset, size_t length, u8* buffer) const {
+ResultVal<std::size_t> CIAFile::Read(u64 offset, std::size_t length, u8* buffer) const {
     UNIMPLEMENTED();
-    return MakeResult<size_t>(length);
+    return MakeResult<std::size_t>(length);
 }
 
-ResultVal<size_t> CIAFile::WriteTitleMetadata(u64 offset, size_t length, const u8* buffer) {
+ResultVal<std::size_t> CIAFile::WriteTitleMetadata(u64 offset, std::size_t length,
+                                                   const u8* buffer) {
     container.LoadTitleMetadata(data, container.GetTitleMetadataOffset());
     FileSys::TitleMetadata tmd = container.GetTitleMetadata();
     tmd.Print();
@@ -106,10 +112,10 @@ ResultVal<size_t> CIAFile::WriteTitleMetadata(u64 offset, size_t length, const u
     content_written.resize(container.GetTitleMetadata().GetContentCount());
     install_state = CIAInstallState::TMDLoaded;
 
-    return MakeResult<size_t>(length);
+    return MakeResult<std::size_t>(length);
 }
 
-ResultVal<size_t> CIAFile::WriteContentData(u64 offset, size_t length, const u8* buffer) {
+ResultVal<std::size_t> CIAFile::WriteContentData(u64 offset, std::size_t length, const u8* buffer) {
     // Data is not being buffered, so we have to keep track of how much of each <ID>.app
     // has been written since we might get a written buffer which contains multiple .app
     // contents or only part of a larger .app's contents.
@@ -148,10 +154,11 @@ ResultVal<size_t> CIAFile::WriteContentData(u64 offset, size_t length, const u8*
         }
     }
 
-    return MakeResult<size_t>(length);
+    return MakeResult<std::size_t>(length);
 }
 
-ResultVal<size_t> CIAFile::Write(u64 offset, size_t length, bool flush, const u8* buffer) {
+ResultVal<std::size_t> CIAFile::Write(u64 offset, std::size_t length, bool flush,
+                                      const u8* buffer) {
     written += length;
 
     // TODO(shinyquagsire23): Can we assume that things will only be written in sequence?
@@ -163,9 +170,9 @@ ResultVal<size_t> CIAFile::Write(u64 offset, size_t length, bool flush, const u8
     // content sizes so it ends up becoming a problem of keeping track of how much has been
     // written and what we have been able to pick up.
     if (install_state == CIAInstallState::InstallStarted) {
-        size_t buf_copy_size = std::min(length, FileSys::CIA_HEADER_SIZE);
-        size_t buf_max_size =
-            std::min(static_cast<size_t>(offset + length), FileSys::CIA_HEADER_SIZE);
+        std::size_t buf_copy_size = std::min(length, FileSys::CIA_HEADER_SIZE);
+        std::size_t buf_max_size =
+            std::min(static_cast<std::size_t>(offset + length), FileSys::CIA_HEADER_SIZE);
         data.resize(buf_max_size);
         memcpy(data.data() + offset, buffer, buf_copy_size);
 
@@ -179,18 +186,18 @@ ResultVal<size_t> CIAFile::Write(u64 offset, size_t length, bool flush, const u8
 
     // If we don't have a header yet, we can't pull offsets of other sections
     if (install_state == CIAInstallState::InstallStarted)
-        return MakeResult<size_t>(length);
+        return MakeResult<std::size_t>(length);
 
     // If we have been given data before (or including) .app content, pull it into
     // our buffer, but only pull *up to* the content offset, no further.
     if (offset < container.GetContentOffset()) {
-        size_t buf_loaded = data.size();
-        size_t copy_offset = std::max(static_cast<size_t>(offset), buf_loaded);
-        size_t buf_offset = buf_loaded - offset;
-        size_t buf_copy_size =
-            std::min(length, static_cast<size_t>(container.GetContentOffset() - offset)) -
+        std::size_t buf_loaded = data.size();
+        std::size_t copy_offset = std::max(static_cast<std::size_t>(offset), buf_loaded);
+        std::size_t buf_offset = buf_loaded - offset;
+        std::size_t buf_copy_size =
+            std::min(length, static_cast<std::size_t>(container.GetContentOffset() - offset)) -
             buf_loaded;
-        size_t buf_max_size = std::min(offset + length, container.GetContentOffset());
+        std::size_t buf_max_size = std::min(offset + length, container.GetContentOffset());
         data.resize(buf_max_size);
         memcpy(data.data() + copy_offset, buffer + buf_offset, buf_copy_size);
     }
@@ -207,14 +214,14 @@ ResultVal<size_t> CIAFile::Write(u64 offset, size_t length, bool flush, const u8
 
     // Content data sizes can only be retrieved from TMD data
     if (install_state != CIAInstallState::TMDLoaded)
-        return MakeResult<size_t>(length);
+        return MakeResult<std::size_t>(length);
 
     // From this point forward, data will no longer be buffered in data
     auto result = WriteContentData(offset, length, buffer);
     if (result.Failed())
         return result;
 
-    return MakeResult<size_t>(length);
+    return MakeResult<std::size_t>(length);
 }
 
 u64 CIAFile::GetSize() const {
@@ -227,8 +234,8 @@ bool CIAFile::SetSize(u64 size) const {
 
 bool CIAFile::Close() const {
     bool complete = true;
-    for (size_t i = 0; i < container.GetTitleMetadata().GetContentCount(); i++) {
-        if (content_written[i] < container.GetContentSize(i))
+    for (std::size_t i = 0; i < container.GetTitleMetadata().GetContentCount(); i++) {
+        if (content_written[i] < container.GetContentSize(static_cast<u16>(i)))
             complete = false;
     }
 
@@ -289,8 +296,8 @@ InstallStatus InstallCIA(const std::string& path,
         Service::AM::CIAFile installFile(
             Service::AM::GetTitleMediaType(container.GetTitleMetadata().GetTitleID()));
 
-        for (size_t i = 0; i < container.GetTitleMetadata().GetContentCount(); i++) {
-            if (container.GetTitleMetadata().GetContentTypeByIndex(i) &
+        for (std::size_t i = 0; i < container.GetTitleMetadata().GetContentCount(); i++) {
+            if (container.GetTitleMetadata().GetContentTypeByIndex(static_cast<u16>(i)) &
                 FileSys::TMDContentTypeFlag::Encrypted) {
                 LOG_ERROR(Service_AM, "File {} is encrypted! Aborting...", path);
                 return InstallStatus::ErrorEncrypted;
@@ -302,9 +309,9 @@ InstallStatus InstallCIA(const std::string& path,
             return InstallStatus::ErrorFailedToOpenFile;
 
         std::array<u8, 0x10000> buffer;
-        size_t total_bytes_read = 0;
+        std::size_t total_bytes_read = 0;
         while (total_bytes_read != file.GetSize()) {
-            size_t bytes_read = file.ReadBytes(buffer.data(), buffer.size());
+            std::size_t bytes_read = file.ReadBytes(buffer.data(), buffer.size());
             auto result = installFile.Write(static_cast<u64>(total_bytes_read), bytes_read, true,
                                             static_cast<u8*>(buffer.data()));
 
@@ -376,7 +383,7 @@ std::string GetTitleMetadataPath(Service::FS::MediaType media_type, u64 tid, boo
     if (base_id == update_id)
         update_id++;
 
-    return content_path + Common::StringFromFormat("%08x.tmd", (update ? update_id : base_id));
+    return content_path + fmt::format("{:08x}.tmd", (update ? update_id : base_id));
 }
 
 std::string GetTitleContentPath(Service::FS::MediaType media_type, u64 tid, u16 index,
@@ -395,7 +402,13 @@ std::string GetTitleContentPath(Service::FS::MediaType media_type, u64 tid, u16 
     u32 content_id = 0;
     FileSys::TitleMetadata tmd;
     if (tmd.Load(tmd_path) == Loader::ResultStatus::Success) {
-        content_id = tmd.GetContentIDByIndex(index);
+        if (index < tmd.GetContentCount()) {
+            content_id = tmd.GetContentIDByIndex(index);
+        } else {
+            LOG_ERROR(Service_AM, "Attempted to get path for non-existent content index {:04x}.",
+                      index);
+            return "";
+        }
 
         // TODO(shinyquagsire23): how does DLC actually get this folder on hardware?
         // For now, check if the second (index 1) content has the optional flag set, for most
@@ -407,7 +420,7 @@ std::string GetTitleContentPath(Service::FS::MediaType media_type, u64 tid, u16 
         }
     }
 
-    return Common::StringFromFormat("%s%08x.app", content_path.c_str(), content_id);
+    return fmt::format("{}{:08x}.app", content_path, content_id);
 }
 
 std::string GetTitlePath(Service::FS::MediaType media_type, u64 tid) {
@@ -415,8 +428,7 @@ std::string GetTitlePath(Service::FS::MediaType media_type, u64 tid) {
     u32 low = static_cast<u32>(tid & 0xFFFFFFFF);
 
     if (media_type == Service::FS::MediaType::NAND || media_type == Service::FS::MediaType::SDMC)
-        return Common::StringFromFormat("%s%08x/%08x/", GetMediaTitlePath(media_type).c_str(), high,
-                                        low);
+        return fmt::format("{}{:08x}/{:08x}/", GetMediaTitlePath(media_type), high, low);
 
     if (media_type == Service::FS::MediaType::GameCard) {
         // TODO(shinyquagsire23): get current app path if TID matches?
@@ -429,13 +441,11 @@ std::string GetTitlePath(Service::FS::MediaType media_type, u64 tid) {
 
 std::string GetMediaTitlePath(Service::FS::MediaType media_type) {
     if (media_type == Service::FS::MediaType::NAND)
-        return Common::StringFromFormat("%s%s/title/", FileUtil::GetUserPath(D_NAND_IDX).c_str(),
-                                        SYSTEM_ID);
+        return fmt::format("{}{}/title/", FileUtil::GetUserPath(D_NAND_IDX), SYSTEM_ID);
 
     if (media_type == Service::FS::MediaType::SDMC)
-        return Common::StringFromFormat("%sNintendo 3DS/%s/%s/title/",
-                                        FileUtil::GetUserPath(D_SDMC_IDX).c_str(), SYSTEM_ID,
-                                        SDCARD_ID);
+        return fmt::format("{}Nintendo 3DS/{}/{}/title/", FileUtil::GetUserPath(D_SDMC_IDX),
+                           SYSTEM_ID, SDCARD_ID);
 
     if (media_type == Service::FS::MediaType::GameCard) {
         // TODO(shinyquagsire23): get current app parent folder if TID matches?
@@ -484,7 +494,7 @@ void Module::Interface::GetNumPrograms(Kernel::HLERequestContext& ctx) {
 
     IPC::RequestBuilder rb = rp.MakeBuilder(2, 0);
     rb.Push(RESULT_SUCCESS);
-    rb.Push<u32>(am->am_title_list[media_type].size());
+    rb.Push<u32>(static_cast<u32>(am->am_title_list[media_type].size()));
 }
 
 void Module::Interface::FindDLCContentInfos(Kernel::HLERequestContext& ctx) {
@@ -517,20 +527,33 @@ void Module::Interface::FindDLCContentInfos(Kernel::HLERequestContext& ctx) {
     if (tmd.Load(tmd_path) == Loader::ResultStatus::Success) {
         std::size_t write_offset = 0;
         // Get info for each content index requested
-        for (size_t i = 0; i < content_count; i++) {
+        for (std::size_t i = 0; i < content_count; i++) {
             std::shared_ptr<FileUtil::IOFile> romfs_file;
             u64 romfs_offset = 0;
-            u64 romfs_size = 0;
 
-            FileSys::NCCHContainer ncch_container(GetTitleContentPath(media_type, title_id, i));
-            ncch_container.ReadRomFS(romfs_file, romfs_offset, romfs_size);
+            if (content_requested[i] >= tmd.GetContentCount()) {
+                LOG_ERROR(Service_AM,
+                          "Attempted to get info for non-existent content index {:04x}.",
+                          content_requested[i]);
+
+                IPC::RequestBuilder rb = rp.MakeBuilder(1, 4);
+                rb.Push<u32>(-1); // TODO(Steveice10): Find the right error code
+                rb.PushMappedBuffer(content_requested_in);
+                rb.PushMappedBuffer(content_info_out);
+                return;
+            }
 
             ContentInfo content_info = {};
-            content_info.index = static_cast<u16>(i);
+            content_info.index = content_requested[i];
             content_info.type = tmd.GetContentTypeByIndex(content_requested[i]);
             content_info.content_id = tmd.GetContentIDByIndex(content_requested[i]);
             content_info.size = tmd.GetContentSizeByIndex(content_requested[i]);
-            content_info.romfs_size = romfs_size;
+            content_info.ownership =
+                OWNERSHIP_OWNED; // TODO(Steveice10): Pull this from the ticket.
+
+            if (FileUtil::Exists(GetTitleContentPath(media_type, title_id, content_requested[i]))) {
+                content_info.ownership |= OWNERSHIP_DOWNLOADED;
+            }
 
             content_info_out.Write(&content_info, write_offset, sizeof(ContentInfo));
             write_offset += sizeof(ContentInfo);
@@ -569,25 +592,28 @@ void Module::Interface::ListDLCContentInfos(Kernel::HLERequestContext& ctx) {
     u32 copied = 0;
     FileSys::TitleMetadata tmd;
     if (tmd.Load(tmd_path) == Loader::ResultStatus::Success) {
-        copied = std::min(content_count, static_cast<u32>(tmd.GetContentCount()));
+        u32 end_index =
+            std::min(start_index + content_count, static_cast<u32>(tmd.GetContentCount()));
         std::size_t write_offset = 0;
-        for (u32 i = start_index; i < copied; i++) {
+        for (u32 i = start_index; i < end_index; i++) {
             std::shared_ptr<FileUtil::IOFile> romfs_file;
             u64 romfs_offset = 0;
-            u64 romfs_size = 0;
-
-            FileSys::NCCHContainer ncch_container(GetTitleContentPath(media_type, title_id, i));
-            ncch_container.ReadRomFS(romfs_file, romfs_offset, romfs_size);
 
             ContentInfo content_info = {};
             content_info.index = static_cast<u16>(i);
             content_info.type = tmd.GetContentTypeByIndex(i);
             content_info.content_id = tmd.GetContentIDByIndex(i);
             content_info.size = tmd.GetContentSizeByIndex(i);
-            content_info.romfs_size = romfs_size;
+            content_info.ownership =
+                OWNERSHIP_OWNED; // TODO(Steveice10): Pull this from the ticket.
+
+            if (FileUtil::Exists(GetTitleContentPath(media_type, title_id, i))) {
+                content_info.ownership |= OWNERSHIP_DOWNLOADED;
+            }
 
             content_info_out.Write(&content_info, write_offset, sizeof(ContentInfo));
             write_offset += sizeof(ContentInfo);
+            copied++;
         }
     }
 
@@ -854,7 +880,7 @@ void Module::Interface::GetDLCContentInfoCount(Kernel::HLERequestContext& ctx) {
 
     FileSys::TitleMetadata tmd;
     if (tmd.Load(tmd_path) == Loader::ResultStatus::Success) {
-        rb.Push<u32>(tmd.GetContentCount());
+        rb.Push<u32>(static_cast<u32>(tmd.GetContentCount()));
     } else {
         rb.Push<u32>(1); // Number of content infos plus one
         LOG_WARNING(Service_AM, "(STUBBED) called media_type={}, title_id=0x{:016x}",

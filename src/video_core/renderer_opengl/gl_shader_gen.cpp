@@ -62,6 +62,7 @@ layout (std140) uniform shader_data {
     int proctex_alpha_map_offset;
     int proctex_lut_offset;
     int proctex_diff_lut_offset;
+    float proctex_bias;
     ivec4 lighting_lut_offset[NUM_LIGHTING_SAMPLERS / 4];
     vec3 fog_color;
     vec2 proctex_noise_f;
@@ -128,7 +129,7 @@ PicaFSConfig PicaFSConfig::BuildFromRegs(const Pica::Regs& regs) {
     // shader uniform instead.
     const auto& tev_stages = regs.texturing.GetTevStages();
     DEBUG_ASSERT(state.tev_stages.size() == tev_stages.size());
-    for (size_t i = 0; i < tev_stages.size(); i++) {
+    for (std::size_t i = 0; i < tev_stages.size(); i++) {
         const auto& tev_stage = tev_stages[i];
         state.tev_stages[i].sources_raw = tev_stage.sources_raw;
         state.tev_stages[i].modifiers_raw = tev_stage.modifiers_raw;
@@ -226,7 +227,12 @@ PicaFSConfig PicaFSConfig::BuildFromRegs(const Pica::Regs& regs) {
         state.proctex.u_shift = regs.texturing.proctex.u_shift;
         state.proctex.v_shift = regs.texturing.proctex.v_shift;
         state.proctex.lut_width = regs.texturing.proctex_lut.width;
-        state.proctex.lut_offset = regs.texturing.proctex_lut_offset;
+        state.proctex.lut_offset0 = regs.texturing.proctex_lut_offset.level0;
+        state.proctex.lut_offset1 = regs.texturing.proctex_lut_offset.level1;
+        state.proctex.lut_offset2 = regs.texturing.proctex_lut_offset.level2;
+        state.proctex.lut_offset3 = regs.texturing.proctex_lut_offset.level3;
+        state.proctex.lod_min = regs.texturing.proctex_lut.lod_min;
+        state.proctex.lod_max = regs.texturing.proctex_lut.lod_max;
         state.proctex.lut_filter = regs.texturing.proctex_lut.filter;
     }
 
@@ -266,8 +272,8 @@ void PicaGSConfigCommonRaw::Init(const Pica::Regs& regs) {
             regs.rasterizer.vs_output_attributes[attrib].map_w};
         for (u32 comp = 0; comp < 4; ++comp) {
             const auto semantic = semantics[comp];
-            if (static_cast<size_t>(semantic) < 24) {
-                semantic_maps[static_cast<size_t>(semantic)] = {attrib, comp};
+            if (static_cast<std::size_t>(semantic) < 24) {
+                semantic_maps[static_cast<std::size_t>(semantic)] = {attrib, comp};
             } else if (semantic != VSOutputAttributes::INVALID) {
                 LOG_ERROR(Render_OpenGL, "Invalid/unknown semantic id: {}",
                           static_cast<u32>(semantic));
@@ -319,6 +325,8 @@ static std::string SampleTexture(const PicaFSConfig& config, unsigned texture_un
             return "shadowTexture(texcoord0, texcoord0_w)";
         case TexturingRegs::TextureConfig::ShadowCube:
             return "shadowTextureCube(texcoord0, texcoord0_w)";
+        case TexturingRegs::TextureConfig::Disabled:
+            return "vec4(0.0)";
         default:
             LOG_CRITICAL(HW_GPU, "Unhandled texture type {:x}",
                          static_cast<int>(state.texture0_type));
@@ -1122,6 +1130,41 @@ float ProcTexNoiseCoef(vec2 x) {
         )";
     }
 
+    out += "vec4 SampleProcTexColor(float lut_coord, int level) {\n";
+    out += "int lut_width = " + std::to_string(config.state.proctex.lut_width) + " >> level;\n";
+    std::string offset0 = std::to_string(config.state.proctex.lut_offset0);
+    std::string offset1 = std::to_string(config.state.proctex.lut_offset1);
+    std::string offset2 = std::to_string(config.state.proctex.lut_offset2);
+    std::string offset3 = std::to_string(config.state.proctex.lut_offset3);
+    // Offsets for level 4-7 seem to be hardcoded
+    out += "int lut_offsets[8] = int[](" + offset0 + ", " + offset1 + ", " + offset2 + ", " +
+           offset3 + ", 0xF0, 0xF8, 0xFC, 0xFE);\n";
+    out += "int lut_offset = lut_offsets[level];\n";
+    // For the color lut, coord=0.0 is lut[offset] and coord=1.0 is lut[offset+width-1]
+    out += "lut_coord *= lut_width - 1;\n";
+
+    switch (config.state.proctex.lut_filter) {
+    case ProcTexFilter::Linear:
+    case ProcTexFilter::LinearMipmapLinear:
+    case ProcTexFilter::LinearMipmapNearest:
+        out += "int lut_index_i = int(lut_coord) + lut_offset;\n";
+        out += "float lut_index_f = fract(lut_coord);\n";
+        out += "return texelFetch(texture_buffer_lut_rgba, lut_index_i + "
+               "proctex_lut_offset) + "
+               "lut_index_f * "
+               "texelFetch(texture_buffer_lut_rgba, lut_index_i + proctex_diff_lut_offset);\n";
+        break;
+    case ProcTexFilter::Nearest:
+    case ProcTexFilter::NearestMipmapLinear:
+    case ProcTexFilter::NearestMipmapNearest:
+        out += "lut_coord += lut_offset;\n";
+        out += "return texelFetch(texture_buffer_lut_rgba, int(round(lut_coord)) + "
+               "proctex_lut_offset);\n";
+        break;
+    }
+
+    out += "}\n";
+
     out += "vec4 ProcTex() {\n";
     if (config.state.proctex.coord < 3) {
         out += "vec2 uv = abs(texcoord" + std::to_string(config.state.proctex.coord) + ");\n";
@@ -1130,6 +1173,18 @@ float ProcTexNoiseCoef(vec2 x) {
         out += "vec2 uv = abs(texcoord0);\n";
     }
 
+    // This LOD formula is the same as the LOD upper limit defined in OpenGL.
+    // f(x, y) <= m_u + m_v + m_w
+    // (See OpenGL 4.6 spec, 8.14.1 - Scale Factor and Level-of-Detail)
+    // Note: this is different from the one normal 2D textures use.
+    out += "vec2 duv = max(abs(dFdx(uv)), abs(dFdy(uv)));\n";
+    // unlike normal texture, the bias is inside the log2
+    out += "float lod = log2(abs(" + std::to_string(config.state.proctex.lut_width) +
+           " * proctex_bias) * (duv.x + duv.y));\n";
+    out += "if (proctex_bias == 0.0) lod = 0.0;\n";
+    out += "lod = clamp(lod, " +
+           std::to_string(std::max<float>(0.0f, config.state.proctex.lod_min)) + ", " +
+           std::to_string(std::min<float>(7.0f, config.state.proctex.lod_max)) + ");\n";
     // Get shift offset before noise generation
     out += "float u_shift = ";
     AppendProcTexShiftOffset(out, "uv.y", config.state.proctex.u_shift,
@@ -1160,28 +1215,21 @@ float ProcTexNoiseCoef(vec2 x) {
                                "proctex_color_map_offset");
     out += ";\n";
 
-    // Look up color
-    // For the color lut, coord=0.0 is lut[offset] and coord=1.0 is lut[offset+width-1]
-    out += "lut_coord *= " + std::to_string(config.state.proctex.lut_width - 1) + ";\n";
-    // TODO(wwylele): implement mipmap
     switch (config.state.proctex.lut_filter) {
     case ProcTexFilter::Linear:
-    case ProcTexFilter::LinearMipmapLinear:
-    case ProcTexFilter::LinearMipmapNearest:
-        out += "int lut_index_i = int(lut_coord) + " +
-               std::to_string(config.state.proctex.lut_offset) + ";\n";
-        out += "float lut_index_f = fract(lut_coord);\n";
-        out += "vec4 final_color = texelFetch(texture_buffer_lut_rgba, lut_index_i + "
-               "proctex_lut_offset) + "
-               "lut_index_f * "
-               "texelFetch(texture_buffer_lut_rgba, lut_index_i + proctex_diff_lut_offset);\n";
-        break;
     case ProcTexFilter::Nearest:
-    case ProcTexFilter::NearestMipmapLinear:
+        out += "vec4 final_color = SampleProcTexColor(lut_coord, 0);\n";
+        break;
     case ProcTexFilter::NearestMipmapNearest:
-        out += "lut_coord += " + std::to_string(config.state.proctex.lut_offset) + ";\n";
-        out += "vec4 final_color = texelFetch(texture_buffer_lut_rgba, int(round(lut_coord)) + "
-               "proctex_lut_offset);\n";
+    case ProcTexFilter::LinearMipmapNearest:
+        out += "vec4 final_color = SampleProcTexColor(lut_coord, int(round(lod)));\n";
+        break;
+    case ProcTexFilter::NearestMipmapLinear:
+    case ProcTexFilter::LinearMipmapLinear:
+        out += "int lod_i = int(lod);\n";
+        out += "float lod_f = fract(lod);\n";
+        out += "vec4 final_color = mix(SampleProcTexColor(lut_coord, lod_i), "
+               "SampleProcTexColor(lut_coord, lod_i + 1), lod_f);\n";
         break;
     }
 
@@ -1468,7 +1516,7 @@ vec4 secondary_fragment_color = vec4(0.0);
     out += "vec4 next_combiner_buffer = tev_combiner_buffer_color;\n";
     out += "vec4 last_tex_env_out = vec4(0.0);\n";
 
-    for (size_t index = 0; index < state.tev_stages.size(); ++index)
+    for (std::size_t index = 0; index < state.tev_stages.size(); ++index)
         WriteTevStage(out, config, (unsigned)index);
 
     if (state.alpha_test_func != FramebufferRegs::CompareFunc::Always) {

@@ -7,7 +7,7 @@
 #include <array>
 #include <cstddef>
 #include "common/common_types.h"
-#include "core/hle/kernel/kernel.h"
+#include "core/hle/kernel/object.h"
 #include "core/hle/result.h"
 
 namespace Kernel {
@@ -93,7 +93,7 @@ private:
      * This is the maximum limit of handles allowed per process in CTR-OS. It can be further
      * reduced by ExHeader values, but this is not emulated here.
      */
-    static const size_t MAX_COUNT = 4096;
+    static const std::size_t MAX_COUNT = 4096;
 
     static u16 GetSlot(Handle handle) {
         return handle >> 15;

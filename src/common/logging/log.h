@@ -48,6 +48,9 @@ enum class Class : ClassType {
     Debug_GDBStub,     ///< GDB Stub
     Kernel,            ///< The HLE implementation of the CTR kernel
     Kernel_SVC,        ///< Kernel system calls
+    Applet,            ///< HLE implementation of system applets. Each applet
+                       ///  should have its own subclass.
+    Applet_SWKBD,      ///< The Software Keyboard applet
     Service,           ///< HLE implementation of system services. Each major service
                        ///  should have its own subclass.
     Service_SRV,       ///< The SRV (Service Directory) implementation
@@ -95,6 +98,7 @@ enum class Class : ClassType {
     Network,           ///< Network emulation
     Movie,             ///< Movie (Input Recording) Playback
     WebService,        ///< Interface to Citra Web Services
+    RPC_Server,        ///< RPC server
     Count              ///< Total number of logging classes
 };
 
@@ -107,7 +111,7 @@ template <typename... Args>
 void FmtLogMessage(Class log_class, Level log_level, const char* filename, unsigned int line_num,
                    const char* function, const char* format, const Args&... args) {
     FmtLogMessageImpl(log_class, log_level, filename, line_num, function, format,
-                      fmt::make_args(args...));
+                      fmt::make_format_args(args...));
 }
 
 } // namespace Log

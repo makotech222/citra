@@ -6,7 +6,7 @@
 
 #include <string>
 #include "common/common_types.h"
-#include "core/hle/kernel/kernel.h"
+#include "core/hle/kernel/object.h"
 #include "core/hle/kernel/process.h"
 #include "core/hle/result.h"
 
@@ -114,7 +114,7 @@ public:
     /// Backing memory for this shared memory block.
     std::shared_ptr<std::vector<u8>> backing_block;
     /// Offset into the backing block for this shared memory.
-    size_t backing_block_offset;
+    std::size_t backing_block_offset;
     /// Size of the memory block. Page-aligned.
     u32 size;
     /// Permission restrictions applied to the process which created the block.

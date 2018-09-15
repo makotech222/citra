@@ -5,10 +5,10 @@
 #include <algorithm>
 #include <memory>
 #include <vector>
+#include <fmt/format.h>
 #include "common/common_types.h"
 #include "common/file_util.h"
 #include "common/logging/log.h"
-#include "common/string_util.h"
 #include "core/file_sys/archive_extsavedata.h"
 #include "core/file_sys/disk_archive.h"
 #include "core/file_sys/errors.h"
@@ -37,11 +37,12 @@ public:
         return false;
     }
 
-    ResultVal<size_t> Write(u64 offset, size_t length, bool flush, const u8* buffer) override {
+    ResultVal<std::size_t> Write(u64 offset, std::size_t length, bool flush,
+                                 const u8* buffer) override {
         if (offset > size) {
             return ERR_WRITE_BEYOND_END;
         } else if (offset == size) {
-            return MakeResult<size_t>(0);
+            return MakeResult<std::size_t>(0);
         }
 
         if (offset + length > size) {
@@ -57,7 +58,7 @@ private:
 
 class ExtSaveDataDelayGenerator : public DelayGenerator {
 public:
-    u64 GetReadDelayNs(size_t length) override {
+    u64 GetReadDelayNs(std::size_t length) override {
         // This is the delay measured for a savedate read,
         // not for extsaveData
         // For now we will take that
@@ -165,16 +166,14 @@ std::string GetExtSaveDataPath(const std::string& mount_point, const Path& path)
     ExtSaveDataArchivePath path_data;
     std::memcpy(&path_data, vec_data.data(), sizeof(path_data));
 
-    return Common::StringFromFormat("%s%08X/%08X/", mount_point.c_str(), path_data.save_high,
-                                    path_data.save_low);
+    return fmt::format("{}{:08X}/{:08X}/", mount_point, path_data.save_high, path_data.save_low);
 }
 
 std::string GetExtDataContainerPath(const std::string& mount_point, bool shared) {
     if (shared)
-        return Common::StringFromFormat("%sdata/%s/extdata/", mount_point.c_str(), SYSTEM_ID);
+        return fmt::format("{}data/{}/extdata/", mount_point, SYSTEM_ID);
 
-    return Common::StringFromFormat("%sNintendo 3DS/%s/%s/extdata/", mount_point.c_str(), SYSTEM_ID,
-                                    SDCARD_ID);
+    return fmt::format("{}Nintendo 3DS/{}/{}/extdata/", mount_point, SYSTEM_ID, SDCARD_ID);
 }
 
 Path ConstructExtDataBinaryPath(u32 media_type, u32 high, u32 low) {
@@ -277,7 +276,7 @@ ResultVal<ArchiveFormatInfo> ArchiveFactory_ExtSaveData::GetFormatInfo(const Pat
 }
 
 void ArchiveFactory_ExtSaveData::WriteIcon(const Path& path, const u8* icon_data,
-                                           size_t icon_size) {
+                                           std::size_t icon_size) {
     std::string game_path = FileSys::GetExtSaveDataPath(GetMountPoint(), path);
     FileUtil::IOFile icon_file(game_path + "icon", "wb");
     icon_file.WriteBytes(icon_data, icon_size);

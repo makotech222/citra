@@ -2,10 +2,10 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <algorithm>
 #include <chrono>
 #include <mutex>
 #include <thread>
-#include "common/math_util.h"
 #include "core/hw/gpu.h"
 #include "core/perf_stats.h"
 #include "core/settings.h"
@@ -40,22 +40,21 @@ void PerfStats::EndGameFrame() {
     game_frames += 1;
 }
 
-PerfStats::Results PerfStats::GetAndResetStats(u64 current_system_time_us) {
+PerfStats::Results PerfStats::GetAndResetStats(microseconds current_system_time_us) {
     std::lock_guard<std::mutex> lock(object_mutex);
 
-    auto now = Clock::now();
+    const auto now = Clock::now();
     // Walltime elapsed since stats were reset
-    auto interval = duration_cast<DoubleSecs>(now - reset_point).count();
+    const auto interval = duration_cast<DoubleSecs>(now - reset_point).count();
 
-    auto system_us_per_second =
-        static_cast<double>(current_system_time_us - reset_point_system_us) / interval;
+    const auto system_us_per_second = (current_system_time_us - reset_point_system_us) / interval;
 
     Results results{};
     results.system_fps = static_cast<double>(system_frames) / interval;
     results.game_fps = static_cast<double>(game_frames) / interval;
     results.frametime = duration_cast<DoubleSecs>(accumulated_frametime).count() /
                         static_cast<double>(system_frames);
-    results.emulation_speed = system_us_per_second / 1'000'000.0;
+    results.emulation_speed = system_us_per_second.count() / 1'000'000.0;
 
     // Reset counters
     reset_point = now;
@@ -74,7 +73,7 @@ double PerfStats::GetLastFrameTimeScale() {
     return duration_cast<DoubleSecs>(previous_frame_length).count() / FRAME_LENGTH;
 }
 
-void FrameLimiter::DoFrameLimiting(u64 current_system_time_us) {
+void FrameLimiter::DoFrameLimiting(microseconds current_system_time_us) {
     if (!Settings::values.use_frame_limit) {
         return;
     }
@@ -92,7 +91,7 @@ void FrameLimiter::DoFrameLimiting(u64 current_system_time_us) {
             (current_system_time_us - previous_system_time_us) / sleep_scale));
     frame_limiting_delta_err -= duration_cast<microseconds>(now - previous_walltime);
     frame_limiting_delta_err =
-        MathUtil::Clamp(frame_limiting_delta_err, -max_lag_time_us, max_lag_time_us);
+        std::clamp(frame_limiting_delta_err, -max_lag_time_us, max_lag_time_us);
 
     if (frame_limiting_delta_err > microseconds::zero()) {
         std::this_thread::sleep_for(frame_limiting_delta_err);

@@ -2,7 +2,6 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
-#include <cinttypes>
 #include <QApplication>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
@@ -21,23 +20,20 @@
 #include <QThreadPool>
 #include <QToolButton>
 #include <QTreeView>
+#include <fmt/format.h>
 #include "citra_qt/game_list.h"
 #include "citra_qt/game_list_p.h"
 #include "citra_qt/main.h"
 #include "citra_qt/ui_settings.h"
 #include "common/common_paths.h"
 #include "common/logging/log.h"
-#include "common/string_util.h"
 #include "core/hle/service/fs/archive.h"
 #include "core/loader/loader.h"
 
-GameList::SearchField::KeyReleaseEater::KeyReleaseEater(GameList* gamelist) {
-    this->gamelist = gamelist;
-    edit_filter_text_old = "";
-}
+GameListSearchField::KeyReleaseEater::KeyReleaseEater(GameList* gamelist) : gamelist{gamelist} {}
 
 // EventFilter in order to process systemkeys while editing the searchfield
-bool GameList::SearchField::KeyReleaseEater::eventFilter(QObject* obj, QEvent* event) {
+bool GameListSearchField::KeyReleaseEater::eventFilter(QObject* obj, QEvent* event) {
     // If it isn't a KeyRelease event then continue with standard event processing
     if (event->type() != QEvent::KeyRelease)
         return QObject::eventFilter(obj, event);
@@ -85,7 +81,7 @@ bool GameList::SearchField::KeyReleaseEater::eventFilter(QObject* obj, QEvent* e
     return QObject::eventFilter(obj, event);
 }
 
-void GameList::SearchField::setFilterResult(int visible, int total) {
+void GameListSearchField::setFilterResult(int visible, int total) {
     this->visible = visible;
     this->total = total;
 
@@ -119,17 +115,17 @@ QString GameList::getLastFilterResultItem() {
     return file_path;
 }
 
-void GameList::SearchField::clear() {
+void GameListSearchField::clear() {
     edit_filter->setText("");
 }
 
-void GameList::SearchField::setFocus() {
+void GameListSearchField::setFocus() {
     if (edit_filter->isVisible()) {
         edit_filter->setFocus();
     }
 }
 
-GameList::SearchField::SearchField(GameList* parent) : QWidget{parent} {
+GameListSearchField::GameListSearchField(GameList* parent) : QWidget{parent} {
     KeyReleaseEater* keyReleaseEater = new KeyReleaseEater(parent);
     layout_filter = new QHBoxLayout;
     layout_filter->setMargin(8);
@@ -166,10 +162,12 @@ GameList::SearchField::SearchField(GameList* parent) : QWidget{parent} {
  * @param String containing all words getting checked
  * @return true if the haystack contains all words of userinput
  */
-bool GameList::containsAllWords(QString haystack, QString userinput) {
-    QStringList userinput_split = userinput.split(" ", QString::SplitBehavior::SkipEmptyParts);
+static bool ContainsAllWords(const QString& haystack, const QString& userinput) {
+    const QStringList userinput_split =
+        userinput.split(' ', QString::SplitBehavior::SkipEmptyParts);
+
     return std::all_of(userinput_split.begin(), userinput_split.end(),
-                       [haystack](QString s) { return haystack.contains(s); });
+                       [&haystack](const QString& s) { return haystack.contains(s); });
 }
 
 // Syncs the expanded state of Game Directories with settings to persist across sessions
@@ -186,9 +184,7 @@ void GameList::onTextChanged(const QString& newText) {
     int folderCount = tree_view->model()->rowCount();
     QString edit_filter_text = newText.toLower();
     QStandardItem* folder;
-    QStandardItem* child;
     int childrenTotal = 0;
-    QModelIndex root_index = item_model->invisibleRootItem()->index();
 
     // If the searchfield is empty every item is visible
     // Otherwise the filter gets applied
@@ -204,7 +200,6 @@ void GameList::onTextChanged(const QString& newText) {
         }
         search_field->setFilterResult(childrenTotal, childrenTotal);
     } else {
-        QString file_path, file_name, file_title, file_programmid;
         int result_count = 0;
         for (int i = 0; i < folderCount; ++i) {
             folder = item_model->item(i, 0);
@@ -212,18 +207,21 @@ void GameList::onTextChanged(const QString& newText) {
             int childrenCount = folder->rowCount();
             for (int j = 0; j < childrenCount; ++j) {
                 ++childrenTotal;
-                child = folder->child(j, 0);
-                file_path = child->data(GameListItemPath::FullPathRole).toString().toLower();
-                file_name = file_path.mid(file_path.lastIndexOf("/") + 1);
-                file_title = child->data(GameListItemPath::TitleRole).toString().toLower();
-                file_programmid = child->data(GameListItemPath::ProgramIdRole).toString().toLower();
+                const QStandardItem* child = folder->child(j, 0);
+                const QString file_path =
+                    child->data(GameListItemPath::FullPathRole).toString().toLower();
+                QString file_name = file_path.mid(file_path.lastIndexOf("/") + 1);
+                const QString file_title =
+                    child->data(GameListItemPath::TitleRole).toString().toLower();
+                const QString file_programmid =
+                    child->data(GameListItemPath::ProgramIdRole).toString().toLower();
 
                 // Only items which filename in combination with its title contains all words
                 // that are in the searchfield will be visible in the gamelist
                 // The search is case insensitive because of toLower()
                 // I decided not to use Qt::CaseInsensitive in containsAllWords to prevent
                 // multiple conversions of edit_filter_text for each game in the gamelist
-                if (containsAllWords(file_name.append(" ").append(file_title), edit_filter_text) ||
+                if (ContainsAllWords(file_name.append(' ').append(file_title), edit_filter_text) ||
                     (file_programmid.count() == 16 && edit_filter_text.contains(file_programmid))) {
                     tree_view->setRowHidden(j, folder_index, false);
                     ++result_count;
@@ -272,7 +270,7 @@ GameList::GameList(GMainWindow* parent) : QWidget{parent} {
     this->main_window = parent;
     layout = new QVBoxLayout;
     tree_view = new QTreeView;
-    search_field = new SearchField(this);
+    search_field = new GameListSearchField(this);
     item_model = new QStandardItemModel(tree_view);
     tree_view->setModel(item_model);
 
@@ -442,14 +440,9 @@ void GameList::AddGamePopup(QMenu& context_menu, u64 program_id) {
     open_save_location->setEnabled(program_id != 0);
     open_application_location->setVisible(FileUtil::Exists(
         Service::AM::GetTitleContentPath(Service::FS::MediaType::SDMC, program_id)));
-    open_update_location->setEnabled(0x00040000'00000000 <= program_id &&
-                                     program_id <= 0x00040000'FFFFFFFF);
-    auto it = std::find_if(
-        compatibility_list.begin(), compatibility_list.end(),
-        [program_id](const std::pair<std::string, std::pair<QString, QString>>& element) {
-            std::string pid = Common::StringFromFormat("%016" PRIX64, program_id);
-            return element.first == pid;
-        });
+    open_update_location->setEnabled(0x0004000000000000 <= program_id &&
+                                     program_id <= 0x00040000FFFFFFFF);
+    auto it = FindMatchingCompatibilityEntry(compatibility_list, program_id);
     navigate_to_gamedb_entry->setVisible(it != compatibility_list.end());
 
     connect(open_save_location, &QAction::triggered, [this, program_id] {
@@ -538,7 +531,7 @@ void GameList::LoadCompatibilityList() {
     }
 
     if (compat_list.size() == 0) {
-        LOG_ERROR(Frontend, "Game compatibility list is empty");
+        LOG_WARNING(Frontend, "Game compatibility list is empty");
         return;
     }
 
@@ -563,9 +556,9 @@ void GameList::LoadCompatibilityList() {
             for (const QJsonValue& value : ids) {
                 QJsonObject object = value.toObject();
                 QString id = object["id"].toString();
-                compatibility_list.insert(
-                    std::make_pair(id.toUpper().toStdString(),
-                                   std::make_pair(QString::number(compatibility), directory)));
+                compatibility_list.emplace(
+                    id.toUpper().toStdString(),
+                    std::make_pair(QString::number(compatibility), directory));
             }
         }
     }
@@ -618,7 +611,7 @@ const QStringList GameList::supported_file_extensions = {"3ds", "3dsx", "elf", "
                                                          "cci", "cxi",  "app"};
 
 static bool HasSupportedFileExtension(const std::string& file_name) {
-    QFileInfo file = QFileInfo(file_name.c_str());
+    QFileInfo file = QFileInfo(QString::fromStdString(file_name));
     return GameList::supported_file_extensions.contains(file.suffix(), Qt::CaseInsensitive);
 }
 
@@ -629,9 +622,27 @@ void GameList::RefreshGameDirectory() {
     }
 }
 
+QString GameList::FindGameByProgramID(u64 program_id) {
+    return FindGameByProgramID(item_model->invisibleRootItem(), program_id);
+}
+
+QString GameList::FindGameByProgramID(QStandardItem* current_item, u64 program_id) {
+    if (current_item->type() == static_cast<int>(GameListItemType::Game) &&
+        current_item->data(GameListItemPath::ProgramIdRole).toULongLong() == program_id) {
+        return current_item->data(GameListItemPath::FullPathRole).toString();
+    } else if (current_item->hasChildren()) {
+        for (int child_id = 0; child_id < current_item->rowCount(); child_id++) {
+            QString path = FindGameByProgramID(current_item->child(child_id, 0), program_id);
+            if (!path.isEmpty())
+                return path;
+        }
+    }
+    return "";
+}
+
 void GameListWorker::AddFstEntriesToGameList(const std::string& dir_path, unsigned int recursion,
                                              GameListDir* parent_dir) {
-    const auto callback = [this, recursion, parent_dir](unsigned* num_entries_out,
+    const auto callback = [this, recursion, parent_dir](u64* num_entries_out,
                                                         const std::string& directory,
                                                         const std::string& virtual_name) -> bool {
         std::string physical_name = directory + DIR_SEP + virtual_name;
@@ -652,11 +663,11 @@ void GameListWorker::AddFstEntriesToGameList(const std::string& dir_path, unsign
                 std::vector<u8> original_smdh;
                 loader->ReadIcon(original_smdh);
 
-                if (program_id < 0x00040000'00000000 || program_id > 0x00040000'FFFFFFFF)
+                if (program_id < 0x0004000000000000 || program_id > 0x00040000FFFFFFFF)
                     return original_smdh;
 
                 std::string update_path = Service::AM::GetTitleContentPath(
-                    Service::FS::MediaType::SDMC, program_id + 0x0000000E'00000000);
+                    Service::FS::MediaType::SDMC, program_id + 0x0000000E00000000);
 
                 if (!FileUtil::Exists(update_path))
                     return original_smdh;
@@ -671,12 +682,7 @@ void GameListWorker::AddFstEntriesToGameList(const std::string& dir_path, unsign
                 return update_smdh;
             }();
 
-            auto it = std::find_if(
-                compatibility_list.begin(), compatibility_list.end(),
-                [program_id](const std::pair<std::string, std::pair<QString, QString>>& element) {
-                    std::string pid = Common::StringFromFormat("%016" PRIX64, program_id);
-                    return element.first == pid;
-                });
+            auto it = FindMatchingCompatibilityEntry(compatibility_list, program_id);
 
             // The game list uses this as compatibility number for untested games
             QString compatibility("99");
@@ -709,7 +715,7 @@ void GameListWorker::run() {
     stop_processing = false;
     for (UISettings::GameDir& game_dir : game_dirs) {
         if (game_dir.path == "INSTALLED") {
-            QString path = QString(FileUtil::GetUserPath(D_SDMC_IDX).c_str()) +
+            QString path = QString::fromStdString(FileUtil::GetUserPath(D_SDMC_IDX)) +
                            "Nintendo "
                            "3DS/00000000000000000000000000000000/"
                            "00000000000000000000000000000000/title/00040000";
@@ -718,14 +724,12 @@ void GameListWorker::run() {
             emit DirEntryReady({game_list_dir});
             AddFstEntriesToGameList(path.toStdString(), 2, game_list_dir);
         } else if (game_dir.path == "SYSTEM") {
-            QString path = QString(FileUtil::GetUserPath(D_NAND_IDX).c_str()) +
+            QString path = QString::fromStdString(FileUtil::GetUserPath(D_NAND_IDX)) +
                            "00000000000000000000000000000000/title/00040010";
             watch_list.append(path);
             GameListDir* game_list_dir = new GameListDir(game_dir, GameListItemType::SystemDir);
             emit DirEntryReady({game_list_dir});
-            AddFstEntriesToGameList(std::string(FileUtil::GetUserPath(D_NAND_IDX).c_str()) +
-                                        "00000000000000000000000000000000/title/00040010",
-                                    2, game_list_dir);
+            AddFstEntriesToGameList(path.toStdString(), 2, game_list_dir);
         } else {
             watch_list.append(game_dir.path);
             GameListDir* game_list_dir = new GameListDir(game_dir);

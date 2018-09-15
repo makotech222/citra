@@ -10,6 +10,7 @@
 #include "audio_core/audio_types.h"
 #include "audio_core/dsp_interface.h"
 #include "common/common_types.h"
+#include "core/hle/service/dsp/dsp_dsp.h"
 #include "core/memory.h"
 
 namespace AudioCore {
@@ -22,10 +23,12 @@ public:
     DspState GetDspState() const override;
 
     std::vector<u8> PipeRead(DspPipe pipe_number, u32 length) override;
-    size_t GetPipeReadableSize(DspPipe pipe_number) const override;
+    std::size_t GetPipeReadableSize(DspPipe pipe_number) const override;
     void PipeWrite(DspPipe pipe_number, const std::vector<u8>& buffer) override;
 
     std::array<u8, Memory::DSP_RAM_SIZE>& GetDspMemory() override;
+
+    void SetServiceToInterrupt(std::weak_ptr<Service::DSP::DSP_DSP> dsp) override;
 
 private:
     struct Impl;

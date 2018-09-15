@@ -2,6 +2,7 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <algorithm>
 #include <cctype>
 #include <cerrno>
 #include <cstdio>
@@ -25,100 +26,20 @@ namespace Common {
 
 /// Make a string lowercase
 std::string ToLower(std::string str) {
-    boost::transform(str, str.begin(), ::tolower);
+    std::transform(str.begin(), str.end(), str.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
     return str;
 }
 
 /// Make a string uppercase
 std::string ToUpper(std::string str) {
-    boost::transform(str, str.begin(), ::toupper);
+    std::transform(str.begin(), str.end(), str.begin(),
+                   [](unsigned char c) { return std::toupper(c); });
     return str;
 }
 
-// faster than sscanf
-bool AsciiToHex(const char* _szValue, u32& result) {
-    char* endptr = nullptr;
-    const u32 value = strtoul(_szValue, &endptr, 16);
-
-    if (!endptr || *endptr)
-        return false;
-
-    result = value;
-    return true;
-}
-
-bool CharArrayFromFormatV(char* out, int outsize, const char* format, va_list args) {
-    int writtenCount;
-
-#ifdef _MSC_VER
-    // You would think *printf are simple, right? Iterate on each character,
-    // if it's a format specifier handle it properly, etc.
-    //
-    // Nooooo. Not according to the C standard.
-    //
-    // According to the C99 standard (7.19.6.1 "The fprintf function")
-    //     The format shall be a multibyte character sequence
-    //
-    // Because some character encodings might have '%' signs in the middle of
-    // a multibyte sequence (SJIS for example only specifies that the first
-    // byte of a 2 byte sequence is "high", the second byte can be anything),
-    // printf functions have to decode the multibyte sequences and try their
-    // best to not screw up.
-    //
-    // Unfortunately, on Windows, the locale for most languages is not UTF-8
-    // as we would need. Notably, for zh_TW, Windows chooses EUC-CN as the
-    // locale, and completely fails when trying to decode UTF-8 as EUC-CN.
-    //
-    // On the other hand, the fix is simple: because we use UTF-8, no such
-    // multibyte handling is required as we can simply assume that no '%' char
-    // will be present in the middle of a multibyte sequence.
-    //
-    // This is why we lookup an ANSI (cp1252) locale here and use _vsnprintf_l.
-    static locale_t c_locale = nullptr;
-    if (!c_locale)
-        c_locale = _create_locale(LC_ALL, ".1252");
-    writtenCount = _vsnprintf_l(out, outsize, format, c_locale, args);
-#else
-    writtenCount = vsnprintf(out, outsize, format, args);
-#endif
-
-    if (writtenCount > 0 && writtenCount < outsize) {
-        out[writtenCount] = '\0';
-        return true;
-    } else {
-        out[outsize - 1] = '\0';
-        return false;
-    }
-}
-
-std::string StringFromFormat(const char* format, ...) {
-    va_list args;
-    char* buf = nullptr;
-#ifdef _WIN32
-    int required = 0;
-
-    va_start(args, format);
-    required = _vscprintf(format, args);
-    buf = new char[required + 1];
-    CharArrayFromFormatV(buf, required + 1, format, args);
-    va_end(args);
-
-    std::string temp = buf;
-    delete[] buf;
-#else
-    va_start(args, format);
-    if (vasprintf(&buf, format, args) < 0)
-        LOG_ERROR(Common, "Unable to allocate memory for string");
-    va_end(args);
-
-    std::string temp = buf;
-    free(buf);
-#endif
-    return temp;
-}
-
 // For Debugging. Read out an u8 array.
-std::string ArrayToString(const u8* data, size_t size, int line_len, bool spaces) {
+std::string ArrayToString(const u8* data, std::size_t size, int line_len, bool spaces) {
     std::ostringstream oss;
     oss << std::setfill('0') << std::hex;
 
@@ -137,7 +58,7 @@ std::string ArrayToString(const u8* data, size_t size, int line_len, bool spaces
 
 // Turns "  hej " into "hej". Also handles tabs.
 std::string StripSpaces(const std::string& str) {
-    const size_t s = str.find_first_not_of(" \t\r\n");
+    const std::size_t s = str.find_first_not_of(" \t\r\n");
 
     if (str.npos != s)
         return str.substr(s, str.find_last_not_of(" \t\r\n") - s + 1);
@@ -198,10 +119,10 @@ bool SplitPath(const std::string& full_path, std::string* _pPath, std::string* _
     if (full_path.empty())
         return false;
 
-    size_t dir_end = full_path.find_last_of("/"
+    std::size_t dir_end = full_path.find_last_of("/"
 // windows needs the : included for something like just "C:" to be considered a directory
 #ifdef _WIN32
-                                            ":"
+                                                 ":"
 #endif
     );
     if (std::string::npos == dir_end)
@@ -209,7 +130,7 @@ bool SplitPath(const std::string& full_path, std::string* _pPath, std::string* _
     else
         dir_end += 1;
 
-    size_t fname_end = full_path.rfind('.');
+    std::size_t fname_end = full_path.rfind('.');
     if (fname_end < dir_end || std::string::npos == fname_end)
         fname_end = full_path.size();
 
@@ -241,25 +162,25 @@ void SplitString(const std::string& str, const char delim, std::vector<std::stri
     std::istringstream iss(str);
     output.resize(1);
 
-    while (std::getline(iss, *output.rbegin(), delim))
-        output.push_back("");
+    while (std::getline(iss, *output.rbegin(), delim)) {
+        output.emplace_back();
+    }
 
     output.pop_back();
 }
 
-std::string TabsToSpaces(int tab_size, const std::string& in) {
-    const std::string spaces(tab_size, ' ');
-    std::string out(in);
+std::string TabsToSpaces(int tab_size, std::string in) {
+    std::size_t i = 0;
 
-    size_t i = 0;
-    while (out.npos != (i = out.find('\t')))
-        out.replace(i, 1, spaces);
+    while ((i = in.find('\t')) != std::string::npos) {
+        in.replace(i, 1, tab_size, ' ');
+    }
 
-    return out;
+    return in;
 }
 
 std::string ReplaceAll(std::string result, const std::string& src, const std::string& dest) {
-    size_t pos = 0;
+    std::size_t pos = 0;
 
     if (src == dest)
         return result;
@@ -299,31 +220,37 @@ std::u16string UTF8ToUTF16(const std::string& input) {
 }
 
 static std::wstring CPToUTF16(u32 code_page, const std::string& input) {
-    auto const size =
+    const auto size =
         MultiByteToWideChar(code_page, 0, input.data(), static_cast<int>(input.size()), nullptr, 0);
 
-    std::wstring output;
-    output.resize(size);
+    if (size == 0) {
+        return L"";
+    }
 
-    if (size == 0 ||
-        size != MultiByteToWideChar(code_page, 0, input.data(), static_cast<int>(input.size()),
-                                    &output[0], static_cast<int>(output.size())))
+    std::wstring output(size, L'\0');
+
+    if (size != MultiByteToWideChar(code_page, 0, input.data(), static_cast<int>(input.size()),
+                                    &output[0], static_cast<int>(output.size()))) {
         output.clear();
+    }
 
     return output;
 }
 
 std::string UTF16ToUTF8(const std::wstring& input) {
-    auto const size = WideCharToMultiByte(CP_UTF8, 0, input.data(), static_cast<int>(input.size()),
+    const auto size = WideCharToMultiByte(CP_UTF8, 0, input.data(), static_cast<int>(input.size()),
                                           nullptr, 0, nullptr, nullptr);
+    if (size == 0) {
+        return "";
+    }
 
-    std::string output;
-    output.resize(size);
+    std::string output(size, '\0');
 
-    if (size == 0 ||
-        size != WideCharToMultiByte(CP_UTF8, 0, input.data(), static_cast<int>(input.size()),
-                                    &output[0], static_cast<int>(output.size()), nullptr, nullptr))
+    if (size != WideCharToMultiByte(CP_UTF8, 0, input.data(), static_cast<int>(input.size()),
+                                    &output[0], static_cast<int>(output.size()), nullptr,
+                                    nullptr)) {
         output.clear();
+    }
 
     return output;
 }
@@ -344,8 +271,6 @@ std::string CP1252ToUTF8(const std::string& input) {
 
 template <typename T>
 static std::string CodeToUTF8(const char* fromcode, const std::basic_string<T>& input) {
-    std::string result;
-
     iconv_t const conv_desc = iconv_open("UTF-8", fromcode);
     if ((iconv_t)(-1) == conv_desc) {
         LOG_ERROR(Common, "Iconv initialization failure [{}]: {}", fromcode, strerror(errno));
@@ -353,23 +278,22 @@ static std::string CodeToUTF8(const char* fromcode, const std::basic_string<T>& 
         return {};
     }
 
-    const size_t in_bytes = sizeof(T) * input.size();
+    const std::size_t in_bytes = sizeof(T) * input.size();
     // Multiply by 4, which is the max number of bytes to encode a codepoint
-    const size_t out_buffer_size = 4 * in_bytes;
+    const std::size_t out_buffer_size = 4 * in_bytes;
 
-    std::string out_buffer;
-    out_buffer.resize(out_buffer_size);
+    std::string out_buffer(out_buffer_size, '\0');
 
     auto src_buffer = &input[0];
-    size_t src_bytes = in_bytes;
+    std::size_t src_bytes = in_bytes;
     auto dst_buffer = &out_buffer[0];
-    size_t dst_bytes = out_buffer.size();
+    std::size_t dst_bytes = out_buffer.size();
 
     while (0 != src_bytes) {
-        size_t const iconv_result =
+        std::size_t const iconv_result =
             iconv(conv_desc, (char**)(&src_buffer), &src_bytes, &dst_buffer, &dst_bytes);
 
-        if (static_cast<size_t>(-1) == iconv_result) {
+        if (static_cast<std::size_t>(-1) == iconv_result) {
             if (EILSEQ == errno || EINVAL == errno) {
                 // Try to skip the bad character
                 if (0 != src_bytes) {
@@ -383,6 +307,7 @@ static std::string CodeToUTF8(const char* fromcode, const std::basic_string<T>& 
         }
     }
 
+    std::string result;
     out_buffer.resize(out_buffer_size - dst_bytes);
     out_buffer.swap(result);
 
@@ -392,8 +317,6 @@ static std::string CodeToUTF8(const char* fromcode, const std::basic_string<T>& 
 }
 
 std::u16string UTF8ToUTF16(const std::string& input) {
-    std::u16string result;
-
     iconv_t const conv_desc = iconv_open("UTF-16LE", "UTF-8");
     if ((iconv_t)(-1) == conv_desc) {
         LOG_ERROR(Common, "Iconv initialization failure [UTF-8]: {}", strerror(errno));
@@ -401,23 +324,22 @@ std::u16string UTF8ToUTF16(const std::string& input) {
         return {};
     }
 
-    const size_t in_bytes = sizeof(char) * input.size();
+    const std::size_t in_bytes = sizeof(char) * input.size();
     // Multiply by 4, which is the max number of bytes to encode a codepoint
-    const size_t out_buffer_size = 4 * sizeof(char16_t) * in_bytes;
+    const std::size_t out_buffer_size = 4 * sizeof(char16_t) * in_bytes;
 
-    std::u16string out_buffer;
-    out_buffer.resize(out_buffer_size);
+    std::u16string out_buffer(out_buffer_size, char16_t{});
 
     char* src_buffer = const_cast<char*>(&input[0]);
-    size_t src_bytes = in_bytes;
+    std::size_t src_bytes = in_bytes;
     char* dst_buffer = (char*)(&out_buffer[0]);
-    size_t dst_bytes = out_buffer.size();
+    std::size_t dst_bytes = out_buffer.size();
 
     while (0 != src_bytes) {
-        size_t const iconv_result =
+        std::size_t const iconv_result =
             iconv(conv_desc, &src_buffer, &src_bytes, &dst_buffer, &dst_bytes);
 
-        if (static_cast<size_t>(-1) == iconv_result) {
+        if (static_cast<std::size_t>(-1) == iconv_result) {
             if (EILSEQ == errno || EINVAL == errno) {
                 // Try to skip the bad character
                 if (0 != src_bytes) {
@@ -431,6 +353,7 @@ std::u16string UTF8ToUTF16(const std::string& input) {
         }
     }
 
+    std::u16string result;
     out_buffer.resize(out_buffer_size - dst_bytes);
     out_buffer.swap(result);
 
@@ -456,8 +379,8 @@ std::string SHIFTJISToUTF8(const std::string& input) {
 
 #endif
 
-std::string StringFromFixedZeroTerminatedBuffer(const char* buffer, size_t max_len) {
-    size_t len = 0;
+std::string StringFromFixedZeroTerminatedBuffer(const char* buffer, std::size_t max_len) {
+    std::size_t len = 0;
     while (len < max_len && buffer[len] != '\0')
         ++len;
 

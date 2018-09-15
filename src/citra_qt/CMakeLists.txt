@@ -2,11 +2,16 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/CMakeModules)
+if (POLICY CMP0071)
+    cmake_policy(SET CMP0071 NEW)
+endif()
 
 add_executable(citra-qt
     Info.plist
     aboutdialog.cpp
     aboutdialog.h
+    applets/swkbd.cpp
+    applets/swkbd.h
     bootmanager.cpp
     bootmanager.h
     cheatsearch.cpp
@@ -38,6 +43,8 @@ add_executable(citra-qt
     configuration/configure_graphics.h
     configuration/configure_input.cpp
     configuration/configure_input.h
+    configuration/configure_motion_touch.cpp
+    configuration/configure_motion_touch.h
     configuration/configure_system.cpp
     configuration/configure_system.h
     configuration/configure_web.cpp
@@ -59,12 +66,15 @@ add_executable(citra-qt
     debugger/graphics/graphics_tracing.h
     debugger/graphics/graphics_vertex_shader.cpp
     debugger/graphics/graphics_vertex_shader.h
+    debugger/lle_service_modules.cpp
+    debugger/lle_service_modules.h
     debugger/profiler.cpp
     debugger/profiler.h
     debugger/registers.cpp
     debugger/registers.h
     debugger/wait_tree.cpp
     debugger/wait_tree.h
+    discord.h
     game_list.cpp
     game_list.h
     game_list_p.h
@@ -113,6 +123,7 @@ set(UIS
     configuration/configure_general.ui
     configuration/configure_graphics.ui
     configuration/configure_input.ui
+    configuration/configure_motion_touch.ui
     configuration/configure_system.ui
     configuration/configure_web.ui
     debugger/registers.ui
@@ -128,8 +139,8 @@ set(UIS
 )
 
 file(GLOB COMPAT_LIST
-            ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
-            ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
+     ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
+     ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
 file(GLOB_RECURSE ICONS ${CMAKE_SOURCE_DIR}/dist/icons/*)
 file(GLOB_RECURSE THEMES ${CMAKE_SOURCE_DIR}/dist/qt_themes/*)
 
@@ -199,6 +210,15 @@ create_target_directory_groups(citra-qt)
 target_link_libraries(citra-qt PRIVATE audio_core common core input_common network video_core)
 target_link_libraries(citra-qt PRIVATE Boost::boost glad nihstro-headers Qt5::OpenGL Qt5::Widgets Qt5::Multimedia)
 target_link_libraries(citra-qt PRIVATE ${PLATFORM_LIBRARIES} Threads::Threads)
+
+if (USE_DISCORD_PRESENCE)
+    target_sources(citra-qt PUBLIC
+        discord_impl.cpp
+        discord_impl.h
+    )
+    target_link_libraries(citra-qt PRIVATE discord-rpc)
+    target_compile_definitions(citra-qt PRIVATE -DUSE_DISCORD_PRESENCE)
+endif()
 
 if(UNIX AND NOT APPLE)
     install(TARGETS citra-qt RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/bin")

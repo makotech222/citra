@@ -45,7 +45,7 @@ static u64 GenerateTelemetryId() {
 
 u64 GetTelemetryId() {
     u64 telemetry_id{};
-    static const std::string& filename{FileUtil::GetUserPath(D_CONFIG_IDX) + "telemetry_id"};
+    const std::string filename{FileUtil::GetUserPath(D_CONFIG_IDX) + "telemetry_id"};
 
     if (FileUtil::Exists(filename)) {
         FileUtil::IOFile file(filename, "rb");
@@ -69,7 +69,7 @@ u64 GetTelemetryId() {
 
 u64 RegenerateTelemetryId() {
     const u64 new_telemetry_id{GenerateTelemetryId()};
-    static const std::string& filename{FileUtil::GetUserPath(D_CONFIG_IDX) + "telemetry_id"};
+    const std::string filename{FileUtil::GetUserPath(D_CONFIG_IDX) + "telemetry_id"};
 
     FileUtil::IOFile file(filename, "wb");
     if (!file.IsOpen()) {
@@ -82,7 +82,8 @@ u64 RegenerateTelemetryId() {
 
 std::future<bool> VerifyLogin(std::string username, std::string token, std::function<void()> func) {
 #ifdef ENABLE_WEB_SERVICE
-    return WebService::VerifyLogin(username, token, Settings::values.verify_endpoint_url, func);
+    return WebService::VerifyLogin(username, token, Settings::values.web_api_url + "/profile",
+                                   func);
 #else
     return std::async(std::launch::async, [func{std::move(func)}]() {
         func();
@@ -95,7 +96,7 @@ TelemetrySession::TelemetrySession() {
 #ifdef ENABLE_WEB_SERVICE
     if (Settings::values.enable_telemetry) {
         backend = std::make_unique<WebService::TelemetryJson>(
-            Settings::values.telemetry_endpoint_url, Settings::values.citra_username,
+            Settings::values.web_api_url + "/telemetry", Settings::values.citra_username,
             Settings::values.citra_token);
     } else {
         backend = std::make_unique<Telemetry::NullVisitor>();
@@ -162,6 +163,7 @@ TelemetrySession::TelemetrySession() {
 #endif
 
     // Log user configuration information
+    AddField(Telemetry::FieldType::UserConfig, "Audio_SinkId", Settings::values.sink_id);
     AddField(Telemetry::FieldType::UserConfig, "Audio_EnableAudioStretching",
              Settings::values.enable_audio_stretching);
     AddField(Telemetry::FieldType::UserConfig, "Core_UseCpuJit", Settings::values.use_cpu_jit);
@@ -172,9 +174,17 @@ TelemetrySession::TelemetrySession() {
     AddField(Telemetry::FieldType::UserConfig, "Renderer_FrameLimit", Settings::values.frame_limit);
     AddField(Telemetry::FieldType::UserConfig, "Renderer_UseHwRenderer",
              Settings::values.use_hw_renderer);
+    AddField(Telemetry::FieldType::UserConfig, "Renderer_UseHwShader",
+             Settings::values.use_hw_shader);
+    AddField(Telemetry::FieldType::UserConfig, "Renderer_ShadersAccurateGs",
+             Settings::values.shaders_accurate_gs);
+    AddField(Telemetry::FieldType::UserConfig, "Renderer_ShadersAccurateMul",
+             Settings::values.shaders_accurate_mul);
     AddField(Telemetry::FieldType::UserConfig, "Renderer_UseShaderJit",
              Settings::values.use_shader_jit);
     AddField(Telemetry::FieldType::UserConfig, "Renderer_UseVsync", Settings::values.use_vsync);
+    AddField(Telemetry::FieldType::UserConfig, "Renderer_Toggle3d", Settings::values.toggle_3d);
+    AddField(Telemetry::FieldType::UserConfig, "Renderer_Factor3d", Settings::values.factor_3d);
     AddField(Telemetry::FieldType::UserConfig, "System_IsNew3ds", Settings::values.is_new_3ds);
     AddField(Telemetry::FieldType::UserConfig, "System_RegionValue", Settings::values.region_value);
 }

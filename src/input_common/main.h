@@ -20,6 +20,8 @@ void Init();
 /// Deregisters all built-in input device factories and shuts them down.
 void Shutdown();
 
+void StartJoystickEventHandler();
+
 class Keyboard;
 
 /// Gets the keyboard button device factory.
@@ -36,6 +38,9 @@ std::string GenerateKeyboardParam(int key_code);
 /// Generates a serialized param package for creating an analog device taking input from keyboard
 std::string GenerateAnalogParamFromKeys(int key_up, int key_down, int key_left, int key_right,
                                         int key_modifier, float modifier_scale);
+
+/// Reloads the input devices
+void ReloadInputDevices();
 
 namespace Polling {
 

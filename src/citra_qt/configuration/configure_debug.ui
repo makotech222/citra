@@ -23,13 +23,6 @@
        </property>
        <layout class="QVBoxLayout" name="verticalLayout_3">
         <item>
-         <widget class="QLabel" name="label_1">
-          <property name="text">
-           <string>The GDB Stub only works correctly when the CPU JIT is off.</string>
-          </property>
-         </widget>
-        </item>
-        <item>
          <layout class="QHBoxLayout" name="horizontalLayout_1">
           <item>
            <widget class="QCheckBox" name="toggle_gdbstub">
@@ -109,6 +102,22 @@
          </widget>
         </item>
        </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupBox_3">
+     <property name="title">
+      <string>Miscellaneous</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_4">
+      <item>
+       <widget class="QCheckBox" name="toggle_cpu_jit">
+        <property name="text">
+         <string>Enable CPU JIT</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>

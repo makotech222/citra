@@ -9,6 +9,7 @@
 #include <QMainWindow>
 #include <QTimer>
 #include <QTranslator>
+#include "citra_qt/hotkeys.h"
 #include "common/announce_multiplayer_room.h"
 #include "core/core.h"
 #include "core/hle/service/am/am.h"
@@ -28,6 +29,7 @@ class GraphicsBreakPointsWidget;
 class GraphicsTracingWidget;
 class GraphicsVertexShaderWidget;
 class GRenderWindow;
+class LLEServiceModulesWidget;
 class MicroProfileDialog;
 class MultiplayerState;
 class ProfilerWidget;
@@ -39,6 +41,9 @@ class Updater;
 class WaitTreeWidget;
 class CheatDialog;
 class CheatSearch;
+namespace DiscordRPC {
+class DiscordInterface;
+}
 
 class GMainWindow : public QMainWindow {
     Q_OBJECT
@@ -62,6 +67,7 @@ public:
     ~GMainWindow();
 
     GameList* game_list;
+    std::unique_ptr<DiscordRPC::DiscordInterface> discord_rpc;
 
 signals:
 
@@ -81,7 +87,7 @@ signals:
      */
     void EmulationStopping();
 
-    void UpdateProgress(size_t written, size_t total);
+    void UpdateProgress(std::size_t written, std::size_t total);
     void CIAInstallReport(Service::AM::InstallStatus status, QString filepath);
     void CIAInstallFinished();
     // Signal that tells widgets to update icons to use the current theme
@@ -104,11 +110,12 @@ private:
     void BootGame(const QString& filename);
     void ShutdownGame();
 
-    void ShowCallouts();
+    void ShowTelemetryCallout();
     void ShowUpdaterWidgets();
     void ShowUpdatePrompt();
     void ShowNoUpdatePrompt();
     void CheckForUpdates();
+    void SetDiscordEnabled(bool state);
 
     /**
      * Stores the filename in the recently loaded files list.
@@ -156,7 +163,7 @@ private slots:
     void OnGameListShowList(bool show);
     void OnMenuLoadFile();
     void OnMenuInstallCIA();
-    void OnUpdateProgress(size_t written, size_t total);
+    void OnUpdateProgress(std::size_t written, std::size_t total);
     void OnCIAInstallReport(Service::AM::InstallStatus status, QString filepath);
     void OnCIAInstallFinished();
     void OnMenuRecentFile();
@@ -173,6 +180,9 @@ private slots:
     void HideFullscreen();
     void ToggleWindowMode();
     void OnCreateGraphicsSurfaceViewer();
+    void OnRecordMovie();
+    void OnPlayMovie();
+    void OnStopRecordingPlayback();
     void OnCoreError(Core::System::ResultStatus, std::string);
     /// Called whenever a user selects Help->About Citra
     void OnMenuAboutCitra();
@@ -182,9 +192,12 @@ private slots:
     void OnLanguageChanged(const QString& locale);
 
 private:
+    bool ValidateMovie(const QString& path, u64 program_id = 0);
+    Q_INVOKABLE void OnMoviePlaybackCompleted();
     void UpdateStatusBar();
     void LoadTranslation();
     void SetupUIStrings();
+    void RetranslateStatusBar();
 
     Ui::MainWindow ui;
 
@@ -208,6 +221,12 @@ private:
     std::unique_ptr<EmuThread> emu_thread;
     // The title of the game currently running
     QString game_title;
+    // The path to the game currently running
+    QString game_path;
+
+    // Movie
+    bool movie_record_on_start = false;
+    QString movie_record_path;
 
     // Debugger panes
     ProfilerWidget* profilerWidget;
@@ -218,6 +237,7 @@ private:
     GraphicsBreakPointsWidget* graphicsBreakpointsWidget;
     GraphicsVertexShaderWidget* graphicsVertexShaderWidget;
     GraphicsTracingWidget* graphicsTracingWidget;
+    LLEServiceModulesWidget* lleServiceModulesWidget;
     WaitTreeWidget* waitTreeWidget;
     Updater* updater;
 
@@ -233,11 +253,13 @@ private:
     // stores default icon theme search paths for the platform
     QStringList default_theme_paths;
 
+    HotkeyRegistry hotkey_registry;
+
 protected:
     void dropEvent(QDropEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
 };
 
-Q_DECLARE_METATYPE(size_t);
+Q_DECLARE_METATYPE(std::size_t);
 Q_DECLARE_METATYPE(Service::AM::InstallStatus);

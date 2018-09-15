@@ -27,7 +27,7 @@ public:
         : context(&context), cmdbuf(context.CommandBuffer()), header(desired_header) {}
 
     /// Returns the total size of the request in words
-    size_t TotalSize() const {
+    std::size_t TotalSize() const {
         return 1 /* command header */ + header.normal_params_size + header.translate_params_size;
     }
 
@@ -111,6 +111,11 @@ private:
 template <>
 inline void RequestBuilder::Push(u32 value) {
     cmdbuf[index++] = value;
+}
+
+template <>
+inline void RequestBuilder::Push(s32 value) {
+    cmdbuf[index++] = static_cast<u32>(value);
 }
 
 template <typename T>
@@ -331,6 +336,12 @@ inline u64 RequestParser::Pop() {
 }
 
 template <>
+inline s32 RequestParser::Pop() {
+    s32_le data = PopRaw<s32_le>();
+    return data;
+}
+
+template <>
 inline bool RequestParser::Pop() {
     return Pop<u8>() != 0;
 }
@@ -387,7 +398,7 @@ inline std::array<Kernel::SharedPtr<Kernel::Object>, N> RequestParser::PopGeneri
 }
 
 namespace detail {
-template <typename... T, size_t... I>
+template <typename... T, std::size_t... I>
 std::tuple<Kernel::SharedPtr<T>...> PopObjectsHelper(
     std::array<Kernel::SharedPtr<Kernel::Object>, sizeof...(T)>&& pointers,
     std::index_sequence<I...>) {
@@ -412,7 +423,7 @@ inline const std::vector<u8>& RequestParser::PopStaticBuffer() {
     Pop<VAddr>();
 
     StaticBufferDescInfo buffer_info{sbuffer_descriptor};
-    return context->GetStaticBuffer(buffer_info.buffer_id);
+    return context->GetStaticBuffer(static_cast<u8>(buffer_info.buffer_id));
 }
 
 inline Kernel::MappedBuffer& RequestParser::PopMappedBuffer() {

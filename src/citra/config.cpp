@@ -2,7 +2,10 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <iomanip>
 #include <memory>
+#include <sstream>
+#include <unordered_map>
 #include <SDL.h>
 #include <inih/cpp/INIReader.h>
 #include "citra/config.h"
@@ -10,8 +13,10 @@
 #include "common/file_util.h"
 #include "common/logging/log.h"
 #include "common/param_package.h"
+#include "core/hle/service/service.h"
 #include "core/settings.h"
 #include "input_common/main.h"
+#include "input_common/udp/client.h"
 
 Config::Config() {
     // TODO: Don't hardcode the path; let the frontend decide where to put the config files.
@@ -89,13 +94,24 @@ void Config::ReadValues() {
                          "engine:motion_emu,update_period:100,sensitivity:0.01,tilt_clamp:90.0");
     Settings::values.touch_device =
         sdl2_config->Get("Controls", "touch_device", "engine:emu_window");
+    Settings::values.udp_input_address =
+        sdl2_config->Get("Controls", "udp_input_address", InputCommon::CemuhookUDP::DEFAULT_ADDR);
+    Settings::values.udp_input_port = static_cast<u16>(sdl2_config->GetInteger(
+        "Controls", "udp_input_port", InputCommon::CemuhookUDP::DEFAULT_PORT));
 
     // Core
     Settings::values.use_cpu_jit = sdl2_config->GetBoolean("Core", "use_cpu_jit", true);
 
     // Renderer
     Settings::values.use_hw_renderer = sdl2_config->GetBoolean("Renderer", "use_hw_renderer", true);
+#ifdef __APPLE__
+    // Hardware shader is broken on macos thanks to poor drivers.
+    // We still want to provide this option for test/development purposes, but disable it by
+    // default.
+    Settings::values.use_hw_shader = sdl2_config->GetBoolean("Renderer", "use_hw_shader", false);
+#else
     Settings::values.use_hw_shader = sdl2_config->GetBoolean("Renderer", "use_hw_shader", true);
+#endif
     Settings::values.shaders_accurate_gs =
         sdl2_config->GetBoolean("Renderer", "shaders_accurate_gs", true);
     Settings::values.shaders_accurate_mul =
@@ -143,6 +159,7 @@ void Config::ReadValues() {
     Settings::values.enable_audio_stretching =
         sdl2_config->GetBoolean("Audio", "enable_audio_stretching", true);
     Settings::values.audio_device_id = sdl2_config->Get("Audio", "output_device", "auto");
+    Settings::values.volume = sdl2_config->GetReal("Audio", "volume", 1);
 
     // Data Storage
     Settings::values.use_virtual_sd =
@@ -152,6 +169,28 @@ void Config::ReadValues() {
     Settings::values.is_new_3ds = sdl2_config->GetBoolean("System", "is_new_3ds", false);
     Settings::values.region_value =
         sdl2_config->GetInteger("System", "region_value", Settings::REGION_VALUE_AUTO_SELECT);
+    Settings::values.init_clock =
+        static_cast<Settings::InitClock>(sdl2_config->GetInteger("System", "init_clock", 1));
+    {
+        std::tm t;
+        t.tm_sec = 1;
+        t.tm_min = 0;
+        t.tm_hour = 0;
+        t.tm_mday = 1;
+        t.tm_mon = 0;
+        t.tm_year = 100;
+        t.tm_isdst = 0;
+        std::istringstream string_stream(
+            sdl2_config->Get("System", "init_time", "2000-01-01 00:00:01"));
+        string_stream >> std::get_time(&t, "%Y-%m-%d %H:%M:%S");
+        if (string_stream.fail()) {
+            LOG_ERROR(Config, "Failed To parse init_time. Using 2000-01-01 00:00:01");
+        }
+        Settings::values.init_time =
+            std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::from_time_t(std::mktime(&t)).time_since_epoch())
+                .count();
+    }
 
     // Camera
     using namespace Service::CAM;
@@ -182,16 +221,16 @@ void Config::ReadValues() {
     Settings::values.gdbstub_port =
         static_cast<u16>(sdl2_config->GetInteger("Debugging", "gdbstub_port", 24689));
 
+    for (const auto& service_module : Service::service_module_map) {
+        bool use_lle = sdl2_config->GetBoolean("Debugging", "LLE\\" + service_module.name, false);
+        Settings::values.lle_modules.emplace(service_module.name, use_lle);
+    }
+
     // Web Service
     Settings::values.enable_telemetry =
         sdl2_config->GetBoolean("WebService", "enable_telemetry", true);
-    Settings::values.telemetry_endpoint_url = sdl2_config->Get(
-        "WebService", "telemetry_endpoint_url", "https://services.citra-emu.org/api/telemetry");
-    Settings::values.verify_endpoint_url = sdl2_config->Get(
-        "WebService", "verify_endpoint_url", "https://services.citra-emu.org/api/profile");
-    Settings::values.announce_multiplayer_room_endpoint_url =
-        sdl2_config->Get("WebService", "announce_multiplayer_room_endpoint_url",
-                         "https://services.citra-emu.org/api/multiplayer/rooms");
+    Settings::values.web_api_url =
+        sdl2_config->Get("WebService", "web_api_url", "https://api.citra-emu.org");
     Settings::values.citra_username = sdl2_config->Get("WebService", "citra_username", "");
     Settings::values.citra_token = sdl2_config->Get("WebService", "citra_token", "");
 }

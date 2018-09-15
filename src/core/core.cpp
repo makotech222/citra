@@ -26,6 +26,7 @@
 #include "core/loader/loader.h"
 #include "core/memory_setup.h"
 #include "core/movie.h"
+#include "core/rpc/rpc_server.h"
 #include "core/settings.h"
 #include "network/network.h"
 #include "video_core/video_core.h"
@@ -47,8 +48,7 @@ System::ResultStatus System::RunLoop(bool tight_loop) {
         // execute. Otherwise, get out of the loop function.
         if (GDBStub::GetCpuHaltFlag()) {
             if (GDBStub::GetCpuStepFlag()) {
-                GDBStub::SetCpuStepFlag(false);
-                tight_loop = 1;
+                tight_loop = false;
             } else {
                 return ResultStatus::Success;
             }
@@ -71,6 +71,10 @@ System::ResultStatus System::RunLoop(bool tight_loop) {
         }
     }
 
+    if (GDBStub::IsServerEnabled()) {
+        GDBStub::SetCpuStepFlag(false);
+    }
+
     HW::Update();
     Reschedule();
 
@@ -81,7 +85,7 @@ System::ResultStatus System::SingleStep() {
     return RunLoop(false);
 }
 
-System::ResultStatus System::Load(EmuWindow* emu_window, const std::string& filepath) {
+System::ResultStatus System::Load(EmuWindow& emu_window, const std::string& filepath) {
     app_loader = Loader::GetLoader(filepath);
 
     if (!app_loader) {
@@ -150,7 +154,7 @@ void System::Reschedule() {
     Kernel::Reschedule();
 }
 
-System::ResultStatus System::Init(EmuWindow* emu_window, u32 system_mode) {
+System::ResultStatus System::Init(EmuWindow& emu_window, u32 system_mode) {
     LOG_DEBUG(HW_Memory, "initialized OK");
 
     CoreTiming::Init();
@@ -167,21 +171,23 @@ System::ResultStatus System::Init(EmuWindow* emu_window, u32 system_mode) {
     }
 
     dsp_core = std::make_unique<AudioCore::DspHle>();
-    dsp_core->SetSink(Settings::values.sink_id);
+    dsp_core->SetSink(Settings::values.sink_id, Settings::values.audio_device_id);
     dsp_core->EnableStretching(Settings::values.enable_audio_stretching);
 
     telemetry_session = std::make_unique<Core::TelemetrySession>();
+    rpc_server = std::make_unique<RPC::RPCServer>();
     service_manager = std::make_shared<Service::SM::ServiceManager>();
+    shared_page_handler = std::make_shared<SharedPage::Handler>();
 
     HW::Init();
     Kernel::Init(system_mode);
     Service::Init(service_manager);
     CheatCore::Init();
     GDBStub::Init();
-    Movie::GetInstance().Init();
 
-    if (!VideoCore::Init(emu_window)) {
-        return ResultStatus::ErrorVideoCore;
+    ResultStatus result = VideoCore::Init(emu_window);
+    if (result != ResultStatus::Success) {
+        return result;
     }
 
     LOG_DEBUG(Core, "Initialized OK");
@@ -201,6 +207,10 @@ const Service::SM::ServiceManager& System::ServiceManager() const {
     return *service_manager;
 }
 
+void System::RegisterSoftwareKeyboard(std::shared_ptr<Frontend::SoftwareKeyboard> swkbd) {
+    registered_swkbd = std::move(swkbd);
+}
+
 void System::Shutdown() {
     // Log last frame performance stats
     auto perf_results = GetAndResetPerfStats();
@@ -212,7 +222,6 @@ void System::Shutdown() {
                          perf_results.frametime * 1000.0);
 
     // Shutdown emulation session
-    Movie::GetInstance().Shutdown();
     GDBStub::Shutdown();
     CheatCore::Shutdown();
     VideoCore::Shutdown();
@@ -220,6 +229,7 @@ void System::Shutdown() {
     Kernel::Shutdown();
     HW::Shutdown();
     telemetry_session.reset();
+    rpc_server.reset();
     service_manager.reset();
     dsp_core.reset();
     cpu_core.reset();

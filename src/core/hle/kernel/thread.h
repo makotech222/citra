@@ -11,7 +11,7 @@
 #include <boost/container/flat_set.hpp>
 #include "common/common_types.h"
 #include "core/arm/arm_interface.h"
-#include "core/hle/kernel/kernel.h"
+#include "core/hle/kernel/object.h"
 #include "core/hle/kernel/wait_object.h"
 #include "core/hle/result.h"
 
@@ -269,12 +269,6 @@ Thread* GetCurrentThread();
  * Waits the current thread on a sleep
  */
 void WaitCurrentThread_Sleep();
-
-/**
- * Waits the current thread from an ArbitrateAddress call
- * @param wait_address Arbitration address used to resume from wait
- */
-void WaitCurrentThread_ArbitrateAddress(VAddr wait_address);
 
 /**
  * Stops the current thread and removes it from the thread_list

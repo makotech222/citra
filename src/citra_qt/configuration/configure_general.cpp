@@ -37,15 +37,13 @@ ConfigureGeneral::ConfigureGeneral(QWidget* parent)
 
     this->setConfiguration();
 
-    ui->toggle_cpu_jit->setEnabled(!Core::System::GetInstance().IsPoweredOn());
     ui->updateBox->setVisible(UISettings::values.updater_found);
 }
 
-ConfigureGeneral::~ConfigureGeneral() {}
+ConfigureGeneral::~ConfigureGeneral() = default;
 
 void ConfigureGeneral::setConfiguration() {
     ui->toggle_check_exit->setChecked(UISettings::values.confirm_before_closing);
-    ui->toggle_cpu_jit->setChecked(Settings::values.use_cpu_jit);
 
     ui->toggle_update_check->setChecked(UISettings::values.check_for_update_on_start);
     ui->toggle_auto_update->setChecked(UISettings::values.update_on_close);
@@ -58,6 +56,10 @@ void ConfigureGeneral::setConfiguration() {
         ui->language_combobox->findData(UISettings::values.language));
 }
 
+void ConfigureGeneral::PopulateHotkeyList(const HotkeyRegistry& registry) {
+    ui->hotkeysDialog->Populate(registry);
+}
+
 void ConfigureGeneral::applyConfiguration() {
     UISettings::values.confirm_before_closing = ui->toggle_check_exit->isChecked();
     UISettings::values.theme =
@@ -67,8 +69,6 @@ void ConfigureGeneral::applyConfiguration() {
     UISettings::values.update_on_close = ui->toggle_auto_update->isChecked();
 
     Settings::values.region_value = ui->region_combobox->currentIndex() - 1;
-    Settings::values.use_cpu_jit = ui->toggle_cpu_jit->isChecked();
-    Settings::Apply();
 }
 
 void ConfigureGeneral::onLanguageChanged(int index) {
@@ -80,4 +80,5 @@ void ConfigureGeneral::onLanguageChanged(int index) {
 
 void ConfigureGeneral::retranslateUi() {
     ui->retranslateUi(this);
+    ui->hotkeysDialog->retranslateUi();
 }

@@ -107,7 +107,12 @@ struct PicaFSConfigState {
         bool noise_enable;
         Pica::TexturingRegs::ProcTexShift u_shift, v_shift;
         u32 lut_width;
-        u32 lut_offset;
+        u32 lut_offset0;
+        u32 lut_offset1;
+        u32 lut_offset2;
+        u32 lut_offset3;
+        u32 lod_min;
+        u32 lod_max;
         Pica::TexturingRegs::ProcTexFilter lut_filter;
     } proctex;
 
@@ -256,28 +261,28 @@ std::string GenerateFragmentShader(const PicaFSConfig& config, bool separable_sh
 namespace std {
 template <>
 struct hash<GLShader::PicaFSConfig> {
-    size_t operator()(const GLShader::PicaFSConfig& k) const {
+    std::size_t operator()(const GLShader::PicaFSConfig& k) const {
         return k.Hash();
     }
 };
 
 template <>
 struct hash<GLShader::PicaVSConfig> {
-    size_t operator()(const GLShader::PicaVSConfig& k) const {
+    std::size_t operator()(const GLShader::PicaVSConfig& k) const {
         return k.Hash();
     }
 };
 
 template <>
 struct hash<GLShader::PicaFixedGSConfig> {
-    size_t operator()(const GLShader::PicaFixedGSConfig& k) const {
+    std::size_t operator()(const GLShader::PicaFixedGSConfig& k) const {
         return k.Hash();
     }
 };
 
 template <>
 struct hash<GLShader::PicaGSConfig> {
-    size_t operator()(const GLShader::PicaGSConfig& k) const {
+    std::size_t operator()(const GLShader::PicaGSConfig& k) const {
         return k.Hash();
     }
 };

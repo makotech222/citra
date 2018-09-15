@@ -2,12 +2,12 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <mutex>
 #include <vector>
 #include <cubeb/cubeb.h>
 #include "audio_core/audio_types.h"
 #include "audio_core/cubeb_sink.h"
 #include "common/logging/log.h"
-#include "core/settings.h"
 
 namespace AudioCore {
 
@@ -18,6 +18,7 @@ struct CubebSink::Impl {
     cubeb* ctx = nullptr;
     cubeb_stream* stream = nullptr;
 
+    std::mutex queue_mutex;
     std::vector<s16> queue;
 
     static long DataCallback(cubeb_stream* stream, void* user_data, const void* input_buffer,
@@ -25,13 +26,12 @@ struct CubebSink::Impl {
     static void StateCallback(cubeb_stream* stream, void* user_data, cubeb_state state);
 };
 
-CubebSink::CubebSink() : impl(std::make_unique<Impl>()) {
+CubebSink::CubebSink(std::string target_device_name) : impl(std::make_unique<Impl>()) {
     if (cubeb_init(&impl->ctx, "Citra", nullptr) != CUBEB_OK) {
         LOG_CRITICAL(Audio_Sink, "cubeb_init failed");
         return;
     }
 
-    const char* target_device_name = nullptr;
     cubeb_devid output_device = nullptr;
 
     cubeb_stream_params params;
@@ -46,27 +46,21 @@ CubebSink::CubebSink() : impl(std::make_unique<Impl>()) {
     if (cubeb_get_min_latency(impl->ctx, &params, &minimum_latency) != CUBEB_OK)
         LOG_CRITICAL(Audio_Sink, "Error getting minimum latency");
 
-    cubeb_device_collection collection;
-    if (cubeb_enumerate_devices(impl->ctx, CUBEB_DEVICE_TYPE_OUTPUT, &collection) != CUBEB_OK) {
-        LOG_WARNING(Audio_Sink, "Audio output device enumeration not supported");
-    } else {
-        if (collection.count >= 1 && Settings::values.audio_device_id != "auto" &&
-            !Settings::values.audio_device_id.empty()) {
-            target_device_name = Settings::values.audio_device_id.c_str();
-        }
-
-        for (size_t i = 0; i < collection.count; i++) {
-            const cubeb_device_info& device = collection.device[i];
-            if (device.friendly_name) {
-                impl->device_list.emplace_back(device.friendly_name);
-
-                if (target_device_name && strcmp(target_device_name, device.friendly_name) == 0) {
-                    output_device = device.devid;
-                }
+    if (target_device_name != auto_device_name && !target_device_name.empty()) {
+        cubeb_device_collection collection;
+        if (cubeb_enumerate_devices(impl->ctx, CUBEB_DEVICE_TYPE_OUTPUT, &collection) != CUBEB_OK) {
+            LOG_WARNING(Audio_Sink, "Audio output device enumeration not supported");
+        } else {
+            const auto collection_end = collection.device + collection.count;
+            const auto device = std::find_if(collection.device, collection_end,
+                                             [&](const cubeb_device_info& device) {
+                                                 return target_device_name == device.friendly_name;
+                                             });
+            if (device != collection_end) {
+                output_device = device->devid;
             }
+            cubeb_device_collection_destroy(impl->ctx, &collection);
         }
-
-        cubeb_device_collection_destroy(impl->ctx, &collection);
     }
 
     if (cubeb_stream_init(impl->ctx, &impl->stream, "Citra Audio Output", nullptr, nullptr,
@@ -101,13 +95,11 @@ unsigned int CubebSink::GetNativeSampleRate() const {
     return impl->sample_rate;
 }
 
-std::vector<std::string> CubebSink::GetDeviceList() const {
-    return impl->device_list;
-}
-
-void CubebSink::EnqueueSamples(const s16* samples, size_t sample_count) {
+void CubebSink::EnqueueSamples(const s16* samples, std::size_t sample_count) {
     if (!impl->ctx)
         return;
+
+    std::lock_guard lock{impl->queue_mutex};
 
     impl->queue.reserve(impl->queue.size() + sample_count * 2);
     std::copy(samples, samples + sample_count * 2, std::back_inserter(impl->queue));
@@ -117,10 +109,9 @@ size_t CubebSink::SamplesInQueue() const {
     if (!impl->ctx)
         return 0;
 
+    std::lock_guard lock{impl->queue_mutex};
     return impl->queue.size() / 2;
 }
-
-void CubebSink::SetDevice(int device_id) {}
 
 long CubebSink::Impl::DataCallback(cubeb_stream* stream, void* user_data, const void* input_buffer,
                                    void* output_buffer, long num_frames) {
@@ -130,7 +121,10 @@ long CubebSink::Impl::DataCallback(cubeb_stream* stream, void* user_data, const 
     if (!impl)
         return 0;
 
-    size_t frames_to_write = std::min(impl->queue.size() / 2, static_cast<size_t>(num_frames));
+    std::lock_guard lock{impl->queue_mutex};
+
+    std::size_t frames_to_write =
+        std::min(impl->queue.size() / 2, static_cast<std::size_t>(num_frames));
 
     memcpy(buffer, impl->queue.data(), frames_to_write * sizeof(s16) * 2);
     impl->queue.erase(impl->queue.begin(), impl->queue.begin() + frames_to_write * 2);
@@ -145,5 +139,31 @@ long CubebSink::Impl::DataCallback(cubeb_stream* stream, void* user_data, const 
 }
 
 void CubebSink::Impl::StateCallback(cubeb_stream* stream, void* user_data, cubeb_state state) {}
+
+std::vector<std::string> ListCubebSinkDevices() {
+    std::vector<std::string> device_list;
+    cubeb* ctx;
+
+    if (cubeb_init(&ctx, "Citra Device Enumerator", nullptr) != CUBEB_OK) {
+        LOG_CRITICAL(Audio_Sink, "cubeb_init failed");
+        return {};
+    }
+
+    cubeb_device_collection collection;
+    if (cubeb_enumerate_devices(ctx, CUBEB_DEVICE_TYPE_OUTPUT, &collection) != CUBEB_OK) {
+        LOG_WARNING(Audio_Sink, "Audio output device enumeration not supported");
+    } else {
+        for (std::size_t i = 0; i < collection.count; i++) {
+            const cubeb_device_info& device = collection.device[i];
+            if (device.friendly_name) {
+                device_list.emplace_back(device.friendly_name);
+            }
+        }
+        cubeb_device_collection_destroy(ctx, &collection);
+    }
+
+    cubeb_destroy(ctx);
+    return device_list;
+}
 
 } // namespace AudioCore

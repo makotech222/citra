@@ -129,7 +129,7 @@ static THREEDSX_Error Load3DSXFile(FileUtil::IOFile& file, u32 base_addr,
     // Read the relocation headers
     std::vector<u32> relocs(n_reloc_tables * NUM_SEGMENTS);
     for (unsigned int current_segment = 0; current_segment < NUM_SEGMENTS; ++current_segment) {
-        size_t size = n_reloc_tables * sizeof(u32);
+        std::size_t size = n_reloc_tables * sizeof(u32);
         if (file.ReadBytes(&relocs[current_segment * n_reloc_tables], size) != size)
             return ERROR_READ;
     }
@@ -219,19 +219,19 @@ static THREEDSX_Error Load3DSXFile(FileUtil::IOFile& file, u32 base_addr,
     // Create the CodeSet
     SharedPtr<CodeSet> code_set = CodeSet::Create("", 0);
 
-    code_set->code.offset = loadinfo.seg_ptrs[0] - program_image.data();
-    code_set->code.addr = loadinfo.seg_addrs[0];
-    code_set->code.size = loadinfo.seg_sizes[0];
+    code_set->CodeSegment().offset = loadinfo.seg_ptrs[0] - program_image.data();
+    code_set->CodeSegment().addr = loadinfo.seg_addrs[0];
+    code_set->CodeSegment().size = loadinfo.seg_sizes[0];
 
-    code_set->rodata.offset = loadinfo.seg_ptrs[1] - program_image.data();
-    code_set->rodata.addr = loadinfo.seg_addrs[1];
-    code_set->rodata.size = loadinfo.seg_sizes[1];
+    code_set->RODataSegment().offset = loadinfo.seg_ptrs[1] - program_image.data();
+    code_set->RODataSegment().addr = loadinfo.seg_addrs[1];
+    code_set->RODataSegment().size = loadinfo.seg_sizes[1];
 
-    code_set->data.offset = loadinfo.seg_ptrs[2] - program_image.data();
-    code_set->data.addr = loadinfo.seg_addrs[2];
-    code_set->data.size = loadinfo.seg_sizes[2];
+    code_set->DataSegment().offset = loadinfo.seg_ptrs[2] - program_image.data();
+    code_set->DataSegment().addr = loadinfo.seg_addrs[2];
+    code_set->DataSegment().size = loadinfo.seg_sizes[2];
 
-    code_set->entrypoint = code_set->code.addr;
+    code_set->entrypoint = code_set->CodeSegment().addr;
     code_set->memory = std::make_shared<std::vector<u8>>(std::move(program_image));
 
     LOG_DEBUG(Loader, "code size:   {:#X}", loadinfo.seg_sizes[0]);
@@ -283,8 +283,7 @@ ResultStatus AppLoader_THREEDSX::Load(Kernel::SharedPtr<Kernel::Process>& proces
     return ResultStatus::Success;
 }
 
-ResultStatus AppLoader_THREEDSX::ReadRomFS(std::shared_ptr<FileUtil::IOFile>& romfs_file,
-                                           u64& offset, u64& size) {
+ResultStatus AppLoader_THREEDSX::ReadRomFS(std::shared_ptr<FileSys::RomFSReader>& romfs_file) {
     if (!file.IsOpen())
         return ResultStatus::Error;
 
@@ -307,12 +306,12 @@ ResultStatus AppLoader_THREEDSX::ReadRomFS(std::shared_ptr<FileUtil::IOFile>& ro
         LOG_DEBUG(Loader, "RomFS size:             {:#010X}", romfs_size);
 
         // We reopen the file, to allow its position to be independent from file's
-        romfs_file = std::make_shared<FileUtil::IOFile>(filepath, "rb");
-        if (!romfs_file->IsOpen())
+        FileUtil::IOFile romfs_file_inner(filepath, "rb");
+        if (!romfs_file_inner.IsOpen())
             return ResultStatus::Error;
 
-        offset = romfs_offset;
-        size = romfs_size;
+        romfs_file = std::make_shared<FileSys::RomFSReader>(std::move(romfs_file_inner),
+                                                            romfs_offset, romfs_size);
 
         return ResultStatus::Success;
     }
