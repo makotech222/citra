@@ -24,7 +24,7 @@ CheatDialog::CheatDialog(QWidget* parent)
     ui->textDetails->setEnabled(false);
     ui->textNotes->setEnabled(false);
     const auto game_id =
-        Common::StringFromFormat("%016llX", Kernel::g_current_process->codeset->program_id);
+        fmt::format("{:016x}", Kernel::g_current_process->codeset->program_id);
     ui->labelTitle->setText(tr("Title ID: %1").arg(QString::fromStdString(game_id)));
 
     connect(ui->buttonClose, &QPushButton::released, this, &CheatDialog::OnCancel);
