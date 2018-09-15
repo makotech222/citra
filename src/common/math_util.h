@@ -17,17 +17,12 @@ inline bool IntervalsIntersect(unsigned start0, unsigned length0, unsigned start
     return (std::max(start0, start1) < std::min(start0 + length0, start1 + length1));
 }
 
-template <typename T>
-inline T Clamp(const T val, const T& min, const T& max) {
-    return std::max(min, std::min(max, val));
-}
-
 template <class T>
 struct Rectangle {
-    T left;
-    T top;
-    T right;
-    T bottom;
+    T left{};
+    T top{};
+    T right{};
+    T bottom{};
 
     Rectangle() = default;
 

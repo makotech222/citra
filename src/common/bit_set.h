@@ -96,7 +96,7 @@ static inline int LeastSignificantSetBit(u64 val) {
 
 template <typename IntTy>
 class BitSet {
-    static_assert(!std::is_signed<IntTy>::value, "BitSet should not be used with signed types");
+    static_assert(!std::is_signed_v<IntTy>, "BitSet should not be used with signed types");
 
 public:
     // A reference to a particular bit, returned from operator[].
@@ -155,14 +155,14 @@ public:
             m_val |= (IntTy)1 << bit;
     }
 
-    static BitSet AllTrue(size_t count) {
+    static BitSet AllTrue(std::size_t count) {
         return BitSet(count == sizeof(IntTy) * 8 ? ~(IntTy)0 : (((IntTy)1 << count) - 1));
     }
 
-    Ref operator[](size_t bit) {
+    Ref operator[](std::size_t bit) {
         return Ref(this, (IntTy)1 << bit);
     }
-    const Ref operator[](size_t bit) const {
+    const Ref operator[](std::size_t bit) const {
         return (*const_cast<BitSet*>(this))[bit];
     }
     bool operator==(BitSet other) const {

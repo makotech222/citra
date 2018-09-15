@@ -2,6 +2,7 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -34,11 +35,17 @@ MICROPROFILE_DEFINE(OpenGL_Drawing, "OpenGL", "Drawing", MP_RGB(128, 128, 192));
 MICROPROFILE_DEFINE(OpenGL_Blits, "OpenGL", "Blits", MP_RGB(100, 100, 255));
 MICROPROFILE_DEFINE(OpenGL_CacheManagement, "OpenGL", "Cache Mgmt", MP_RGB(100, 255, 100));
 
-RasterizerOpenGL::RasterizerOpenGL()
-    : shader_dirty(true), vertex_buffer(GL_ARRAY_BUFFER, VERTEX_BUFFER_SIZE),
-      uniform_buffer(GL_UNIFORM_BUFFER, UNIFORM_BUFFER_SIZE),
-      index_buffer(GL_ELEMENT_ARRAY_BUFFER, INDEX_BUFFER_SIZE),
-      texture_buffer(GL_TEXTURE_BUFFER, TEXTURE_BUFFER_SIZE) {
+static bool IsVendorAmd() {
+    std::string gpu_vendor{reinterpret_cast<char const*>(glGetString(GL_VENDOR))};
+    return gpu_vendor == "ATI Technologies Inc." || gpu_vendor == "Advanced Micro Devices, Inc.";
+}
+
+RasterizerOpenGL::RasterizerOpenGL(EmuWindow& window)
+    : is_amd(IsVendorAmd()), shader_dirty(true),
+      vertex_buffer(GL_ARRAY_BUFFER, VERTEX_BUFFER_SIZE, is_amd),
+      uniform_buffer(GL_UNIFORM_BUFFER, UNIFORM_BUFFER_SIZE, false),
+      index_buffer(GL_ELEMENT_ARRAY_BUFFER, INDEX_BUFFER_SIZE, false),
+      texture_buffer(GL_TEXTURE_BUFFER, TEXTURE_BUFFER_SIZE, false), emu_window{window} {
 
     allow_shadow = GLAD_GL_ARB_shader_image_load_store && GLAD_GL_ARB_shader_image_size &&
                    GLAD_GL_ARB_framebuffer_no_attachments;
@@ -47,11 +54,16 @@ RasterizerOpenGL::RasterizerOpenGL()
                     "Shadow might not be able to render because of unsupported OpenGL extensions.");
     }
 
+    if (!GLAD_GL_ARB_texture_barrier) {
+        LOG_WARNING(Render_OpenGL,
+                    "ARB_texture_barrier not supported. Some games might produce artifacts.");
+    }
+
     // Clipping plane 0 is always enabled for PICA fixed clip plane z <= 0
     state.clip_distance[0] = true;
 
     // Create sampler objects
-    for (size_t i = 0; i < texture_samplers.size(); ++i) {
+    for (std::size_t i = 0; i < texture_samplers.size(); ++i) {
         texture_samplers[i].Create();
         state.texture_units[i].sampler = texture_samplers[i].sampler.handle;
     }
@@ -79,11 +91,11 @@ RasterizerOpenGL::RasterizerOpenGL()
 
     glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &uniform_buffer_alignment);
     uniform_size_aligned_vs =
-        Common::AlignUp<size_t>(sizeof(VSUniformData), uniform_buffer_alignment);
+        Common::AlignUp<std::size_t>(sizeof(VSUniformData), uniform_buffer_alignment);
     uniform_size_aligned_gs =
-        Common::AlignUp<size_t>(sizeof(GSUniformData), uniform_buffer_alignment);
+        Common::AlignUp<std::size_t>(sizeof(GSUniformData), uniform_buffer_alignment);
     uniform_size_aligned_fs =
-        Common::AlignUp<size_t>(sizeof(UniformData), uniform_buffer_alignment);
+        Common::AlignUp<std::size_t>(sizeof(UniformData), uniform_buffer_alignment);
 
     // Set vertex attributes for software shader path
     state.draw.vertex_array = sw_vao.handle;
@@ -140,7 +152,7 @@ RasterizerOpenGL::RasterizerOpenGL()
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, index_buffer.GetHandle());
 
     shader_program_manager =
-        std::make_unique<ShaderProgramManager>(GLAD_GL_ARB_separate_shader_objects);
+        std::make_unique<ShaderProgramManager>(GLAD_GL_ARB_separate_shader_objects, is_amd);
 
     glEnable(GL_BLEND);
 
@@ -186,6 +198,7 @@ void RasterizerOpenGL::SyncEntireState() {
 
     SyncFogColor();
     SyncProcTexNoise();
+    SyncProcTexBias();
     SyncShadowBias();
 }
 
@@ -528,18 +541,18 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
                               : (depth_surface == nullptr ? 1u : depth_surface->res_scale);
 
     MathUtil::Rectangle<u32> draw_rect{
-        static_cast<u32>(MathUtil::Clamp<s32>(static_cast<s32>(surfaces_rect.left) +
-                                                  viewport_rect_unscaled.left * res_scale,
-                                              surfaces_rect.left, surfaces_rect.right)), // Left
-        static_cast<u32>(MathUtil::Clamp<s32>(static_cast<s32>(surfaces_rect.bottom) +
-                                                  viewport_rect_unscaled.top * res_scale,
-                                              surfaces_rect.bottom, surfaces_rect.top)), // Top
-        static_cast<u32>(MathUtil::Clamp<s32>(static_cast<s32>(surfaces_rect.left) +
-                                                  viewport_rect_unscaled.right * res_scale,
-                                              surfaces_rect.left, surfaces_rect.right)), // Right
-        static_cast<u32>(MathUtil::Clamp<s32>(static_cast<s32>(surfaces_rect.bottom) +
-                                                  viewport_rect_unscaled.bottom * res_scale,
-                                              surfaces_rect.bottom, surfaces_rect.top))}; // Bottom
+        static_cast<u32>(std::clamp<s32>(static_cast<s32>(surfaces_rect.left) +
+                                             viewport_rect_unscaled.left * res_scale,
+                                         surfaces_rect.left, surfaces_rect.right)), // Left
+        static_cast<u32>(std::clamp<s32>(static_cast<s32>(surfaces_rect.bottom) +
+                                             viewport_rect_unscaled.top * res_scale,
+                                         surfaces_rect.bottom, surfaces_rect.top)), // Top
+        static_cast<u32>(std::clamp<s32>(static_cast<s32>(surfaces_rect.left) +
+                                             viewport_rect_unscaled.right * res_scale,
+                                         surfaces_rect.left, surfaces_rect.right)), // Right
+        static_cast<u32>(std::clamp<s32>(static_cast<s32>(surfaces_rect.bottom) +
+                                             viewport_rect_unscaled.bottom * res_scale,
+                                         surfaces_rect.bottom, surfaces_rect.top))}; // Bottom
 
     // Bind the framebuffer surfaces
     state.draw.draw_framebuffer = framebuffer.handle;
@@ -618,6 +631,13 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
         uniform_block_data.dirty = true;
     }
 
+    bool need_texture_barrier = false;
+    auto CheckBarrier = [&need_texture_barrier, &color_surface](GLuint handle) {
+        if (color_surface && color_surface->texture.handle == handle) {
+            need_texture_barrier = true;
+        }
+    };
+
     // Sync and bind the texture surfaces
     const auto pica_textures = regs.texturing.GetTextures();
     for (unsigned texture_index = 0; texture_index < pica_textures.size(); ++texture_index) {
@@ -633,7 +653,7 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
 
                     Surface surface = res_cache.GetTextureSurface(texture);
                     if (surface != nullptr) {
-                        state.image_shadow_texture_px = surface->texture.handle;
+                        CheckBarrier(state.image_shadow_texture_px = surface->texture.handle);
                     } else {
                         state.image_shadow_texture_px = 0;
                     }
@@ -651,7 +671,7 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
                         regs.texturing.GetCubePhysicalAddress(CubeFace::PositiveX);
                     surface = res_cache.GetTextureSurface(info);
                     if (surface != nullptr) {
-                        state.image_shadow_texture_px = surface->texture.handle;
+                        CheckBarrier(state.image_shadow_texture_px = surface->texture.handle);
                     } else {
                         state.image_shadow_texture_px = 0;
                     }
@@ -660,7 +680,7 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
                         regs.texturing.GetCubePhysicalAddress(CubeFace::NegativeX);
                     surface = res_cache.GetTextureSurface(info);
                     if (surface != nullptr) {
-                        state.image_shadow_texture_nx = surface->texture.handle;
+                        CheckBarrier(state.image_shadow_texture_nx = surface->texture.handle);
                     } else {
                         state.image_shadow_texture_nx = 0;
                     }
@@ -669,7 +689,7 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
                         regs.texturing.GetCubePhysicalAddress(CubeFace::PositiveY);
                     surface = res_cache.GetTextureSurface(info);
                     if (surface != nullptr) {
-                        state.image_shadow_texture_py = surface->texture.handle;
+                        CheckBarrier(state.image_shadow_texture_py = surface->texture.handle);
                     } else {
                         state.image_shadow_texture_py = 0;
                     }
@@ -678,7 +698,7 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
                         regs.texturing.GetCubePhysicalAddress(CubeFace::NegativeY);
                     surface = res_cache.GetTextureSurface(info);
                     if (surface != nullptr) {
-                        state.image_shadow_texture_ny = surface->texture.handle;
+                        CheckBarrier(state.image_shadow_texture_ny = surface->texture.handle);
                     } else {
                         state.image_shadow_texture_ny = 0;
                     }
@@ -687,7 +707,7 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
                         regs.texturing.GetCubePhysicalAddress(CubeFace::PositiveZ);
                     surface = res_cache.GetTextureSurface(info);
                     if (surface != nullptr) {
-                        state.image_shadow_texture_pz = surface->texture.handle;
+                        CheckBarrier(state.image_shadow_texture_pz = surface->texture.handle);
                     } else {
                         state.image_shadow_texture_pz = 0;
                     }
@@ -696,7 +716,7 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
                         regs.texturing.GetCubePhysicalAddress(CubeFace::NegativeZ);
                     surface = res_cache.GetTextureSurface(info);
                     if (surface != nullptr) {
-                        state.image_shadow_texture_nz = surface->texture.handle;
+                        CheckBarrier(state.image_shadow_texture_nz = surface->texture.handle);
                     } else {
                         state.image_shadow_texture_nz = 0;
                     }
@@ -727,7 +747,8 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
             texture_samplers[texture_index].SyncWithConfig(texture.config);
             Surface surface = res_cache.GetTextureSurface(texture);
             if (surface != nullptr) {
-                state.texture_units[texture_index].texture_2d = surface->texture.handle;
+                CheckBarrier(state.texture_units[texture_index].texture_2d =
+                                 surface->texture.handle);
             } else {
                 // Can occur when texture addr is null or its memory is unmapped/invalid
                 state.texture_units[texture_index].texture_2d = 0;
@@ -809,6 +830,10 @@ bool RasterizerOpenGL::Draw(bool accelerate, bool is_indexed) {
     if (shadow_rendering) {
         glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
                         GL_TEXTURE_UPDATE_BARRIER_BIT | GL_FRAMEBUFFER_BARRIER_BIT);
+    }
+
+    if (need_texture_barrier && GLAD_GL_ARB_texture_barrier) {
+        glTextureBarrier();
     }
 
     // Mark framebuffer surfaces as dirty
@@ -894,6 +919,7 @@ void RasterizerOpenGL::NotifyPicaRegisterChanged(u32 id) {
     case PICA_REG_INDEX(texturing.proctex):
     case PICA_REG_INDEX(texturing.proctex_lut):
     case PICA_REG_INDEX(texturing.proctex_lut_offset):
+        SyncProcTexBias();
         shader_dirty = true;
         break;
 
@@ -1681,6 +1707,15 @@ void RasterizerOpenGL::SyncProcTexNoise() {
     uniform_block_data.dirty = true;
 }
 
+void RasterizerOpenGL::SyncProcTexBias() {
+    const auto& regs = Pica::g_state.regs.texturing;
+    uniform_block_data.data.proctex_bias =
+        Pica::float16::FromRaw(regs.proctex.bias_low | (regs.proctex_lut.bias_high << 8))
+            .ToFloat32();
+
+    uniform_block_data.dirty = true;
+}
+
 void RasterizerOpenGL::SyncAlphaTest() {
     const auto& regs = Pica::g_state.regs;
     if (regs.framebuffer.output_merger.alpha_test.ref != uniform_block_data.data.alphatest_ref) {
@@ -1869,11 +1904,11 @@ void RasterizerOpenGL::SyncShadowBias() {
 }
 
 void RasterizerOpenGL::SyncAndUploadLUTs() {
-    constexpr size_t max_size = sizeof(GLvec2) * 256 * Pica::LightingRegs::NumLightingSampler +
-                                sizeof(GLvec2) * 128 +     // fog
-                                sizeof(GLvec2) * 128 * 3 + // proctex: noise + color + alpha
-                                sizeof(GLvec4) * 256 +     // proctex
-                                sizeof(GLvec4) * 256;      // proctex diff
+    constexpr std::size_t max_size = sizeof(GLvec2) * 256 * Pica::LightingRegs::NumLightingSampler +
+                                     sizeof(GLvec2) * 128 +     // fog
+                                     sizeof(GLvec2) * 128 * 3 + // proctex: noise + color + alpha
+                                     sizeof(GLvec4) * 256 +     // proctex
+                                     sizeof(GLvec4) * 256;      // proctex diff
 
     if (!uniform_block_data.lighting_lut_dirty_any && !uniform_block_data.fog_lut_dirty &&
         !uniform_block_data.proctex_noise_lut_dirty &&
@@ -1886,7 +1921,7 @@ void RasterizerOpenGL::SyncAndUploadLUTs() {
     u8* buffer;
     GLintptr offset;
     bool invalidate;
-    size_t bytes_used = 0;
+    std::size_t bytes_used = 0;
     glBindBuffer(GL_TEXTURE_BUFFER, texture_buffer.GetHandle());
     std::tie(buffer, offset, invalidate) = texture_buffer.Map(max_size, sizeof(GLvec4));
 
@@ -2033,9 +2068,9 @@ void RasterizerOpenGL::UploadUniforms(bool accelerate_draw, bool use_gs) {
     if (!sync_vs && !sync_gs && !sync_fs)
         return;
 
-    size_t uniform_size =
+    std::size_t uniform_size =
         uniform_size_aligned_vs + uniform_size_aligned_gs + uniform_size_aligned_fs;
-    size_t used_bytes = 0;
+    std::size_t used_bytes = 0;
     u8* uniforms;
     GLintptr offset;
     bool invalidate;

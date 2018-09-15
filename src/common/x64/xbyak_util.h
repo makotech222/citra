@@ -8,8 +8,7 @@
 #include <xbyak.h>
 #include "common/x64/xbyak_abi.h"
 
-namespace Common {
-namespace X64 {
+namespace Common::X64 {
 
 // Constants for use with cmpps/cmpss
 enum {
@@ -34,8 +33,8 @@ inline bool IsWithin2G(const Xbyak::CodeGenerator& code, uintptr_t target) {
 
 template <typename T>
 inline void CallFarFunction(Xbyak::CodeGenerator& code, const T f) {
-    static_assert(std::is_pointer<T>(), "Argument must be a (function) pointer.");
-    size_t addr = reinterpret_cast<size_t>(f);
+    static_assert(std::is_pointer_v<T>, "Argument must be a (function) pointer.");
+    std::size_t addr = reinterpret_cast<std::size_t>(f);
     if (IsWithin2G(code, addr)) {
         code.call(f);
     } else {
@@ -45,5 +44,4 @@ inline void CallFarFunction(Xbyak::CodeGenerator& code, const T f) {
     }
 }
 
-} // namespace X64
-} // namespace Common
+} // namespace Common::X64

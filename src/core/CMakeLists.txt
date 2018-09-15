@@ -64,10 +64,16 @@ add_library(core STATIC
     file_sys/ncch_container.h
     file_sys/path_parser.cpp
     file_sys/path_parser.h
+    file_sys/romfs_reader.cpp
+    file_sys/romfs_reader.h
     file_sys/savedata_archive.cpp
     file_sys/savedata_archive.h
     file_sys/title_metadata.cpp
     file_sys/title_metadata.h
+    frontend/applets/default_applets.cpp
+    frontend/applets/default_applets.h
+    frontend/applets/swkbd.cpp
+    frontend/applets/swkbd.h
     frontend/camera/blank_camera.cpp
     frontend/camera/blank_camera.h
     frontend/camera/factory.cpp
@@ -117,6 +123,8 @@ add_library(core STATIC
     hle/kernel/memory.h
     hle/kernel/mutex.cpp
     hle/kernel/mutex.h
+    hle/kernel/object.cpp
+    hle/kernel/object.h
     hle/kernel/process.cpp
     hle/kernel/process.h
     hle/kernel/resource_limit.cpp
@@ -214,8 +222,8 @@ add_library(core STATIC
     hle/service/cfg/cfg_s.h
     hle/service/cfg/cfg_u.cpp
     hle/service/cfg/cfg_u.h
-    hle/service/csnd_snd.cpp
-    hle/service/csnd_snd.h
+    hle/service/csnd/csnd_snd.cpp
+    hle/service/csnd/csnd_snd.h
     hle/service/dlp/dlp.cpp
     hle/service/dlp/dlp.h
     hle/service/dlp/dlp_clnt.cpp
@@ -224,8 +232,8 @@ add_library(core STATIC
     hle/service/dlp/dlp_fkcl.h
     hle/service/dlp/dlp_srvr.cpp
     hle/service/dlp/dlp_srvr.h
-    hle/service/dsp_dsp.cpp
-    hle/service/dsp_dsp.h
+    hle/service/dsp/dsp_dsp.cpp
+    hle/service/dsp/dsp_dsp.h
     hle/service/err_f.cpp
     hle/service/err_f.h
     hle/service/frd/frd.cpp
@@ -328,6 +336,8 @@ add_library(core STATIC
     hle/service/pm/pm_app.h
     hle/service/pm/pm_dbg.cpp
     hle/service/pm/pm_dbg.h
+    hle/service/ps/ps_ps.cpp
+    hle/service/ps/ps_ps.h
     hle/service/ptm/ptm.cpp
     hle/service/ptm/ptm.h
     hle/service/ptm/ptm_gets.cpp
@@ -400,6 +410,14 @@ add_library(core STATIC
     movie.h
     perf_stats.cpp
     perf_stats.h
+    rpc/packet.cpp
+    rpc/packet.h
+    rpc/rpc_server.cpp
+    rpc/rpc_server.h
+    rpc/server.cpp
+    rpc/server.h
+    rpc/zmq_server.cpp
+    rpc/zmq_server.h
     settings.cpp
     settings.h
     telemetry_session.cpp
@@ -412,7 +430,7 @@ add_library(core STATIC
 create_target_directory_groups(core)
 
 target_link_libraries(core PUBLIC common PRIVATE audio_core network video_core)
-target_link_libraries(core PUBLIC Boost::boost PRIVATE cryptopp fmt)
+target_link_libraries(core PUBLIC Boost::boost PRIVATE cryptopp fmt open_source_archives)
 if (ENABLE_WEB_SERVICE)
     target_link_libraries(core PUBLIC json-headers web_service)
 endif()
@@ -426,3 +444,5 @@ if (ARCHITECTURE_x86_64)
     )
     target_link_libraries(core PRIVATE dynarmic)
 endif()
+
+target_link_libraries(core PUBLIC libzmq-headers cppzmq-headers libzmq)

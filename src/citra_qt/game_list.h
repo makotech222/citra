@@ -12,6 +12,7 @@
 
 class GameListWorker;
 class GameListDir;
+class GameListSearchField;
 class GMainWindow;
 class QFileSystemWatcher;
 class QHBoxLayout;
@@ -41,37 +42,6 @@ public:
         COLUMN_COUNT, // Number of columns
     };
 
-    class SearchField : public QWidget {
-    public:
-        explicit SearchField(GameList* parent = nullptr);
-
-        void setFilterResult(int visible, int total);
-        void clear();
-        void setFocus();
-
-        int visible;
-        int total;
-
-    private:
-        class KeyReleaseEater : public QObject {
-        public:
-            explicit KeyReleaseEater(GameList* gamelist);
-
-        private:
-            GameList* gamelist = nullptr;
-            QString edit_filter_text_old;
-
-        protected:
-            bool eventFilter(QObject* obj, QEvent* event) override;
-        };
-        QHBoxLayout* layout_filter = nullptr;
-        QTreeView* tree_view = nullptr;
-        QLabel* label_filter = nullptr;
-        QLineEdit* edit_filter = nullptr;
-        QLabel* label_filter_result = nullptr;
-        QToolButton* button_filter_close = nullptr;
-    };
-
     explicit GameList(GMainWindow* parent = nullptr);
     ~GameList() override;
 
@@ -88,6 +58,8 @@ public:
     void LoadInterfaceLayout();
 
     QStandardItemModel* GetModel() const;
+
+    QString FindGameByProgramID(u64 program_id);
 
     static const QStringList supported_file_extensions;
 
@@ -115,14 +87,15 @@ private:
     void DonePopulating(QStringList watch_list);
 
     void RefreshGameDirectory();
-    bool containsAllWords(QString haystack, QString userinput);
 
     void PopupContextMenu(const QPoint& menu_location);
     void AddGamePopup(QMenu& context_menu, u64 program_id);
     void AddCustomDirPopup(QMenu& context_menu, QModelIndex selected);
     void AddPermDirPopup(QMenu& context_menu, QModelIndex selected);
 
-    SearchField* search_field;
+    QString FindGameByProgramID(QStandardItem* current_item, u64 program_id);
+
+    GameListSearchField* search_field;
     GMainWindow* main_window = nullptr;
     QVBoxLayout* layout = nullptr;
     QTreeView* tree_view = nullptr;
@@ -130,6 +103,8 @@ private:
     GameListWorker* current_worker = nullptr;
     QFileSystemWatcher* watcher = nullptr;
     std::unordered_map<std::string, std::pair<QString, QString>> compatibility_list;
+
+    friend class GameListSearchField;
 };
 
 Q_DECLARE_METATYPE(GameListOpenTarget);

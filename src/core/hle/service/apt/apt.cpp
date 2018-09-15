@@ -143,9 +143,9 @@ bool Module::LoadSharedFont() {
 
     const char16_t* file_name[4] = {u"cbf_std.bcfnt.lz", u"cbf_zh-Hans-CN.bcfnt.lz",
                                     u"cbf_ko-Hang-KR.bcfnt.lz", u"cbf_zh-Hant-TW.bcfnt.lz"};
-    const u8* font_file =
-        RomFS::GetFilePointer(romfs_buffer.data(), {file_name[font_region_code - 1]});
-    if (font_file == nullptr)
+    const RomFS::RomFSFile font_file =
+        RomFS::GetFile(romfs_buffer.data(), {file_name[font_region_code - 1]});
+    if (font_file.Data() == nullptr)
         return false;
 
     struct {
@@ -159,7 +159,7 @@ bool Module::LoadSharedFont() {
     shared_font_header.status = 2; // successfully loaded
     shared_font_header.region = font_region_code;
     shared_font_header.decompressed_size =
-        DecompressLZ11(font_file, shared_font_mem->GetPointer(0x80));
+        DecompressLZ11(font_file.Data(), shared_font_mem->GetPointer(0x80));
     std::memcpy(shared_font_mem->GetPointer(), &shared_font_header, sizeof(shared_font_header));
     *shared_font_mem->GetPointer(0x83) = 'U'; // Change the magic from "CFNT" to "CFNU"
 
@@ -204,7 +204,8 @@ void Module::Interface::GetSharedFont(Kernel::HLERequestContext& ctx) {
             rb.Push<u32>(-1); // TODO: Find the right error code
             rb.Push<u32>(0);
             rb.PushCopyObjects<Kernel::Object>(nullptr);
-            Core::System::GetInstance().SetStatus(Core::System::ResultStatus::ErrorSharedFont);
+            Core::System::GetInstance().SetStatus(Core::System::ResultStatus::ErrorSystemFiles,
+                                                  "Shared fonts");
             return;
         }
     }
@@ -532,7 +533,7 @@ void Module::Interface::StartLibraryApplet(Kernel::HLERequestContext& ctx) {
     IPC::RequestParser rp(ctx, 0x1E, 2, 4); // 0x1E0084
     AppletId applet_id = rp.PopEnum<AppletId>();
 
-    size_t buffer_size = rp.Pop<u32>();
+    std::size_t buffer_size = rp.Pop<u32>();
     Kernel::SharedPtr<Kernel::Object> object = rp.PopGenericObject();
     std::vector<u8> buffer = rp.PopStaticBuffer();
 
@@ -550,6 +551,31 @@ void Module::Interface::CancelLibraryApplet(Kernel::HLERequestContext& ctx) {
     rb.Push<u32>(1); // TODO: Find the return code meaning
 
     LOG_WARNING(Service_APT, "(STUBBED) called exiting={}", exiting);
+}
+
+void Module::Interface::PrepareToCloseLibraryApplet(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x25, 3, 0); // 0x002500C0
+    bool not_pause = rp.Pop<bool>();
+    bool exiting = rp.Pop<bool>();
+    bool jump_to_home = rp.Pop<bool>();
+
+    LOG_DEBUG(Service_APT, "called not_pause={} exiting={} jump_to_home={}", not_pause, exiting,
+              jump_to_home);
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
+    rb.Push(apt->applet_manager->PrepareToCloseLibraryApplet(not_pause, exiting, jump_to_home));
+}
+
+void Module::Interface::CloseLibraryApplet(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x28, 1, 4); // 0x00280044
+    u32 parameter_size = rp.Pop<u32>();
+    auto object = rp.PopGenericObject();
+    std::vector<u8> buffer = rp.PopStaticBuffer();
+
+    LOG_DEBUG(Service_APT, "called size={}", parameter_size);
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
+    rb.Push(apt->applet_manager->CloseLibraryApplet(std::move(object), std::move(buffer)));
 }
 
 void Module::Interface::SendCaptureBufferInfo(Kernel::HLERequestContext& ctx) {
@@ -620,12 +646,14 @@ void Module::Interface::GetStartupArgument(Kernel::HLERequestContext& ctx) {
     u32 parameter_size = rp.Pop<u32>();
     StartupArgumentType startup_argument_type = static_cast<StartupArgumentType>(rp.Pop<u8>());
 
-    if (parameter_size >= 0x300) {
-        LOG_ERROR(
-            Service_APT,
-            "Parameter size is outside the valid range (capped to 0x300): parameter_size={:#010X}",
-            parameter_size);
-        return;
+    const u32 max_parameter_size{0x1000};
+
+    if (parameter_size > max_parameter_size) {
+        LOG_ERROR(Service_APT,
+                  "Parameter size is outside the valid range (capped to {:#010X}): "
+                  "parameter_size={:#010X}",
+                  max_parameter_size, parameter_size);
+        parameter_size = max_parameter_size;
     }
 
     std::vector<u8> parameter(parameter_size, 0);

@@ -55,6 +55,15 @@ public:
         is_set = false;
     }
 
+    template <class Duration>
+    bool WaitFor(const std::chrono::duration<Duration>& time) {
+        std::unique_lock<std::mutex> lk(mutex);
+        if (!condvar.wait_for(lk, time, [this] { return is_set; }))
+            return false;
+        is_set = false;
+        return true;
+    }
+
     template <class Clock, class Duration>
     bool WaitUntil(const std::chrono::time_point<Clock, Duration>& time) {
         std::unique_lock<std::mutex> lk(mutex);
@@ -79,12 +88,12 @@ private:
 
 class Barrier {
 public:
-    explicit Barrier(size_t count_) : count(count_), waiting(0), generation(0) {}
+    explicit Barrier(std::size_t count_) : count(count_), waiting(0), generation(0) {}
 
     /// Blocks until all "count" threads have called Sync()
     void Sync() {
         std::unique_lock<std::mutex> lk(mutex);
-        const size_t current_generation = generation;
+        const std::size_t current_generation = generation;
 
         if (++waiting == count) {
             generation++;
@@ -99,9 +108,9 @@ public:
 private:
     std::condition_variable condvar;
     std::mutex mutex;
-    const size_t count;
-    size_t waiting;
-    size_t generation; // Incremented once each time the barrier is used
+    const std::size_t count;
+    std::size_t waiting;
+    std::size_t generation; // Incremented once each time the barrier is used
 };
 
 void SleepCurrentThread(int ms);

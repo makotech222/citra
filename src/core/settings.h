@@ -6,10 +6,16 @@
 
 #include <array>
 #include <string>
+#include <unordered_map>
 #include "common/common_types.h"
 #include "core/hle/service/cam/cam.h"
 
 namespace Settings {
+
+enum class InitClock {
+    SystemTime = 0,
+    FixedTime = 1,
+};
 
 enum class LayoutOption {
     Default,
@@ -95,6 +101,9 @@ struct Values {
     std::array<std::string, NativeAnalog::NumAnalogs> analogs;
     std::string motion_device;
     std::string touch_device;
+    std::string udp_input_address;
+    u16 udp_input_port;
+    u8 udp_pad_index;
 
     // Core
     bool use_cpu_jit;
@@ -102,8 +111,10 @@ struct Values {
     // Data Storage
     bool use_virtual_sd;
 
-    // System Region
+    // System
     int region_value;
+    InitClock init_clock;
+    u64 init_time;
 
     // Renderer
     bool use_hw_renderer;
@@ -139,6 +150,7 @@ struct Values {
     std::string sink_id;
     bool enable_audio_stretching;
     std::string audio_device_id;
+    float volume;
 
     // Camera
     std::array<std::string, Service::CAM::NumCameras> camera_name;
@@ -149,16 +161,11 @@ struct Values {
     bool use_gdbstub;
     u16 gdbstub_port;
     std::string log_filter;
-
-    // Movie
-    std::string movie_play;
-    std::string movie_record;
+    std::unordered_map<std::string, bool> lle_modules;
 
     // WebService
     bool enable_telemetry;
-    std::string telemetry_endpoint_url;
-    std::string verify_endpoint_url;
-    std::string announce_multiplayer_room_endpoint_url;
+    std::string web_api_url;
     std::string citra_username;
     std::string citra_token;
 } extern values;
@@ -168,4 +175,5 @@ struct Values {
 static constexpr int REGION_VALUE_AUTO_SELECT = -1;
 
 void Apply();
+void LogSettings();
 } // namespace Settings

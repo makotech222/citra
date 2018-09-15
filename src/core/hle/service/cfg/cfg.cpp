@@ -184,7 +184,7 @@ void Module::Interface::SecureInfoGetRegion(Kernel::HLERequestContext& ctx, u16 
 
     IPC::RequestBuilder rb = rp.MakeBuilder(2, 0);
     rb.Push(RESULT_SUCCESS);
-    rb.Push<u8>(cfg->GetRegionValue());
+    rb.Push<u8>(static_cast<u8>(cfg->GetRegionValue()));
 }
 
 void Module::Interface::GenHashConsoleUnique(Kernel::HLERequestContext& ctx) {
@@ -477,7 +477,7 @@ ResultCode Module::FormatConfig() {
 
     u16_le country_name_buffer[16][0x40] = {};
     std::u16string region_name = Common::UTF8ToUTF16("Gensokyo");
-    for (size_t i = 0; i < 16; ++i) {
+    for (std::size_t i = 0; i < 16; ++i) {
         std::copy(region_name.cbegin(), region_name.cend(), country_name_buffer[i]);
     }
     // 0x000B0001 - Localized names for the profile Country
@@ -627,7 +627,7 @@ std::u16string Module::GetUsername() {
     // the username string in the block isn't null-terminated,
     // so we need to find the end manually.
     std::u16string username(block.username, ARRAY_SIZE(block.username));
-    const size_t pos = username.find(u'\0');
+    const std::size_t pos = username.find(u'\0');
     if (pos != std::u16string::npos)
         username.erase(pos);
     return username;
@@ -664,6 +664,17 @@ SoundOutputMode Module::GetSoundOutputMode() {
     u8 block;
     GetConfigInfoBlock(SoundOutputModeBlockID, sizeof(block), 8, &block);
     return static_cast<SoundOutputMode>(block);
+}
+
+void Module::SetCountryCode(u8 country_code) {
+    ConsoleCountryInfo block = {{0, 0, 0}, country_code};
+    SetConfigInfoBlock(CountryInfoBlockID, sizeof(block), 4, &block);
+}
+
+u8 Module::GetCountryCode() {
+    ConsoleCountryInfo block;
+    GetConfigInfoBlock(CountryInfoBlockID, sizeof(block), 8, &block);
+    return block.country_code;
 }
 
 void Module::GenerateConsoleUniqueId(u32& random_number, u64& console_id) {

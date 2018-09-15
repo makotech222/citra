@@ -29,12 +29,13 @@
 #include "video_core/renderer_opengl/pica_to_gl.h"
 #include "video_core/shader/shader.h"
 
+class EmuWindow;
 struct ScreenInfo;
 class ShaderProgramManager;
 
 class RasterizerOpenGL : public VideoCore::RasterizerInterface {
 public:
-    RasterizerOpenGL();
+    explicit RasterizerOpenGL(EmuWindow& renderer);
     ~RasterizerOpenGL() override;
 
     void AddTriangle(const Pica::Shader::OutputVertex& v0, const Pica::Shader::OutputVertex& v1,
@@ -152,6 +153,9 @@ private:
     /// Sync the procedural texture noise configuration to match the PICA register
     void SyncProcTexNoise();
 
+    /// Sync the procedural texture bias configuration to match the PICA register
+    void SyncProcTexBias();
+
     /// Syncs the alpha test states to match the PICA register
     void SyncAlphaTest();
 
@@ -240,9 +244,13 @@ private:
     /// Setup geometry shader for AccelerateDrawBatch
     bool SetupGeometryShader();
 
+    bool is_amd;
+
     OpenGLState state;
 
     RasterizerCacheOpenGL res_cache;
+
+    EmuWindow& emu_window;
 
     std::vector<HardwareVertex> vertex_batch;
 
@@ -264,10 +272,10 @@ private:
     std::unique_ptr<ShaderProgramManager> shader_program_manager;
 
     // They shall be big enough for about one frame.
-    static constexpr size_t VERTEX_BUFFER_SIZE = 32 * 1024 * 1024;
-    static constexpr size_t INDEX_BUFFER_SIZE = 1 * 1024 * 1024;
-    static constexpr size_t UNIFORM_BUFFER_SIZE = 2 * 1024 * 1024;
-    static constexpr size_t TEXTURE_BUFFER_SIZE = 1 * 1024 * 1024;
+    static constexpr std::size_t VERTEX_BUFFER_SIZE = 32 * 1024 * 1024;
+    static constexpr std::size_t INDEX_BUFFER_SIZE = 1 * 1024 * 1024;
+    static constexpr std::size_t UNIFORM_BUFFER_SIZE = 2 * 1024 * 1024;
+    static constexpr std::size_t TEXTURE_BUFFER_SIZE = 1 * 1024 * 1024;
 
     OGLVertexArray sw_vao; // VAO for software shader draw
     OGLVertexArray hw_vao; // VAO for hardware shader / accelerate draw
@@ -280,9 +288,9 @@ private:
     OGLStreamBuffer texture_buffer;
     OGLFramebuffer framebuffer;
     GLint uniform_buffer_alignment;
-    size_t uniform_size_aligned_vs;
-    size_t uniform_size_aligned_gs;
-    size_t uniform_size_aligned_fs;
+    std::size_t uniform_size_aligned_vs;
+    std::size_t uniform_size_aligned_gs;
+    std::size_t uniform_size_aligned_fs;
 
     SamplerInfo texture_cube_sampler;
 

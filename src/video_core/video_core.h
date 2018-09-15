@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <memory>
+#include "core/core.h"
 
 class EmuWindow;
 class RendererBase;
@@ -16,7 +17,6 @@ class RendererBase;
 namespace VideoCore {
 
 extern std::unique_ptr<RendererBase> g_renderer; ///< Renderer plugin
-extern EmuWindow* g_emu_window;                  ///< Emu window
 
 // TODO: Wrap these in a user settings struct along with any other graphics settings (often set from
 // qt ui)
@@ -25,12 +25,10 @@ extern std::atomic<bool> g_shader_jit_enabled;
 extern std::atomic<bool> g_hw_shader_enabled;
 extern std::atomic<bool> g_hw_shader_accurate_gs;
 extern std::atomic<bool> g_hw_shader_accurate_mul;
-
-/// Start the video core
-void Start();
+extern std::atomic<bool> g_renderer_bg_color_update_requested;
 
 /// Initialize the video core
-bool Init(EmuWindow* emu_window);
+Core::System::ResultStatus Init(EmuWindow& emu_window);
 
 /// Shutdown the video core
 void Shutdown();

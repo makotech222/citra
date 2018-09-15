@@ -2,6 +2,10 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <QColorDialog>
+#ifdef __APPLE__
+#include <QMessageBox>
+#endif
 #include "citra_qt/configuration/configure_graphics.h"
 #include "core/core.h"
 #include "core/settings.h"
@@ -26,9 +30,29 @@ ConfigureGraphics::ConfigureGraphics(QWidget* parent)
     ui->hw_shader_group->setEnabled(ui->toggle_hw_shader->isChecked());
     connect(ui->toggle_hw_shader, &QCheckBox::stateChanged, ui->hw_shader_group,
             &QWidget::setEnabled);
+#ifdef __APPLE__
+    connect(ui->toggle_hw_shader, &QCheckBox::stateChanged, this, [this](int state) {
+        if (state == Qt::Checked) {
+            QMessageBox::warning(
+                this, tr("Hardware Shader Warning"),
+                tr("Hardware Shader support is broken on macOS, and will cause graphical issues "
+                   "like showing a black screen.<br><br>The option is only there for "
+                   "test/development purposes. If you experience graphical issues with Hardware "
+                   "Shader, please turn it off."));
+        }
+    });
+#endif
+    connect(ui->bg_button, &QPushButton::clicked, this, [this] {
+        const QColor new_bg_color = QColorDialog::getColor(bg_color);
+        if (!new_bg_color.isValid())
+            return;
+        bg_color = new_bg_color;
+        ui->bg_button->setStyleSheet(
+            QString("QPushButton { background-color: %1 }").arg(bg_color.name()));
+    });
 }
 
-ConfigureGraphics::~ConfigureGraphics() {}
+ConfigureGraphics::~ConfigureGraphics() = default;
 
 void ConfigureGraphics::setConfiguration() {
     ui->toggle_hw_renderer->setChecked(Settings::values.use_hw_renderer);
@@ -44,6 +68,10 @@ void ConfigureGraphics::setConfiguration() {
     ui->toggle_3d->setChecked(Settings::values.toggle_3d);
     ui->layout_combobox->setCurrentIndex(static_cast<int>(Settings::values.layout_option));
     ui->swap_screen->setChecked(Settings::values.swap_screen);
+    bg_color = QColor::fromRgbF(Settings::values.bg_red, Settings::values.bg_green,
+                                Settings::values.bg_blue);
+    ui->bg_button->setStyleSheet(
+        QString("QPushButton { background-color: %1 }").arg(bg_color.name()));
 }
 
 void ConfigureGraphics::applyConfiguration() {
@@ -62,7 +90,9 @@ void ConfigureGraphics::applyConfiguration() {
     Settings::values.layout_option =
         static_cast<Settings::LayoutOption>(ui->layout_combobox->currentIndex());
     Settings::values.swap_screen = ui->swap_screen->isChecked();
-    Settings::Apply();
+    Settings::values.bg_red = static_cast<float>(bg_color.redF());
+    Settings::values.bg_green = static_cast<float>(bg_color.greenF());
+    Settings::values.bg_blue = static_cast<float>(bg_color.blueF());
 }
 
 void ConfigureGraphics::retranslateUi() {

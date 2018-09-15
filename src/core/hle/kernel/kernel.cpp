@@ -14,12 +14,11 @@
 
 namespace Kernel {
 
-unsigned int Object::next_object_id;
+std::atomic<u32> Object::next_object_id{0};
 
 /// Initialize the kernel
 void Init(u32 system_mode) {
     ConfigMem::Init();
-    SharedPage::Init();
 
     Kernel::MemoryInit(system_mode);
 

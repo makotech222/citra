@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <QWidget>
+#include "common/common_types.h"
 
 namespace Ui {
 class ConfigureSystem;
@@ -30,10 +31,12 @@ public:
 
 public slots:
     void updateBirthdayComboBox(int birthmonth_index);
+    void updateInitTime(int init_clock);
     void refreshConsoleID();
 
 private:
     void ReadSystemSettings();
+    void ConfigureTime();
 
     std::unique_ptr<Ui::ConfigureSystem> ui;
     bool enabled;
@@ -43,4 +46,5 @@ private:
     int birthmonth, birthday;
     int language_index;
     int sound_index;
+    u8 country_code;
 };

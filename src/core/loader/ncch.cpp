@@ -8,6 +8,7 @@
 #include <cstring>
 #include <locale>
 #include <memory>
+#include <fmt/format.h>
 #include "common/logging/log.h"
 #include "common/string_util.h"
 #include "common/swap.h"
@@ -76,14 +77,15 @@ ResultStatus AppLoader_NCCH::LoadExec(Kernel::SharedPtr<Kernel::Process>& proces
 
         SharedPtr<CodeSet> codeset = CodeSet::Create(process_name, program_id);
 
-        codeset->code.offset = 0;
-        codeset->code.addr = overlay_ncch->exheader_header.codeset_info.text.address;
-        codeset->code.size =
+        codeset->CodeSegment().offset = 0;
+        codeset->CodeSegment().addr = overlay_ncch->exheader_header.codeset_info.text.address;
+        codeset->CodeSegment().size =
             overlay_ncch->exheader_header.codeset_info.text.num_max_pages * Memory::PAGE_SIZE;
 
-        codeset->rodata.offset = codeset->code.offset + codeset->code.size;
-        codeset->rodata.addr = overlay_ncch->exheader_header.codeset_info.ro.address;
-        codeset->rodata.size =
+        codeset->RODataSegment().offset =
+            codeset->CodeSegment().offset + codeset->CodeSegment().size;
+        codeset->RODataSegment().addr = overlay_ncch->exheader_header.codeset_info.ro.address;
+        codeset->RODataSegment().size =
             overlay_ncch->exheader_header.codeset_info.ro.num_max_pages * Memory::PAGE_SIZE;
 
         // TODO(yuriks): Not sure if the bss size is added to the page-aligned .data size or just
@@ -91,13 +93,14 @@ ResultStatus AppLoader_NCCH::LoadExec(Kernel::SharedPtr<Kernel::Process>& proces
         u32 bss_page_size = (overlay_ncch->exheader_header.codeset_info.bss_size + 0xFFF) & ~0xFFF;
         code.resize(code.size() + bss_page_size, 0);
 
-        codeset->data.offset = codeset->rodata.offset + codeset->rodata.size;
-        codeset->data.addr = overlay_ncch->exheader_header.codeset_info.data.address;
-        codeset->data.size =
+        codeset->DataSegment().offset =
+            codeset->RODataSegment().offset + codeset->RODataSegment().size;
+        codeset->DataSegment().addr = overlay_ncch->exheader_header.codeset_info.data.address;
+        codeset->DataSegment().size =
             overlay_ncch->exheader_header.codeset_info.data.num_max_pages * Memory::PAGE_SIZE +
             bss_page_size;
 
-        codeset->entrypoint = codeset->code.addr;
+        codeset->entrypoint = codeset->CodeSegment().addr;
         codeset->memory = std::make_shared<std::vector<u8>>(std::move(code));
 
         process = Kernel::Process::Create(std::move(codeset));
@@ -154,7 +157,7 @@ ResultStatus AppLoader_NCCH::Load(Kernel::SharedPtr<Kernel::Process>& process) {
         return result;
 
     ReadProgramId(ncch_program_id);
-    std::string program_id{Common::StringFromFormat("%016" PRIX64, ncch_program_id)};
+    std::string program_id{fmt::format("{:016X}", ncch_program_id)};
 
     LOG_INFO(Loader, "Program ID: {}", program_id);
 
@@ -211,17 +214,15 @@ ResultStatus AppLoader_NCCH::ReadProgramId(u64& out_program_id) {
     return ResultStatus::Success;
 }
 
-ResultStatus AppLoader_NCCH::ReadRomFS(std::shared_ptr<FileUtil::IOFile>& romfs_file, u64& offset,
-                                       u64& size) {
-    return base_ncch.ReadRomFS(romfs_file, offset, size);
+ResultStatus AppLoader_NCCH::ReadRomFS(std::shared_ptr<FileSys::RomFSReader>& romfs_file) {
+    return base_ncch.ReadRomFS(romfs_file);
 }
 
-ResultStatus AppLoader_NCCH::ReadUpdateRomFS(std::shared_ptr<FileUtil::IOFile>& romfs_file,
-                                             u64& offset, u64& size) {
-    ResultStatus result = update_ncch.ReadRomFS(romfs_file, offset, size);
+ResultStatus AppLoader_NCCH::ReadUpdateRomFS(std::shared_ptr<FileSys::RomFSReader>& romfs_file) {
+    ResultStatus result = update_ncch.ReadRomFS(romfs_file);
 
     if (result != ResultStatus::Success)
-        return base_ncch.ReadRomFS(romfs_file, offset, size);
+        return base_ncch.ReadRomFS(romfs_file);
 
     return ResultStatus::Success;
 }

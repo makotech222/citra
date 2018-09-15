@@ -2,9 +2,10 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
-#include <catch.hpp>
+#include <catch2/catch.hpp>
 #include "core/hle/kernel/memory.h"
 #include "core/hle/kernel/process.h"
+#include "core/hle/shared_page.h"
 #include "core/memory.h"
 
 TEST_CASE("Memory::IsValidVirtualAddress", "[core][memory]") {

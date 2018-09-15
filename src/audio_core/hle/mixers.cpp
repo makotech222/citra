@@ -2,12 +2,11 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include <algorithm>
 #include <cstddef>
-
 #include "audio_core/hle/mixers.h"
 #include "common/assert.h"
 #include "common/logging/log.h"
-#include "common/math_util.h"
 
 namespace AudioCore {
 namespace HLE {
@@ -69,7 +68,7 @@ void Mixers::ParseConfig(DspConfiguration& config) {
         config.output_format_dirty.Assign(0);
         state.output_format = config.output_format;
         LOG_TRACE(Audio_DSP, "mixers output_format = {}",
-                  static_cast<size_t>(config.output_format));
+                  static_cast<std::size_t>(config.output_format));
     }
 
     if (config.headphones_connected_dirty) {
@@ -87,7 +86,7 @@ void Mixers::ParseConfig(DspConfiguration& config) {
 }
 
 static s16 ClampToS16(s32 value) {
-    return static_cast<s16>(MathUtil::Clamp(value, -32768, 32767));
+    return static_cast<s16>(std::clamp(value, -32768, 32767));
 }
 
 static std::array<s16, 2> AddAndClampToS16(const std::array<s16, 2>& a,
@@ -132,7 +131,7 @@ void Mixers::DownmixAndMixIntoCurrentFrame(float gain, const QuadFrame32& sample
         return;
     }
 
-    UNREACHABLE_MSG("Invalid output_format {}", static_cast<size_t>(state.output_format));
+    UNREACHABLE_MSG("Invalid output_format {}", static_cast<std::size_t>(state.output_format));
 }
 
 void Mixers::AuxReturn(const IntermediateMixSamples& read_samples) {
@@ -140,8 +139,8 @@ void Mixers::AuxReturn(const IntermediateMixSamples& read_samples) {
     // QuadFrame32.
 
     if (state.mixer1_enabled) {
-        for (size_t sample = 0; sample < samples_per_frame; sample++) {
-            for (size_t channel = 0; channel < 4; channel++) {
+        for (std::size_t sample = 0; sample < samples_per_frame; sample++) {
+            for (std::size_t channel = 0; channel < 4; channel++) {
                 state.intermediate_mix_buffer[1][sample][channel] =
                     read_samples.mix1.pcm32[channel][sample];
             }
@@ -149,8 +148,8 @@ void Mixers::AuxReturn(const IntermediateMixSamples& read_samples) {
     }
 
     if (state.mixer2_enabled) {
-        for (size_t sample = 0; sample < samples_per_frame; sample++) {
-            for (size_t channel = 0; channel < 4; channel++) {
+        for (std::size_t sample = 0; sample < samples_per_frame; sample++) {
+            for (std::size_t channel = 0; channel < 4; channel++) {
                 state.intermediate_mix_buffer[2][sample][channel] =
                     read_samples.mix2.pcm32[channel][sample];
             }
@@ -166,8 +165,8 @@ void Mixers::AuxSend(IntermediateMixSamples& write_samples,
     state.intermediate_mix_buffer[0] = input[0];
 
     if (state.mixer1_enabled) {
-        for (size_t sample = 0; sample < samples_per_frame; sample++) {
-            for (size_t channel = 0; channel < 4; channel++) {
+        for (std::size_t sample = 0; sample < samples_per_frame; sample++) {
+            for (std::size_t channel = 0; channel < 4; channel++) {
                 write_samples.mix1.pcm32[channel][sample] = input[1][sample][channel];
             }
         }
@@ -176,8 +175,8 @@ void Mixers::AuxSend(IntermediateMixSamples& write_samples,
     }
 
     if (state.mixer2_enabled) {
-        for (size_t sample = 0; sample < samples_per_frame; sample++) {
-            for (size_t channel = 0; channel < 4; channel++) {
+        for (std::size_t sample = 0; sample < samples_per_frame; sample++) {
+            for (std::size_t channel = 0; channel < 4; channel++) {
                 write_samples.mix2.pcm32[channel][sample] = input[2][sample][channel];
             }
         }
@@ -189,7 +188,7 @@ void Mixers::AuxSend(IntermediateMixSamples& write_samples,
 void Mixers::MixCurrentFrame() {
     current_frame.fill({});
 
-    for (size_t mix = 0; mix < 3; mix++) {
+    for (std::size_t mix = 0; mix < 3; mix++) {
         DownmixAndMixIntoCurrentFrame(state.intermediate_mixer_volume[mix],
                                       state.intermediate_mix_buffer[mix]);
     }

@@ -16,9 +16,11 @@ namespace UISettings {
 using ContextualShortcut = std::pair<QString, int>;
 using Shortcut = std::pair<QString, ContextualShortcut>;
 
-static const std::array<std::pair<QString, QString>, 2> themes = {
+static const std::array<std::pair<QString, QString>, 4> themes = {
     {std::make_pair(QString("Default"), QString("default")),
-     std::make_pair(QString("Dark"), QString("qdarkstyle"))}};
+     std::make_pair(QString("Dark"), QString("qdarkstyle")),
+     std::make_pair(QString("Colorful"), QString("colorful")),
+     std::make_pair(QString("Colorful Dark"), QString("colorful_dark"))}};
 
 struct GameDir {
     QString path;
@@ -56,8 +58,13 @@ struct Values {
     bool update_on_close;
     bool check_for_update_on_start;
 
+    // Discord RPC
+    bool enable_discord_presence;
+
     QString roms_path;
     QString symbols_path;
+    QString movie_record_path;
+    QString movie_playback_path;
     QString game_dir_deprecated;
     bool game_dir_deprecated_deepscan;
     QList<UISettings::GameDir> game_dirs;

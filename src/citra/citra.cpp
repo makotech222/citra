@@ -35,9 +35,11 @@
 #include "common/string_util.h"
 #include "core/core.h"
 #include "core/file_sys/cia_container.h"
+#include "core/frontend/applets/default_applets.h"
 #include "core/gdbstub/gdbstub.h"
 #include "core/hle/service/am/am.h"
 #include "core/loader/loader.h"
+#include "core/movie.h"
 #include "core/settings.h"
 #include "network/network.h"
 
@@ -122,6 +124,15 @@ int main(int argc, char** argv) {
     std::string movie_record;
     std::string movie_play;
 
+    Log::Filter log_filter;
+    log_filter.ParseFilterString(Settings::values.log_filter);
+    Log::SetGlobalFilter(log_filter);
+
+    Log::AddBackend(std::make_unique<Log::ColorConsoleBackend>());
+    FileUtil::CreateFullPath(FileUtil::GetUserPath(D_LOGS_IDX));
+    Log::AddBackend(
+        std::make_unique<Log::FileBackend>(FileUtil::GetUserPath(D_LOGS_IDX) + LOG_FILE));
+
     char* endarg;
 #ifdef _WIN32
     int argc_w;
@@ -169,7 +180,7 @@ int main(int argc, char** argv) {
                 }
                 break;
             case 'i': {
-                const auto cia_progress = [](size_t written, size_t total) {
+                const auto cia_progress = [](std::size_t written, std::size_t total) {
                     LOG_INFO(Frontend, "{:02d}%", (written * 100 / total));
                 };
                 if (Service::AM::InstallCIA(std::string(optarg), cia_progress) !=
@@ -255,21 +266,13 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    Log::Filter log_filter;
-    log_filter.ParseFilterString(Settings::values.log_filter);
-    Log::SetGlobalFilter(log_filter);
-
-    Log::AddBackend(std::make_unique<Log::ColorConsoleBackend>());
-    FileUtil::CreateFullPath(FileUtil::GetUserPath(D_LOGS_IDX));
-    Log::AddBackend(
-        std::make_unique<Log::FileBackend>(FileUtil::GetUserPath(D_LOGS_IDX) + LOG_FILE));
-
     // Apply the command line arguments
     Settings::values.gdbstub_port = gdb_port;
     Settings::values.use_gdbstub = use_gdbstub;
-    Settings::values.movie_play = std::move(movie_play);
-    Settings::values.movie_record = std::move(movie_record);
     Settings::Apply();
+
+    // Register frontend applets
+    Frontend::RegisterDefaultApplets();
 
     std::unique_ptr<EmuWindow_SDL2> emu_window{std::make_unique<EmuWindow_SDL2>(fullscreen)};
 
@@ -277,7 +280,7 @@ int main(int argc, char** argv) {
 
     SCOPE_EXIT({ system.Shutdown(); });
 
-    const Core::System::ResultStatus load_result{system.Load(emu_window.get(), filepath)};
+    const Core::System::ResultStatus load_result{system.Load(*emu_window, filepath)};
 
     switch (load_result) {
     case Core::System::ResultStatus::ErrorGetLoader:
@@ -323,9 +326,18 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (!movie_play.empty()) {
+        Core::Movie::GetInstance().StartPlayback(movie_play);
+    }
+    if (!movie_record.empty()) {
+        Core::Movie::GetInstance().StartRecording(movie_record);
+    }
+
     while (emu_window->IsOpen()) {
         system.RunLoop();
     }
+
+    Core::Movie::GetInstance().Shutdown();
 
     return 0;
 }

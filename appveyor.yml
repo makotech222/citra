@@ -44,9 +44,9 @@ before_build:
         $COMPAT = if ($env:ENABLE_COMPATIBILITY_REPORTING -eq $null) {0} else {$env:ENABLE_COMPATIBILITY_REPORTING}
         if ($env:BUILD_TYPE -eq 'msvc') {
           # redirect stderr and change the exit code to prevent powershell from cancelling the build if cmake prints a warning
-          cmd /C 'cmake -G "Visual Studio 15 2017 Win64" -DCITRA_USE_BUNDLED_QT=1 -DCITRA_USE_BUNDLED_SDL2=1 -DCITRA_ENABLE_COMPATIBILITY_REPORTING=${COMPAT} -DENABLE_COMPATIBILITY_LIST_DOWNLOAD=ON .. 2>&1 && exit 0'
+          cmd /C 'cmake -G "Visual Studio 15 2017 Win64" -DCITRA_USE_BUNDLED_QT=1 -DCITRA_USE_BUNDLED_SDL2=1 -DCITRA_ENABLE_COMPATIBILITY_REPORTING=${COMPAT} -DENABLE_COMPATIBILITY_LIST_DOWNLOAD=ON -DUSE_DISCORD_PRESENCE=ON .. 2>&1 && exit 0'
         } else {
-          C:\msys64\usr\bin\bash.exe -lc "cmake -G 'MSYS Makefiles' -DCMAKE_BUILD_TYPE=Release -DENABLE_QT_TRANSLATION=ON -DCITRA_ENABLE_COMPATIBILITY_REPORTING=${COMPAT} -DENABLE_COMPATIBILITY_LIST_DOWNLOAD=ON .. 2>&1"
+          C:\msys64\usr\bin\bash.exe -lc "cmake -G 'MSYS Makefiles' -DCMAKE_BUILD_TYPE=Release -DENABLE_QT_TRANSLATION=ON -DCITRA_ENABLE_COMPATIBILITY_REPORTING=${COMPAT} -DENABLE_COMPATIBILITY_LIST_DOWNLOAD=ON -DUSE_DISCORD_PRESENCE=ON .. 2>&1"
         }
   - cd ..
 
@@ -113,6 +113,7 @@ after_build:
           mkdir $RELEASE_DIST/platforms
           mkdir $RELEASE_DIST/mediaservice
           mkdir $RELEASE_DIST/styles
+          mkdir $RELEASE_DIST/imageformats
 
           # copy the compiled binaries and other release files to the release folder
           Get-ChildItem "$CMAKE_BINARY_DIR" -Recurse -Filter "citra*.exe" | Copy-Item -destination $RELEASE_DIST
@@ -138,6 +139,9 @@ after_build:
 
           # copy the qt windows vista style dll to platforms
           Copy-Item -path "C:/msys64/mingw64/share/qt5/plugins/styles/qwindowsvistastyle.dll" -force -destination "$RELEASE_DIST/styles"
+
+          # copy the qt imageformats plugin dlls to imageformats
+          Get-ChildItem "C:/msys64/mingw64/share/qt5/plugins/imageformats" -Exclude "*d.dll" | Copy-Item -force -destination "$RELEASE_DIST/imageformats"
 
           # process PDBs
           . "./.appveyor/ProcessPdb.ps1"
@@ -166,17 +170,6 @@ artifacts:
     name: debugsymbols
   - path: $(BUILD_UPDATE)
     name: update
-
-deploy:
-  provider: GitHub
-  release: $(appveyor_repo_tag_name)
-  auth_token:
-    secure: "dbpsMC/MgPKWFNJCXpQl4cR8FYhepkPLjgNp/pRMktZ8oLKTqPYErfreaIxb/4P1"
-  artifact: update,build
-  draft: false
-  prerelease: false
-  on:
-    appveyor_repo_tag: true
 
 notifications:
   - provider: Webhook

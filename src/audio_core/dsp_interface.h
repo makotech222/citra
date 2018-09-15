@@ -11,6 +11,12 @@
 #include "common/common_types.h"
 #include "core/memory.h"
 
+namespace Service {
+namespace DSP {
+class DSP_DSP;
+} // namespace DSP
+} // namespace Service
+
 namespace AudioCore {
 
 class Sink;
@@ -48,7 +54,7 @@ public:
      * @return The amount of data remaning in the pipe. This is the maximum length PipeRead will
      * return.
      */
-    virtual size_t GetPipeReadableSize(DspPipe pipe_number) const = 0;
+    virtual std::size_t GetPipeReadableSize(DspPipe pipe_number) const = 0;
 
     /**
      * Write to a DSP pipe.
@@ -60,15 +66,18 @@ public:
     /// Returns a reference to the array backing DSP memory
     virtual std::array<u8, Memory::DSP_RAM_SIZE>& GetDspMemory() = 0;
 
+    /// Sets the dsp class that we trigger interrupts for
+    virtual void SetServiceToInterrupt(std::weak_ptr<Service::DSP::DSP_DSP> dsp) = 0;
+
     /// Select the sink to use based on sink id.
-    void SetSink(const std::string& sink_id);
+    void SetSink(const std::string& sink_id, const std::string& audio_device);
     /// Get the current sink
     Sink& GetSink();
     /// Enable/Disable audio stretching.
     void EnableStretching(bool enable);
 
 protected:
-    void OutputFrame(const StereoFrame16& frame);
+    void OutputFrame(StereoFrame16& frame);
 
 private:
     void FlushResidualStretcherAudio();

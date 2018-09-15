@@ -19,8 +19,8 @@
 namespace CoreTiming {
 
 static s64 global_timer;
-static int slice_length;
-static int downcount;
+static s64 slice_length;
+static s64 downcount;
 
 struct EventType {
     TimedCallback callback;
@@ -142,7 +142,7 @@ void ScheduleEvent(s64 cycles_into_future, const EventType* event_type, u64 user
         ForceExceptionCheck(cycles_into_future);
 
     event_queue.emplace_back(Event{timeout, event_fifo_id++, userdata, event_type});
-    std::push_heap(event_queue.begin(), event_queue.end(), std::greater<Event>());
+    std::push_heap(event_queue.begin(), event_queue.end(), std::greater<>());
 }
 
 void ScheduleEventThreadsafe(s64 cycles_into_future, const EventType* event_type, u64 userdata) {
@@ -157,7 +157,7 @@ void UnscheduleEvent(const EventType* event_type, u64 userdata) {
     // Removing random items breaks the invariant so we have to re-establish it.
     if (itr != event_queue.end()) {
         event_queue.erase(itr, event_queue.end());
-        std::make_heap(event_queue.begin(), event_queue.end(), std::greater<Event>());
+        std::make_heap(event_queue.begin(), event_queue.end(), std::greater<>());
     }
 }
 
@@ -168,7 +168,7 @@ void RemoveEvent(const EventType* event_type) {
     // Removing random items breaks the invariant so we have to re-establish it.
     if (itr != event_queue.end()) {
         event_queue.erase(itr, event_queue.end());
-        std::make_heap(event_queue.begin(), event_queue.end(), std::greater<Event>());
+        std::make_heap(event_queue.begin(), event_queue.end(), std::greater<>());
     }
 }
 
@@ -180,10 +180,8 @@ void RemoveNormalAndThreadsafeEvent(const EventType* event_type) {
 void ForceExceptionCheck(s64 cycles) {
     cycles = std::max<s64>(0, cycles);
     if (downcount > cycles) {
-        // downcount is always (much) smaller than MAX_INT so we can safely cast cycles to an int
-        // here. Account for cycles already executed by adjusting the g.slice_length
-        slice_length -= downcount - static_cast<int>(cycles);
-        downcount = static_cast<int>(cycles);
+        slice_length -= downcount - cycles;
+        downcount = cycles;
     }
 }
 
@@ -191,14 +189,14 @@ void MoveEvents() {
     for (Event ev; ts_queue.Pop(ev);) {
         ev.fifo_order = event_fifo_id++;
         event_queue.emplace_back(std::move(ev));
-        std::push_heap(event_queue.begin(), event_queue.end(), std::greater<Event>());
+        std::push_heap(event_queue.begin(), event_queue.end(), std::greater<>());
     }
 }
 
 void Advance() {
     MoveEvents();
 
-    int cycles_executed = slice_length - downcount;
+    s64 cycles_executed = slice_length - downcount;
     global_timer += cycles_executed;
     slice_length = MAX_SLICE_LENGTH;
 
@@ -206,7 +204,7 @@ void Advance() {
 
     while (!event_queue.empty() && event_queue.front().time <= global_timer) {
         Event evt = std::move(event_queue.front());
-        std::pop_heap(event_queue.begin(), event_queue.end(), std::greater<Event>());
+        std::pop_heap(event_queue.begin(), event_queue.end(), std::greater<>());
         event_queue.pop_back();
         evt.type->callback(evt.userdata, global_timer - evt.time);
     }
@@ -227,11 +225,11 @@ void Idle() {
     downcount = 0;
 }
 
-u64 GetGlobalTimeUs() {
-    return GetTicks() * 1000000 / BASE_CLOCK_RATE_ARM11;
+std::chrono::microseconds GetGlobalTimeUs() {
+    return std::chrono::microseconds{GetTicks() * 1000000 / BASE_CLOCK_RATE_ARM11};
 }
 
-int GetDowncount() {
+s64 GetDowncount() {
     return downcount;
 }
 

@@ -12,22 +12,17 @@ namespace AudioCore {
 
 class NullSink final : public Sink {
 public:
+    NullSink(std::string) {}
     ~NullSink() override = default;
 
     unsigned int GetNativeSampleRate() const override {
         return native_sample_rate;
     }
 
-    void EnqueueSamples(const s16*, size_t) override {}
+    void EnqueueSamples(const s16*, std::size_t) override {}
 
-    size_t SamplesInQueue() const override {
+    std::size_t SamplesInQueue() const override {
         return 0;
-    }
-
-    void SetDevice(int device_id) override {}
-
-    std::vector<std::string> GetDeviceList() const override {
-        return {};
     }
 };
 

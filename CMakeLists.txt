@@ -20,6 +20,8 @@ option(ENABLE_WEB_SERVICE "Enable web services (telemetry, etc.)" ON)
 
 option(ENABLE_CUBEB "Enables the cubeb audio backend" ON)
 
+option(USE_DISCORD_PRESENCE "Enables Discord Rich Presence" OFF)
+
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/.git/hooks/pre-commit)
     message(STATUS "Copying pre-commit hook")
     file(COPY hooks/pre-commit
@@ -42,18 +44,15 @@ function(check_submodules_present)
 endfunction()
 check_submodules_present()
 
-
 configure_file(${CMAKE_SOURCE_DIR}/dist/compatibility_list/compatibility_list.qrc
                ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
                COPYONLY)
-
 if (ENABLE_COMPATIBILITY_LIST_DOWNLOAD AND NOT EXISTS ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
     message(STATUS "Downloading compatibility list for citra...")
     file(DOWNLOAD
         https://api.citra-emu.org/gamedb/
         "${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json" SHOW_PROGRESS)
 endif()
-
 if (NOT EXISTS ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
     file(WRITE ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json "")
 endif()
@@ -83,10 +82,12 @@ if (NOT ENABLE_GENERIC)
         detect_architecture("_M_AMD64" x86_64)
         detect_architecture("_M_IX86" x86)
         detect_architecture("_M_ARM" ARM)
+        detect_architecture("_M_ARM64" ARM64)
     else()
         detect_architecture("__x86_64__" x86_64)
         detect_architecture("__i386__" x86)
         detect_architecture("__arm__" ARM)
+        detect_architecture("__aarch64__" ARM64)
     endif()
 endif()
 if (NOT DEFINED ARCHITECTURE)
@@ -120,8 +121,6 @@ if (NOT MSVC)
 else()
     # Silence "deprecation" warnings
     add_definitions(/D_CRT_SECURE_NO_WARNINGS /D_CRT_NONSTDC_NO_DEPRECATE /D_SCL_SECURE_NO_WARNINGS)
-    # Avoid non-compliant standard library extensions
-    add_definitions(/D_CRT_DECLARE_NONSTDC_NAMES)
     # Avoid windows.h junk
     add_definitions(/DNOMINMAX)
     # Avoid windows.h from including some usually unused libs like winsocks.h, since this might cause some redefinition errors.
@@ -198,8 +197,8 @@ find_package(Threads REQUIRED)
 if (ENABLE_SDL2)
     if (CITRA_USE_BUNDLED_SDL2)
         # Detect toolchain and platform
-        if (MSVC14 AND ARCHITECTURE_x86_64)
-            set(SDL2_VER "SDL2-2.0.5")
+        if ((MSVC_VERSION GREATER_EQUAL 1910 AND MSVC_VERSION LESS 1920) AND ARCHITECTURE_x86_64)
+            set(SDL2_VER "SDL2-2.0.8")
         else()
             message(FATAL_ERROR "No bundled SDL2 binaries for your toolchain. Disable CITRA_USE_BUNDLED_SDL2 and provide your own.")
         endif()
@@ -228,7 +227,7 @@ endif()
 
 if (ENABLE_QT)
     if (CITRA_USE_BUNDLED_QT)
-        if (MSVC14 AND ARCHITECTURE_x86_64)
+        if ((MSVC_VERSION GREATER_EQUAL 1910 AND MSVC_VERSION LESS 1920) AND ARCHITECTURE_x86_64)
             set(QT_VER qt-5.10.0-msvc2017_64)
         else()
             message(FATAL_ERROR "No bundled Qt binaries for your toolchain. Disable CITRA_USE_BUNDLED_QT and provide your own.")
@@ -263,7 +262,7 @@ endif()
 # ======================================
 
 IF (APPLE)
-    FIND_LIBRARY(COCOA_LIBRARY Cocoa)           # Umbrella framework for everything GUI-related
+    find_library(COCOA_LIBRARY Cocoa)           # Umbrella framework for everything GUI-related
     set(PLATFORM_LIBRARIES ${COCOA_LIBRARY} ${IOKIT_LIBRARY} ${COREVIDEO_LIBRARY})
 
     if (CMAKE_CXX_COMPILER_ID STREQUAL Clang)
@@ -323,7 +322,7 @@ if (CLANG_FORMAT)
     set(CCOMMENT "Running clang format against all the .h and .cpp files in src/")
     if (WIN32)
         add_custom_target(clang-format
-            COMMAND powershell.exe -Command "${CLANG_FORMAT} -i @(Get-ChildItem -Recurse ${SRCS}/* -Include \'*.h\', \'*.cpp\')"
+            COMMAND powershell.exe -Command "Get-ChildItem ${SRCS}/* -Include *.cpp,*.h -Recurse | Foreach {${CLANG_FORMAT} -i $_.fullname}"
             COMMENT ${CCOMMENT})
     elseif(MINGW)
         add_custom_target(clang-format
@@ -364,6 +363,13 @@ function(get_timestamp _var)
     string(TIMESTAMP timestamp UTC)
     set(${_var} "${timestamp}" PARENT_SCOPE)
 endfunction()
+
+# Prevent boost from linking against libs when building
+add_definitions(-DBOOST_ERROR_CODE_HEADER_ONLY
+    -DBOOST_SYSTEM_NO_LIB
+    -DBOOST_DATE_TIME_NO_LIB
+    -DBOOST_REGEX_NO_LIB
+)
 
 # generate git/build information
 include(GetGitRevisionDescription)

@@ -19,7 +19,7 @@ public:
     void Step() override;
 
     void ClearInstructionCache() override;
-    void InvalidateCacheRange(u32 start_address, size_t length) override;
+    void InvalidateCacheRange(u32 start_address, std::size_t length) override;
     void PageTableChanged() override;
 
     void SetPC(u32 pc) override;
@@ -42,7 +42,7 @@ public:
     void PrepareReschedule() override;
 
 private:
-    void ExecuteInstructions(int num_instructions);
+    void ExecuteInstructions(u64 num_instructions);
 
     std::unique_ptr<ARMul_State> state;
 };

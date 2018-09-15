@@ -5,7 +5,7 @@
 #pragma once
 
 #include "common/common_types.h"
-#include "core/hle/kernel/kernel.h"
+#include "core/hle/kernel/object.h"
 #include "core/hle/kernel/wait_object.h"
 
 namespace Kernel {
@@ -32,13 +32,17 @@ public:
         return HANDLE_TYPE;
     }
 
-    ResetType reset_type; ///< The ResetType of this timer
+    ResetType GetResetType() const {
+        return reset_type;
+    }
 
-    bool signaled;    ///< Whether the timer has been signaled or not
-    std::string name; ///< Name of timer (optional)
+    u64 GetInitialDelay() const {
+        return initial_delay;
+    }
 
-    u64 initial_delay;  ///< The delay until the timer fires for the first time
-    u64 interval_delay; ///< The delay until the timer fires after the first time
+    u64 GetIntervalDelay() const {
+        return interval_delay;
+    }
 
     bool ShouldWait(Thread* thread) const override;
     void Acquire(Thread* thread) override;
@@ -61,11 +65,19 @@ public:
      * This method should not be called from outside the timer callback handler,
      * lest multiple callback events get scheduled.
      */
-    void Signal(int cycles_late);
+    void Signal(s64 cycles_late);
 
 private:
     Timer();
     ~Timer() override;
+
+    ResetType reset_type; ///< The ResetType of this timer
+
+    u64 initial_delay;  ///< The delay until the timer fires for the first time
+    u64 interval_delay; ///< The delay until the timer fires after the first time
+
+    bool signaled;    ///< Whether the timer has been signaled or not
+    std::string name; ///< Name of timer (optional)
 
     /// Handle used as userdata to reference this object when inserting into the CoreTiming queue.
     Handle callback_handle;

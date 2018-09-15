@@ -150,7 +150,7 @@ struct TexturingRegs {
         if (face != CubeFace::PositiveX) {
             // Bits [22:27] from the main texture address is shared with all cubemap additional
             // addresses.
-            auto& face_addr = cube_address[static_cast<size_t>(face) - 1];
+            auto& face_addr = cube_address[static_cast<std::size_t>(face) - 1];
             address &= ~face_addr.mask;
             address |= face_addr;
         }
@@ -181,9 +181,9 @@ struct TexturingRegs {
     };
     const std::array<FullTextureConfig, 3> GetTextures() const {
         return {{
-            {main_config.texture0_enable.ToBool(), texture0, texture0_format},
-            {main_config.texture1_enable.ToBool(), texture1, texture1_format},
-            {main_config.texture2_enable.ToBool(), texture2, texture2_format},
+            {static_cast<bool>(main_config.texture0_enable), texture0, texture0_format},
+            {static_cast<bool>(main_config.texture1_enable), texture1, texture1_format},
+            {static_cast<bool>(main_config.texture2_enable), texture2, texture2_format},
         }};
     }
 
@@ -251,11 +251,18 @@ struct TexturingRegs {
 
     union {
         BitField<0, 3, ProcTexFilter> filter;
+        BitField<3, 4, u32> lod_min;
+        BitField<7, 4, u32> lod_max;
         BitField<11, 8, u32> width;
         BitField<19, 8, u32> bias_high; // TODO: unimplemented
     } proctex_lut;
 
-    BitField<0, 8, u32> proctex_lut_offset;
+    union {
+        BitField<0, 8, u32> level0;
+        BitField<8, 8, u32> level1;
+        BitField<16, 8, u32> level2;
+        BitField<24, 8, u32> level3;
+    } proctex_lut_offset;
 
     INSERT_PADDING_WORDS(0x1);
 

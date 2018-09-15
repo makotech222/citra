@@ -11,8 +11,10 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
+#include <cryptopp/osrng.h>
 #include "common/common_types.h"
 #include "common/logging/log.h"
+#include "core/core.h"
 #include "core/core_timing.h"
 #include "core/hle/ipc_helpers.h"
 #include "core/hle/kernel/event.h"
@@ -78,7 +80,7 @@ static u8 network_channel = DefaultNetworkChannel;
 static NetworkInfo network_info;
 
 // Mapping of mac addresses to their respective node_ids.
-static std::map<MacAddress, u32> node_map;
+static std::map<MacAddress, u16> node_map;
 
 // Event that will generate and send the 802.11 beacon frames.
 static CoreTiming::EventType* beacon_broadcast_event;
@@ -98,7 +100,7 @@ static std::mutex beacon_mutex;
 
 // Number of beacons to store before we start dropping the old ones.
 // TODO(Subv): Find a more accurate value for this limit.
-constexpr size_t MaxBeaconFrames = 15;
+constexpr std::size_t MaxBeaconFrames = 15;
 
 // List of the last <MaxBeaconFrames> beacons received from the network.
 static std::list<Network::WifiPacket> received_beacons;
@@ -158,15 +160,16 @@ static void BroadcastNodeMap() {
     packet.channel = network_channel;
     packet.type = Network::WifiPacket::PacketType::NodeMap;
     packet.destination_address = Network::BroadcastMac;
-    size_t size = node_map.size();
-    packet.data.resize(sizeof(size) + (sizeof(Network::MacAddress) + sizeof(u32)) * size);
+    std::size_t size = node_map.size();
+    using node_t = decltype(node_map)::value_type;
+    packet.data.resize(sizeof(size) + (sizeof(node_t::first) + sizeof(node_t::second)) * size);
     std::memcpy(packet.data.data(), &size, sizeof(size));
-    size_t offset = sizeof(size);
+    std::size_t offset = sizeof(size);
     for (const auto& node : node_map) {
         std::memcpy(packet.data.data() + offset, node.first.data(), sizeof(node.first));
         std::memcpy(packet.data.data() + offset + sizeof(node.first), &node.second,
                     sizeof(node.second));
-        offset += sizeof(Network::MacAddress) + sizeof(u32);
+        offset += sizeof(node.first) + sizeof(node.second);
     }
 
     SendPacket(packet);
@@ -175,12 +178,12 @@ static void BroadcastNodeMap() {
 static void HandleNodeMapPacket(const Network::WifiPacket& packet) {
     std::lock_guard<std::mutex> lock(connection_status_mutex);
     node_map.clear();
-    size_t num_entries;
+    std::size_t num_entries;
     Network::MacAddress address;
-    u32 id;
+    u16 id;
     std::memcpy(&num_entries, packet.data.data(), sizeof(num_entries));
-    size_t offset = sizeof(num_entries);
-    for (size_t i = 0; i < num_entries; ++i) {
+    std::size_t offset = sizeof(num_entries);
+    for (std::size_t i = 0; i < num_entries; ++i) {
         std::memcpy(&address, packet.data.data() + offset, sizeof(address));
         std::memcpy(&id, packet.data.data() + offset + sizeof(address), sizeof(id));
         node_map[address] = id;
@@ -303,7 +306,7 @@ static void HandleEAPoLPacket(const Network::WifiPacket& packet) {
 
         node_info.clear();
         node_info.reserve(network_info.max_nodes);
-        for (size_t index = 0; index < logoff.connected_nodes; ++index) {
+        for (std::size_t index = 0; index < logoff.connected_nodes; ++index) {
             connection_status.node_bitmask |= 1 << index;
             connection_status.changed_nodes |= 1 << index;
             connection_status.nodes[index] = logoff.nodes[index].network_node_id;
@@ -329,7 +332,7 @@ static void HandleEAPoLPacket(const Network::WifiPacket& packet) {
 
         node_info.clear();
         node_info.reserve(network_info.max_nodes);
-        for (size_t index = 0; index < logoff.connected_nodes; ++index) {
+        for (std::size_t index = 0; index < logoff.connected_nodes; ++index) {
             if ((connection_status.node_bitmask & (1 << index)) == 0) {
                 connection_status.changed_nodes |= 1 << index;
             }
@@ -581,7 +584,7 @@ void NWM_UDS::RecvBeaconBroadcastData(Kernel::HLERequestContext& ctx) {
     Kernel::MappedBuffer out_buffer = rp.PopMappedBuffer();
     ASSERT(out_buffer.GetSize() == out_buffer_size);
 
-    size_t cur_buffer_size = sizeof(BeaconDataReplyHeader);
+    std::size_t cur_buffer_size = sizeof(BeaconDataReplyHeader);
 
     // Retrieve all beacon frames that were received from the desired mac address.
     auto beacons = GetReceivedBeacons(mac_address);
@@ -610,7 +613,7 @@ void NWM_UDS::RecvBeaconBroadcastData(Kernel::HLERequestContext& ctx) {
     }
 
     // Update the total size in the structure and write it to the buffer again.
-    data_reply_header.total_size = cur_buffer_size;
+    data_reply_header.total_size = static_cast<u32>(cur_buffer_size);
     out_buffer.Write(&data_reply_header, 0, sizeof(BeaconDataReplyHeader));
 
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 2);
@@ -733,7 +736,7 @@ void NWM_UDS::Bind(Kernel::HLERequestContext& ctx) {
         return;
     }
 
-    constexpr size_t MaxBindNodes = 16;
+    constexpr std::size_t MaxBindNodes = 16;
     if (channel_data.size() >= MaxBindNodes) {
         IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
         rb.Push(ResultCode(ErrorDescription::OutOfMemory, ErrorModule::UDS,
@@ -1024,7 +1027,7 @@ void NWM_UDS::SendTo(Kernel::HLERequestContext& ctx) {
         dest_address = network_info.host_mac_address;
     }
 
-    constexpr size_t MaxSize = 0x5C6;
+    constexpr std::size_t MaxSize = 0x5C6;
     if (data_size > MaxSize) {
         rb.Push(ResultCode(ErrorDescription::TooLarge, ErrorModule::UDS,
                            ErrorSummary::WrongArgument, ErrorLevel::Usage));
@@ -1187,7 +1190,7 @@ void NWM_UDS::SetApplicationData(Kernel::HLERequestContext& ctx) {
         return;
     }
 
-    network_info.application_data_size = size;
+    network_info.application_data_size = static_cast<u8>(size);
     std::memcpy(network_info.application_data.data(), application_data.data(), size);
 
     rb.Push(RESULT_SUCCESS);
@@ -1260,7 +1263,7 @@ void NWM_UDS::DecryptBeaconData(Kernel::HLERequestContext& ctx) {
 }
 
 // Sends a 802.11 beacon frame with information about the current network.
-static void BeaconBroadcastCallback(u64 userdata, int cycles_late) {
+static void BeaconBroadcastCallback(u64 userdata, s64 cycles_late) {
     // Don't do anything if we're not actually hosting a network
     if (connection_status.status != static_cast<u32>(NetworkStatus::ConnectedAsHost))
         return;
@@ -1320,6 +1323,21 @@ NWM_UDS::NWM_UDS() : ServiceFramework("nwm::UDS") {
 
     beacon_broadcast_event =
         CoreTiming::RegisterEvent("UDS::BeaconBroadcastCallback", BeaconBroadcastCallback);
+
+    CryptoPP::AutoSeededRandomPool rng;
+    auto mac = SharedPage::DefaultMac;
+    // Keep the Nintendo 3DS MAC header and randomly generate the last 3 bytes
+    rng.GenerateBlock(static_cast<CryptoPP::byte*>(mac.data() + 3), 3);
+
+    if (auto room_member = Network::GetRoomMember().lock()) {
+        if (room_member->IsConnected()) {
+            mac = room_member->GetMacAddress();
+        }
+    }
+
+    Core::System::GetInstance().GetSharedPageHandler()->SetMacAddress(mac);
+    Core::System::GetInstance().GetSharedPageHandler()->SetWifiLinkLevel(
+        SharedPage::WifiLinkLevel::BEST);
 }
 
 NWM_UDS::~NWM_UDS() {

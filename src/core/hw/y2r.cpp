@@ -9,7 +9,6 @@
 #include "common/assert.h"
 #include "common/color.h"
 #include "common/common_types.h"
-#include "common/math_util.h"
 #include "common/vector_math.h"
 #include "core/hle/service/y2r_u.h"
 #include "core/hw/y2r.h"
@@ -20,8 +19,8 @@ namespace Y2R {
 
 using namespace Service::Y2R;
 
-static const size_t MAX_TILES = 1024 / 8;
-static const size_t TILE_SIZE = 8 * 8;
+static const std::size_t MAX_TILES = 1024 / 8;
+static const std::size_t TILE_SIZE = 8 * 8;
 using ImageTile = std::array<u32, TILE_SIZE>;
 
 /// Converts a image strip from the source YUV format into individual 8x8 RGB32 tiles.
@@ -70,25 +69,24 @@ static void ConvertYUVToRGB(InputFormat input_format, const u8* input_Y, const u
             unsigned int tile = x / 8;
             unsigned int tile_x = x % 8;
             u32* out = &output[tile][y * 8 + tile_x];
-
-            using MathUtil::Clamp;
-            *out = ((u32)Clamp(r >> 5, 0, 0xFF) << 24) | ((u32)Clamp(g >> 5, 0, 0xFF) << 16) |
-                   ((u32)Clamp(b >> 5, 0, 0xFF) << 8);
+            *out = ((u32)std::clamp(r >> 5, 0, 0xFF) << 24) |
+                   ((u32)std::clamp(g >> 5, 0, 0xFF) << 16) |
+                   ((u32)std::clamp(b >> 5, 0, 0xFF) << 8);
         }
     }
 }
 
 /// Simulates an incoming CDMA transfer. The N parameter is used to automatically convert 16-bit
 /// formats to 8-bit.
-template <size_t N>
-static void ReceiveData(u8* output, ConversionBuffer& buf, size_t amount_of_data) {
+template <std::size_t N>
+static void ReceiveData(u8* output, ConversionBuffer& buf, std::size_t amount_of_data) {
     const u8* input = Memory::GetPointer(buf.address);
 
-    size_t output_unit = buf.transfer_unit / N;
+    std::size_t output_unit = buf.transfer_unit / N;
     ASSERT(amount_of_data % output_unit == 0);
 
     while (amount_of_data > 0) {
-        for (size_t i = 0; i < output_unit; ++i) {
+        for (std::size_t i = 0; i < output_unit; ++i) {
             output[i] = input[i * N];
         }
 
@@ -265,7 +263,7 @@ void PerformConversion(ConversionConfiguration& cvt) {
     ASSERT(cvt.input_line_width % 8 == 0);
     ASSERT(cvt.block_alignment != BlockAlignment::Block8x8 || cvt.input_lines % 8 == 0);
     // Tiles per row
-    size_t num_tiles = cvt.input_line_width / 8;
+    std::size_t num_tiles = cvt.input_line_width / 8;
     ASSERT(num_tiles <= MAX_TILES);
 
     // Buffer used as a CDMA source/target.
@@ -290,7 +288,7 @@ void PerformConversion(ConversionConfiguration& cvt) {
         unsigned int row_height = std::min(cvt.input_lines - y, 8u);
 
         // Total size in pixels of incoming data required for this strip.
-        const size_t row_data_size = row_height * cvt.input_line_width;
+        const std::size_t row_data_size = row_height * cvt.input_line_width;
 
         u8* input_Y = data_buffer.get();
         u8* input_U = input_Y + 8 * cvt.input_line_width;
@@ -331,7 +329,7 @@ void PerformConversion(ConversionConfiguration& cvt) {
 
         u32* output_buffer = reinterpret_cast<u32*>(data_buffer.get());
 
-        for (size_t i = 0; i < num_tiles; ++i) {
+        for (std::size_t i = 0; i < num_tiles; ++i) {
             int image_strip_width = 0;
             int output_stride = 0;
 

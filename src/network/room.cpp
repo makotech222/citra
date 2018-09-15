@@ -195,7 +195,7 @@ void Room::RoomImpl::StartLoop() {
 void Room::RoomImpl::HandleJoinRequest(const ENetEvent* event) {
     Packet packet;
     packet.Append(event->packet->data, event->packet->dataLength);
-    packet.IgnoreBytes(sizeof(u8)); // Igonore the message type
+    packet.IgnoreBytes(sizeof(u8)); // Ignore the message type
     std::string nickname;
     packet >> nickname;
 
@@ -364,7 +364,7 @@ MacAddress Room::RoomImpl::GenerateMacAddress() {
         NintendoOUI; // The first three bytes of each MAC address will be the NintendoOUI
     std::uniform_int_distribution<> dis(0x00, 0xFF); // Random byte between 0 and 0xFF
     do {
-        for (size_t i = 3; i < result_mac.size(); ++i) {
+        for (std::size_t i = 3; i < result_mac.size(); ++i) {
             result_mac[i] = dis(random_gen);
         }
     } while (!IsValidMacAddress(result_mac));
@@ -423,7 +423,7 @@ void Room::RoomImpl::HandleChatPacket(const ENetEvent* event) {
     Packet in_packet;
     in_packet.Append(event->packet->data, event->packet->dataLength);
 
-    in_packet.IgnoreBytes(sizeof(u8)); // Igonore the message type
+    in_packet.IgnoreBytes(sizeof(u8)); // Ignore the message type
     std::string message;
     in_packet >> message;
     auto CompareNetworkAddress = [event](const Member member) -> bool {
@@ -465,7 +465,7 @@ void Room::RoomImpl::HandleGameNamePacket(const ENetEvent* event) {
     Packet in_packet;
     in_packet.Append(event->packet->data, event->packet->dataLength);
 
-    in_packet.IgnoreBytes(sizeof(u8)); // Igonore the message type
+    in_packet.IgnoreBytes(sizeof(u8)); // Ignore the message type
     GameInfo game_info;
     in_packet >> game_info.name;
     in_packet >> game_info.id;

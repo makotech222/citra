@@ -36,6 +36,8 @@ public:
         return status_icon;
     }
 
+    void retranslateUi();
+
 public slots:
     void OnNetworkStateChanged(const Network::RoomMember::State& state);
     void OnViewLobby();
@@ -44,6 +46,7 @@ public slots:
     void OnOpenNetworkRoom();
     void OnDirectConnectToRoom();
     void OnAnnounceFailed(const Common::WebResult&);
+    void UpdateThemedIcons();
 
 signals:
     void NetworkStateChanged(const Network::RoomMember::State&);
@@ -60,6 +63,7 @@ private:
     QAction* leave_room;
     QAction* show_room;
     std::shared_ptr<Core::AnnounceMultiplayerSession> announce_multiplayer_session;
+    Network::RoomMember::State current_state = Network::RoomMember::State::Uninitialized;
     Network::RoomMember::CallbackHandle<Network::RoomMember::State> state_callback_handle;
 };
 

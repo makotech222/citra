@@ -5,6 +5,7 @@
 #include "citra_qt/debugger/wait_tree.h"
 #include "citra_qt/util/util.h"
 
+#include "common/assert.h"
 #include "core/hle/kernel/event.h"
 #include "core/hle/kernel/mutex.h"
 #include "core/hle/kernel/semaphore.h"
@@ -12,7 +13,7 @@
 #include "core/hle/kernel/timer.h"
 #include "core/hle/kernel/wait_object.h"
 
-WaitTreeItem::~WaitTreeItem() {}
+WaitTreeItem::~WaitTreeItem() = default;
 
 QColor WaitTreeItem::GetColor() const {
     return QColor(Qt::GlobalColor::black);
@@ -117,6 +118,8 @@ QString WaitTreeWaitObject::GetResetTypeQString(Kernel::ResetType reset_type) {
     case Kernel::ResetType::Pulse:
         return tr("pulse");
     }
+    UNREACHABLE();
+    return {};
 }
 
 WaitTreeObjectList::WaitTreeObjectList(
@@ -257,7 +260,7 @@ std::vector<std::unique_ptr<WaitTreeItem>> WaitTreeEvent::GetChildren() const {
 
     list.push_back(std::make_unique<WaitTreeText>(
         tr("reset type = %1")
-            .arg(GetResetTypeQString(static_cast<const Kernel::Event&>(object).reset_type))));
+            .arg(GetResetTypeQString(static_cast<const Kernel::Event&>(object).GetResetType()))));
     return list;
 }
 
@@ -298,11 +301,11 @@ std::vector<std::unique_ptr<WaitTreeItem>> WaitTreeTimer::GetChildren() const {
     const auto& timer = static_cast<const Kernel::Timer&>(object);
 
     list.push_back(std::make_unique<WaitTreeText>(
-        tr("reset type = %1").arg(GetResetTypeQString(timer.reset_type))));
+        tr("reset type = %1").arg(GetResetTypeQString(timer.GetResetType()))));
     list.push_back(
-        std::make_unique<WaitTreeText>(tr("initial delay = %1").arg(timer.initial_delay)));
+        std::make_unique<WaitTreeText>(tr("initial delay = %1").arg(timer.GetInitialDelay())));
     list.push_back(
-        std::make_unique<WaitTreeText>(tr("interval delay = %1").arg(timer.interval_delay)));
+        std::make_unique<WaitTreeText>(tr("interval delay = %1").arg(timer.GetIntervalDelay())));
     return list;
 }
 

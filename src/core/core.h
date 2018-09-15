@@ -7,6 +7,8 @@
 #include <memory>
 #include <string>
 #include "common/common_types.h"
+#include "core/frontend/applets/swkbd.h"
+#include "core/hle/shared_page.h"
 #include "core/loader/loader.h"
 #include "core/memory.h"
 #include "core/perf_stats.h"
@@ -17,6 +19,10 @@ class ARM_Interface;
 
 namespace AudioCore {
 class DspInterface;
+}
+
+namespace RPC {
+class RPCServer;
 }
 
 namespace Service {
@@ -45,12 +51,15 @@ public:
         ErrorSystemMode,            ///< Error determining the system mode
         ErrorLoader,                ///< Error loading the specified application
         ErrorLoader_ErrorEncrypted, ///< Error loading the specified application due to encryption
-        ErrorLoader_ErrorInvalidFormat, ///< Error loading the specified application due to an
-                                        /// invalid format
-        ErrorSystemFiles,               ///< Error in finding system files
-        ErrorSharedFont,                ///< Error in finding shared font
-        ErrorVideoCore,                 ///< Error in the video core
-        ErrorUnknown                    ///< Any other error
+        ErrorLoader_ErrorInvalidFormat,     ///< Error loading the specified application due to an
+                                            /// invalid format
+        ErrorSystemFiles,                   ///< Error in finding system files
+        ErrorVideoCore,                     ///< Error in the video core
+        ErrorVideoCore_ErrorGenericDrivers, ///< Error in the video core due to the user having
+                                            /// generic drivers installed
+        ErrorVideoCore_ErrorBelowGL33,      ///< Error in the video core due to the user not having
+                                            /// OpenGL 3.3 or higher
+        ErrorUnknown                        ///< Any other error
     };
 
     /**
@@ -76,11 +85,12 @@ public:
 
     /**
      * Load an executable application.
-     * @param emu_window Pointer to the host-system window used for video output and keyboard input.
+     * @param emu_window Reference to the host-system window used for video output and keyboard
+     *                   input.
      * @param filepath String path to the executable application to load on the host file system.
      * @returns ResultStatus code, indicating if the operation succeeded.
      */
-    ResultStatus Load(EmuWindow* emu_window, const std::string& filepath);
+    ResultStatus Load(EmuWindow& emu_window, const std::string& filepath);
 
     /**
      * Indicates if the emulated system is powered on (all subsystems initialized and able to run an
@@ -150,14 +160,27 @@ public:
         return *app_loader;
     }
 
+    /// Frontend Applets
+
+    void RegisterSoftwareKeyboard(std::shared_ptr<Frontend::SoftwareKeyboard> swkbd);
+
+    std::shared_ptr<Frontend::SoftwareKeyboard> GetSoftwareKeyboard() const {
+        return registered_swkbd;
+    }
+
+    std::shared_ptr<SharedPage::Handler> GetSharedPageHandler() const {
+        return shared_page_handler;
+    }
+
 private:
     /**
      * Initialize the emulated system.
-     * @param emu_window Pointer to the host-system window used for video output and keyboard input.
+     * @param emu_window Reference to the host-system window used for video output and keyboard
+     *                   input.
      * @param system_mode The system mode.
      * @return ResultStatus code, indicating if the operation succeeded.
      */
-    ResultStatus Init(EmuWindow* emu_window, u32 system_mode);
+    ResultStatus Init(EmuWindow& emu_window, u32 system_mode);
 
     /// Reschedule the core emulation
     void Reschedule();
@@ -179,6 +202,15 @@ private:
 
     /// Service manager
     std::shared_ptr<Service::SM::ServiceManager> service_manager;
+
+    /// Frontend applets
+    std::shared_ptr<Frontend::SoftwareKeyboard> registered_swkbd;
+
+    /// RPC Server for scripting support
+    std::unique_ptr<RPC::RPCServer> rpc_server;
+
+    /// Shared Page
+    std::shared_ptr<SharedPage::Handler> shared_page_handler;
 
     static System s_instance;
 

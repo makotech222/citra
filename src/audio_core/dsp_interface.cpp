@@ -7,6 +7,7 @@
 #include "audio_core/sink.h"
 #include "audio_core/sink_details.h"
 #include "common/assert.h"
+#include "core/settings.h"
 
 namespace AudioCore {
 
@@ -18,9 +19,9 @@ DspInterface::~DspInterface() {
     }
 }
 
-void DspInterface::SetSink(const std::string& sink_id) {
+void DspInterface::SetSink(const std::string& sink_id, const std::string& audio_device) {
     const SinkDetails& sink_details = GetSinkDetails(sink_id);
-    sink = sink_details.factory();
+    sink = sink_details.factory(audio_device);
     time_stretcher.SetOutputSampleRate(sink->GetNativeSampleRate());
 }
 
@@ -39,16 +40,23 @@ void DspInterface::EnableStretching(bool enable) {
     perform_time_stretching = enable;
 }
 
-void DspInterface::OutputFrame(const StereoFrame16& frame) {
+void DspInterface::OutputFrame(StereoFrame16& frame) {
     if (!sink)
         return;
+
+    // Implementation of the hardware volume slider with a dynamic range of 60 dB
+    double volume_scale_factor = std::exp(6.90775 * Settings::values.volume) * 0.001;
+    for (std::size_t i = 0; i < frame.size(); i++) {
+        frame[i][0] = static_cast<s16>(frame[i][0] * volume_scale_factor);
+        frame[i][1] = static_cast<s16>(frame[i][1] * volume_scale_factor);
+    }
 
     if (perform_time_stretching) {
         time_stretcher.AddSamples(&frame[0][0], frame.size());
         std::vector<s16> stretched_samples = time_stretcher.Process(sink->SamplesInQueue());
         sink->EnqueueSamples(stretched_samples.data(), stretched_samples.size() / 2);
     } else {
-        constexpr size_t maximum_sample_latency = 2048; // about 64 miliseconds
+        constexpr std::size_t maximum_sample_latency = 2048; // about 64 miliseconds
         if (sink->SamplesInQueue() > maximum_sample_latency) {
             // This can occur if we're running too fast and samples are starting to back up.
             // Just drop the samples.

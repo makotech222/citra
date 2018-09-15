@@ -94,7 +94,7 @@ static std::array<GLfloat, 3 * 2> MakeOrthographicMatrix(const float width, cons
     return matrix;
 }
 
-RendererOpenGL::RendererOpenGL() = default;
+RendererOpenGL::RendererOpenGL(EmuWindow& window) : RendererBase{window} {}
 RendererOpenGL::~RendererOpenGL() = default;
 
 /// Swap buffers (render frame)
@@ -143,8 +143,8 @@ void RendererOpenGL::SwapBuffers() {
     Core::System::GetInstance().perf_stats.EndSystemFrame();
 
     // Swap buffers
-    render_window->PollEvents();
-    render_window->SwapBuffers();
+    render_window.PollEvents();
+    render_window.SwapBuffers();
 
     Core::System::GetInstance().frame_limiter.DoFrameLimiting(CoreTiming::GetGlobalTimeUs());
     Core::System::GetInstance().perf_stats.BeginSystemFrame();
@@ -176,7 +176,7 @@ void RendererOpenGL::LoadFBToScreenInfo(const GPU::Regs::FramebufferConfig& fram
               (int)framebuffer.height, (int)framebuffer.format);
 
     int bpp = GPU::Regs::BytesPerPixel(framebuffer.color_format);
-    size_t pixel_stride = framebuffer.stride / bpp;
+    std::size_t pixel_stride = framebuffer.stride / bpp;
 
     // OpenGL only supports specifying a stride in units of pixels, not bytes, unfortunately
     ASSERT(pixel_stride * bpp == framebuffer.stride);
@@ -384,7 +384,13 @@ void RendererOpenGL::DrawSingleScreenRotated(const ScreenInfo& screen_info, floa
  * Draws the emulated screens to the emulator window.
  */
 void RendererOpenGL::DrawScreens() {
-    auto layout = render_window->GetFramebufferLayout();
+    if (VideoCore::g_renderer_bg_color_update_requested.exchange(false)) {
+        // Update background color before drawing
+        glClearColor(Settings::values.bg_red, Settings::values.bg_green, Settings::values.bg_blue,
+                     0.0f);
+    }
+
+    auto layout = render_window.GetFramebufferLayout();
     const auto& top_screen = layout.top_screen;
     const auto& bottom_screen = layout.bottom_screen;
 
@@ -436,14 +442,6 @@ void RendererOpenGL::DrawScreens() {
 /// Updates the framerate
 void RendererOpenGL::UpdateFramerate() {}
 
-/**
- * Set the emulator window to use for renderer
- * @param window EmuWindow handle to emulator window to use for rendering
- */
-void RendererOpenGL::SetWindow(EmuWindow* window) {
-    render_window = window;
-}
-
 static const char* GetSource(GLenum source) {
 #define RET(s)                                                                                     \
     case GL_DEBUG_SOURCE_##s:                                                                      \
@@ -484,7 +482,7 @@ static void APIENTRY DebugHandler(GLenum source, GLenum type, GLuint id, GLenum 
     Log::Level level;
     switch (severity) {
     case GL_DEBUG_SEVERITY_HIGH:
-        level = Log::Level::Error;
+        level = Log::Level::Critical;
         break;
     case GL_DEBUG_SEVERITY_MEDIUM:
         level = Log::Level::Warning;
@@ -499,8 +497,8 @@ static void APIENTRY DebugHandler(GLenum source, GLenum type, GLuint id, GLenum 
 }
 
 /// Initialize the renderer
-bool RendererOpenGL::Init() {
-    render_window->MakeCurrent();
+Core::System::ResultStatus RendererOpenGL::Init() {
+    render_window.MakeCurrent();
 
     if (GLAD_GL_KHR_debug) {
         glEnable(GL_DEBUG_OUTPUT);
@@ -519,15 +517,19 @@ bool RendererOpenGL::Init() {
     Core::Telemetry().AddField(Telemetry::FieldType::UserSystem, "GPU_Model", gpu_model);
     Core::Telemetry().AddField(Telemetry::FieldType::UserSystem, "GPU_OpenGL_Version", gl_version);
 
+    if (gpu_vendor == "GDI Generic") {
+        return Core::System::ResultStatus::ErrorVideoCore_ErrorGenericDrivers;
+    }
+
     if (!GLAD_GL_VERSION_3_3) {
-        return false;
+        return Core::System::ResultStatus::ErrorVideoCore_ErrorBelowGL33;
     }
 
     InitOpenGLObjects();
 
     RefreshRasterizerSetting();
 
-    return true;
+    return Core::System::ResultStatus::Success;
 }
 
 /// Shutdown the renderer

@@ -27,10 +27,10 @@ public:
         fpexc = 0;
     }
 
-    u32 GetCpuRegister(size_t index) const override {
+    u32 GetCpuRegister(std::size_t index) const override {
         return cpu_registers[index];
     }
-    void SetCpuRegister(size_t index, u32 value) override {
+    void SetCpuRegister(std::size_t index, u32 value) override {
         cpu_registers[index] = value;
     }
     u32 GetCpsr() const override {
@@ -39,10 +39,10 @@ public:
     void SetCpsr(u32 value) override {
         cpsr = value;
     }
-    u32 GetFpuRegister(size_t index) const override {
+    u32 GetFpuRegister(std::size_t index) const override {
         return fpu_registers[index];
     }
-    void SetFpuRegister(size_t index, u32 value) override {
+    void SetFpuRegister(std::size_t index, u32 value) override {
         fpu_registers[index] = value;
     }
     u32 GetFpscr() const override {
@@ -75,7 +75,7 @@ ARM_DynCom::ARM_DynCom(PrivilegeMode initial_mode) {
 ARM_DynCom::~ARM_DynCom() {}
 
 void ARM_DynCom::Run() {
-    ExecuteInstructions(std::max(CoreTiming::GetDowncount(), 0));
+    ExecuteInstructions(std::max<s64>(CoreTiming::GetDowncount(), 0));
 }
 
 void ARM_DynCom::Step() {
@@ -87,7 +87,7 @@ void ARM_DynCom::ClearInstructionCache() {
     trans_cache_buf_top = 0;
 }
 
-void ARM_DynCom::InvalidateCacheRange(u32, size_t) {
+void ARM_DynCom::InvalidateCacheRange(u32, std::size_t) {
     ClearInstructionCache();
 }
 
@@ -143,10 +143,11 @@ void ARM_DynCom::SetCP15Register(CP15Register reg, u32 value) {
     state->CP15[reg] = value;
 }
 
-void ARM_DynCom::ExecuteInstructions(int num_instructions) {
+void ARM_DynCom::ExecuteInstructions(u64 num_instructions) {
     state->NumInstrsToExecute = num_instructions;
     unsigned ticks_executed = InterpreterMainLoop(state.get());
     CoreTiming::AddTicks(ticks_executed);
+    state->ServeBreak();
 }
 
 std::unique_ptr<ARM_Interface::ThreadContext> ARM_DynCom::NewContext() const {

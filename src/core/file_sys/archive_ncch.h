@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <array>
 #include <memory>
 #include <string>
 #include "core/file_sys/archive_backend.h"
@@ -20,6 +21,24 @@ enum class MediaType : u32;
 } // namespace Service
 
 namespace FileSys {
+
+enum class NCCHFilePathType : u32 {
+    RomFS = 0,
+    Code = 1,
+    ExeFS = 2,
+};
+
+enum class NCCHFileOpenType : u32 {
+    NCCHData = 0,
+    SaveData = 1,
+};
+
+/// Helper function to generate a Path for NCCH archives
+Path MakeNCCHArchivePath(u64 tid, Service::FS::MediaType media_type);
+
+/// Helper function to generate a Path for NCCH files
+Path MakeNCCHFilePath(NCCHFileOpenType open_type, u32 content_index, NCCHFilePathType filepath_type,
+                      std::array<char, 8>& exefs_filepath);
 
 /// Archive backend for NCCH Archives (RomFS, ExeFS)
 class NCCHArchive : public ArchiveBackend {
@@ -53,8 +72,9 @@ class NCCHFile : public FileBackend {
 public:
     explicit NCCHFile(std::vector<u8> buffer, std::unique_ptr<DelayGenerator> delay_generator_);
 
-    ResultVal<size_t> Read(u64 offset, size_t length, u8* buffer) const override;
-    ResultVal<size_t> Write(u64 offset, size_t length, bool flush, const u8* buffer) override;
+    ResultVal<std::size_t> Read(u64 offset, std::size_t length, u8* buffer) const override;
+    ResultVal<std::size_t> Write(u64 offset, std::size_t length, bool flush,
+                                 const u8* buffer) override;
     u64 GetSize() const override;
     bool SetSize(u64 size) const override;
     bool Close() const override {
