@@ -50,7 +50,16 @@ CheatSearch::~CheatSearch()
 {
     delete ui;
 }
-
+template <typename T>
+T Read(const VAddr addr) {
+    if (std::is_same<T, u8>::value) {
+        return Memory::Read8(addr);
+    } else if (std::is_same<T, u16>::value) {
+        return Memory::Read16(addr);
+    } else if (std::is_same<T, u32>::value) {
+        return Memory::Read32(addr);
+    }
+}
 string int_to_hex(int i)
 {
     std::stringstream stream;
@@ -286,7 +295,7 @@ shared_ptr<vector<FoundItems>> CheatSearch::FirstSearch(const T value, std::func
     }
     for (auto& range : address_in_use) {
         for (u32 i = range; i < range + 4096; i++) {
-            T resultTemp = Memory::Read<T>(i);
+            T resultTemp = Read<T>(i);
             T2 result = (T2)resultTemp;
             if (comparer(result, value, searchToValue)) {
                 FoundItems item = FoundItems();
@@ -307,7 +316,7 @@ shared_ptr<vector<FoundItems>> CheatSearch::NextSearch(const T value, std::funct
     int searchToValue = ui->txtSearchTo->text().toInt(nullptr, base);
     for (auto& f : *previousFound) {
         int addr = std::stoul(f.address, nullptr, 16);
-        T resultTemp = Memory::Read<T>(addr);
+        T resultTemp = Read<T>(addr);
         T2 result = (T2)resultTemp;
         if (comparer(result, value, searchToValue)) {
             FoundItems item = FoundItems();

@@ -189,7 +189,7 @@ bool IsValidVirtualAddress(VAddr vaddr);
 bool IsValidPhysicalAddress(PAddr paddr);
 
 template <typename T>
-T Read(const VAddr vaddr);
+T Read(VAddr vaddr);
 u8 Read8(VAddr addr);
 u16 Read16(VAddr addr);
 u32 Read32(VAddr addr);
