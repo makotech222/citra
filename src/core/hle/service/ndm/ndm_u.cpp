@@ -2,11 +2,11 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include "core/core.h"
 #include "core/hle/ipc_helpers.h"
 #include "core/hle/service/ndm/ndm_u.h"
 
-namespace Service {
-namespace NDM {
+namespace Service::NDM {
 
 void NDM_U::EnterExclusiveState(Kernel::HLERequestContext& ctx) {
     IPC::RequestParser rp(ctx, 0x01, 1, 2);
@@ -237,9 +237,9 @@ NDM_U::NDM_U() : ServiceFramework("ndm:u", 6) {
     RegisterHandlers(functions);
 }
 
-void InstallInterfaces(SM::ServiceManager& service_manager) {
+void InstallInterfaces(Core::System& system) {
+    auto& service_manager = system.ServiceManager();
     std::make_shared<NDM_U>()->InstallAsService(service_manager);
 }
 
-} // namespace NDM
-} // namespace Service
+} // namespace Service::NDM

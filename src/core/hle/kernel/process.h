@@ -13,6 +13,7 @@
 #include <boost/container/static_vector.hpp>
 #include "common/bit_field.h"
 #include "common/common_types.h"
+#include "core/hle/kernel/handle_table.h"
 #include "core/hle/kernel/object.h"
 #include "core/hle/kernel/vm_manager.h"
 
@@ -24,12 +25,6 @@ struct AddressMapping {
     u32 size;
     bool read_only;
     bool unk_flag;
-};
-
-enum class MemoryRegion : u16 {
-    APPLICATION = 1,
-    SYSTEM = 2,
-    BASE = 3,
 };
 
 union ProcessFlags {
@@ -55,14 +50,13 @@ enum class ProcessStatus { Created, Running, Exited };
 class ResourceLimit;
 struct MemoryRegionInfo;
 
-struct CodeSet final : public Object {
+class CodeSet final : public Object {
+public:
     struct Segment {
         std::size_t offset = 0;
         VAddr addr = 0;
         u32 size = 0;
     };
-
-    static SharedPtr<CodeSet> Create(std::string name, u64 program_id);
 
     std::string GetTypeName() const override {
         return "CodeSet";
@@ -111,14 +105,14 @@ struct CodeSet final : public Object {
     u64 program_id;
 
 private:
-    CodeSet();
+    explicit CodeSet(KernelSystem& kernel);
     ~CodeSet() override;
+
+    friend class KernelSystem;
 };
 
 class Process final : public Object {
 public:
-    static SharedPtr<Process> Create(SharedPtr<CodeSet> code_set);
-
     std::string GetTypeName() const override {
         return "Process";
     }
@@ -131,7 +125,7 @@ public:
         return HANDLE_TYPE;
     }
 
-    static u32 next_process_id;
+    HandleTable handle_table;
 
     SharedPtr<CodeSet> codeset;
     /// Resource limit descriptor for this process
@@ -153,7 +147,7 @@ public:
     ProcessStatus status;
 
     /// The id of this process
-    u32 process_id = next_process_id++;
+    u32 process_id;
 
     /**
      * Parses a list of kernel capability descriptors (as found in the ExHeader) and applies them
@@ -201,14 +195,10 @@ public:
     ResultCode LinearFree(VAddr target, u32 size);
 
 private:
-    Process();
+    explicit Process(Kernel::KernelSystem& kernel);
     ~Process() override;
+
+    friend class KernelSystem;
+    KernelSystem& kernel;
 };
-
-void ClearProcessList();
-
-/// Retrieves a process from the current list of processes.
-SharedPtr<Process> GetProcessById(u32 process_id);
-
-extern SharedPtr<Process> g_current_process;
 } // namespace Kernel

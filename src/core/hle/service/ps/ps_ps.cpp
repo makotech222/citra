@@ -2,11 +2,11 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include "core/core.h"
 #include "core/hle/ipc_helpers.h"
 #include "core/hle/service/ps/ps_ps.h"
 
-namespace Service {
-namespace PS {
+namespace Service::PS {
 
 PS_PS::PS_PS() : ServiceFramework("ps:ps", DefaultMaxSessions) {
     static const FunctionInfo functions[] = {
@@ -33,9 +33,9 @@ PS_PS::PS_PS() : ServiceFramework("ps:ps", DefaultMaxSessions) {
     RegisterHandlers(functions);
 };
 
-void InstallInterfaces(SM::ServiceManager& service_manager) {
+void InstallInterfaces(Core::System& system) {
+    auto& service_manager = system.ServiceManager();
     std::make_shared<PS_PS>()->InstallAsService(service_manager);
 }
 
-} // namespace PS
-} // namespace Service
+} // namespace Service::PS

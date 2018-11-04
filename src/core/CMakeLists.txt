@@ -50,6 +50,7 @@ add_library(core STATIC
     file_sys/archive_source_sd_savedata.h
     file_sys/archive_systemsavedata.cpp
     file_sys/archive_systemsavedata.h
+    file_sys/cia_common.h
     file_sys/cia_container.cpp
     file_sys/cia_container.h
     file_sys/directory_backend.h
@@ -57,6 +58,7 @@ add_library(core STATIC
     file_sys/disk_archive.h
     file_sys/errors.h
     file_sys/file_backend.h
+    file_sys/delay_generator.cpp
     file_sys/delay_generator.h
     file_sys/ivfc_archive.cpp
     file_sys/ivfc_archive.h
@@ -68,6 +70,10 @@ add_library(core STATIC
     file_sys/romfs_reader.h
     file_sys/savedata_archive.cpp
     file_sys/savedata_archive.h
+    file_sys/seed_db.cpp
+    file_sys/seed_db.h
+    file_sys/ticket.cpp
+    file_sys/ticket.h
     file_sys/title_metadata.cpp
     file_sys/title_metadata.h
     frontend/applets/default_applets.cpp
@@ -97,8 +103,6 @@ add_library(core STATIC
     hle/applets/mint.h
     hle/applets/swkbd.cpp
     hle/applets/swkbd.h
-    hle/config_mem.cpp
-    hle/config_mem.h
     hle/function_wrappers.h
     hle/ipc.h
     hle/ipc_helpers.h
@@ -108,6 +112,8 @@ add_library(core STATIC
     hle/kernel/client_port.h
     hle/kernel/client_session.cpp
     hle/kernel/client_session.h
+    hle/kernel/config_mem.cpp
+    hle/kernel/config_mem.h
     hle/kernel/errors.h
     hle/kernel/event.cpp
     hle/kernel/event.h
@@ -138,6 +144,8 @@ add_library(core STATIC
     hle/kernel/session.h
     hle/kernel/shared_memory.cpp
     hle/kernel/shared_memory.h
+    hle/kernel/shared_page.cpp
+    hle/kernel/shared_page.h
     hle/kernel/svc.cpp
     hle/kernel/svc.h
     hle/kernel/thread.cpp
@@ -244,6 +252,10 @@ add_library(core STATIC
     hle/service/frd/frd_u.h
     hle/service/fs/archive.cpp
     hle/service/fs/archive.h
+    hle/service/fs/directory.cpp
+    hle/service/fs/directory.h
+    hle/service/fs/file.cpp
+    hle/service/fs/file.h
     hle/service/fs/fs_user.cpp
     hle/service/fs/fs_user.h
     hle/service/gsp/gsp.cpp
@@ -376,8 +388,6 @@ add_library(core STATIC
     hle/service/ssl_c.h
     hle/service/y2r_u.cpp
     hle/service/y2r_u.h
-    hle/shared_page.cpp
-    hle/shared_page.h
     hw/aes/arithmetic128.cpp
     hw/aes/arithmetic128.h
     hw/aes/ccm.cpp
@@ -410,14 +420,6 @@ add_library(core STATIC
     movie.h
     perf_stats.cpp
     perf_stats.h
-    rpc/packet.cpp
-    rpc/packet.h
-    rpc/rpc_server.cpp
-    rpc/rpc_server.h
-    rpc/server.cpp
-    rpc/server.h
-    rpc/zmq_server.cpp
-    rpc/zmq_server.h
     settings.cpp
     settings.h
     telemetry_session.cpp
@@ -426,13 +428,26 @@ add_library(core STATIC
     tracer/recorder.cpp
     tracer/recorder.h
 )
+if (ENABLE_SCRIPTING)
+    target_sources(core PRIVATE
+        rpc/packet.cpp
+        rpc/packet.h
+        rpc/rpc_server.cpp
+        rpc/rpc_server.h
+        rpc/server.cpp
+        rpc/server.h
+        rpc/zmq_server.cpp
+        rpc/zmq_server.h
+    )
+endif()
 
 create_target_directory_groups(core)
 
 target_link_libraries(core PUBLIC common PRIVATE audio_core network video_core)
 target_link_libraries(core PUBLIC Boost::boost PRIVATE cryptopp fmt open_source_archives)
 if (ENABLE_WEB_SERVICE)
-    target_link_libraries(core PUBLIC json-headers web_service)
+    target_compile_definitions(core PRIVATE -DENABLE_WEB_SERVICE)
+    target_link_libraries(core PRIVATE web_service)
 endif()
 
 if (ARCHITECTURE_x86_64)
@@ -445,4 +460,6 @@ if (ARCHITECTURE_x86_64)
     target_link_libraries(core PRIVATE dynarmic)
 endif()
 
-target_link_libraries(core PUBLIC libzmq-headers cppzmq-headers libzmq)
+if (ENABLE_SCRIPTING)
+    target_link_libraries(core PUBLIC libzmq-headers cppzmq-headers libzmq)
+endif()

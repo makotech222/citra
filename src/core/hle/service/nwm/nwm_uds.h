@@ -11,10 +11,13 @@
 #include "common/swap.h"
 #include "core/hle/service/service.h"
 
+namespace Core {
+class System;
+}
+
 // Local-WLAN service
 
-namespace Service {
-namespace NWM {
+namespace Service::NWM {
 
 const std::size_t ApplicationDataSize = 0xC8;
 const u8 DefaultNetworkChannel = 11;
@@ -33,6 +36,12 @@ struct NodeInfo {
     INSERT_PADDING_BYTES(4);
     u16_le network_node_id;
     INSERT_PADDING_BYTES(6);
+
+    void Reset() {
+        friend_code_seed = 0;
+        username.fill(0);
+        network_node_id = 0;
+    }
 };
 
 static_assert(sizeof(NodeInfo) == 40, "NodeInfo has incorrect size.");
@@ -99,10 +108,12 @@ enum class TagId : u8 {
 
 class NWM_UDS final : public ServiceFramework<NWM_UDS> {
 public:
-    NWM_UDS();
+    explicit NWM_UDS(Core::System& system);
     ~NWM_UDS();
 
 private:
+    Core::System& system;
+
     void UpdateNetworkAttribute(Kernel::HLERequestContext& ctx);
 
     /**
@@ -343,5 +354,4 @@ private:
     void DecryptBeaconData(Kernel::HLERequestContext& ctx);
 };
 
-} // namespace NWM
-} // namespace Service
+} // namespace Service::NWM

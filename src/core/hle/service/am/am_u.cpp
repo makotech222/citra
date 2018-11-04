@@ -4,8 +4,7 @@
 
 #include "core/hle/service/am/am_u.h"
 
-namespace Service {
-namespace AM {
+namespace Service::AM {
 
 AM_U::AM_U(std::shared_ptr<Module> am) : Module::Interface(std::move(am), "am:u", 5) {
     static const FunctionInfo functions[] = {
@@ -56,11 +55,11 @@ AM_U::AM_U(std::shared_ptr<Module> am) : Module::Interface(std::move(am), "am:u"
         {0x002D00C0, nullptr, "CheckContentRightsIgnorePlatform"},
         {0x04010080, nullptr, "UpdateFirmwareTo"},
         {0x04020040, &AM_U::BeginImportProgram, "BeginImportProgram"},
-        {0x04030000, nullptr, "BeginImportProgramTemporarily"},
+        {0x04030000, &AM_U::BeginImportProgramTemporarily, "BeginImportProgramTemporarily"},
         {0x04040002, nullptr, "CancelImportProgram"},
         {0x04050002, &AM_U::EndImportProgram, "EndImportProgram"},
-        {0x04060002, nullptr, "EndImportProgramWithoutCommit"},
-        {0x040700C2, nullptr, "CommitImportPrograms"},
+        {0x04060002, &AM_U::EndImportProgramWithoutCommit, "EndImportProgramWithoutCommit"},
+        {0x040700C2, &AM_U::CommitImportPrograms, "CommitImportPrograms"},
         {0x04080042, &AM_U::GetProgramInfoFromCia, "GetProgramInfoFromCia"},
         {0x04090004, &AM_U::GetSystemMenuDataFromCia, "GetSystemMenuDataFromCia"},
         {0x040A0002, &AM_U::GetDependencyListFromCia, "GetDependencyListFromCia"},
@@ -71,7 +70,7 @@ AM_U::AM_U(std::shared_ptr<Module> am) : Module::Interface(std::move(am), "am:u"
         {0x040F0000, nullptr, "UpdateFirmwareAuto"},
         {0x041000C0, &AM_U::DeleteProgram, "DeleteProgram"},
         {0x04110044, nullptr, "GetTwlProgramListForReboot"},
-        {0x04120000, nullptr, "GetSystemUpdaterMutex"},
+        {0x04120000, &AM_U::GetSystemUpdaterMutex, "GetSystemUpdaterMutex"},
         {0x04130002, &AM_U::GetMetaSizeFromCia, "GetMetaSizeFromCia"},
         {0x04140044, &AM_U::GetMetaDataFromCia, "GetMetaDataFromCia"},
         {0x04150080, nullptr, "CheckDemoLaunchRights"},
@@ -83,5 +82,4 @@ AM_U::AM_U(std::shared_ptr<Module> am) : Module::Interface(std::move(am), "am:u"
     RegisterHandlers(functions);
 }
 
-} // namespace AM
-} // namespace Service
+} // namespace Service::AM

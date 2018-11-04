@@ -6,8 +6,11 @@
 
 #include "core/hle/service/service.h"
 
-namespace Service {
-namespace ACT {
+namespace Core {
+class System;
+}
+
+namespace Service::ACT {
 
 /// Initializes all ACT services
 class Module final {
@@ -22,7 +25,6 @@ public:
     };
 };
 
-void InstallInterfaces(SM::ServiceManager& service_manager);
+void InstallInterfaces(Core::System& system);
 
-} // namespace ACT
-} // namespace Service
+} // namespace Service::ACT

@@ -8,6 +8,7 @@
 #include "common/assert.h"
 #include "common/logging/log.h"
 #include "common/string_util.h"
+#include "core/core.h"
 #include "core/hle/applets/swkbd.h"
 #include "core/hle/kernel/kernel.h"
 #include "core/hle/kernel/shared_memory.h"
@@ -41,7 +42,7 @@ ResultCode SoftwareKeyboard::ReceiveParameter(Service::APT::MessageParameter con
     // Allocate a heap block of the required size for this applet.
     heap_memory = std::make_shared<std::vector<u8>>(capture_info.size);
     // Create a SharedMemory that directly points to this heap block.
-    framebuffer_memory = Kernel::SharedMemory::CreateForApplet(
+    framebuffer_memory = Core::System::GetInstance().Kernel().CreateSharedMemoryForApplet(
         heap_memory, 0, capture_info.size, MemoryPermission::ReadWrite, MemoryPermission::ReadWrite,
         "SoftwareKeyboard Memory");
 
@@ -110,7 +111,7 @@ void SoftwareKeyboard::Update() {
         break;
     default:
         LOG_CRITICAL(Applet_SWKBD, "Unknown button config {}",
-                     static_cast<int>(config.num_buttons_m1));
+                     static_cast<u32>(config.num_buttons_m1));
         UNREACHABLE();
     }
 
@@ -143,8 +144,9 @@ Frontend::KeyboardConfig SoftwareKeyboard::ToFrontendConfig(
     const SoftwareKeyboardConfig& config) const {
     using namespace Frontend;
     KeyboardConfig frontend_config;
-    frontend_config.button_config = static_cast<ButtonConfig>(config.num_buttons_m1);
-    frontend_config.accept_mode = static_cast<AcceptedInput>(config.valid_input);
+    frontend_config.button_config =
+        static_cast<ButtonConfig>(static_cast<u32>(config.num_buttons_m1));
+    frontend_config.accept_mode = static_cast<AcceptedInput>(static_cast<u32>(config.valid_input));
     frontend_config.multiline_mode = config.multiline;
     frontend_config.max_text_length = config.max_text_length;
     frontend_config.max_digits = config.max_digits;

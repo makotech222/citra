@@ -18,8 +18,7 @@ namespace AudioCore {
 enum class DspPipe;
 }
 
-namespace Service {
-namespace DSP {
+namespace Service::DSP {
 
 void DSP_DSP::RecvData(Kernel::HLERequestContext& ctx) {
     IPC::RequestParser rp(ctx, 0x01, 1, 0);
@@ -351,7 +350,7 @@ bool DSP_DSP::HasTooManyEventsRegistered() const {
     return number >= max_number_of_interrupt_events;
 }
 
-DSP_DSP::DSP_DSP() : ServiceFramework("dsp::DSP", DefaultMaxSessions) {
+DSP_DSP::DSP_DSP(Core::System& system) : ServiceFramework("dsp::DSP", DefaultMaxSessions) {
     static const FunctionInfo functions[] = {
         // clang-format off
         {0x00010040, &DSP_DSP::RecvData, "RecvData"},
@@ -392,7 +391,8 @@ DSP_DSP::DSP_DSP() : ServiceFramework("dsp::DSP", DefaultMaxSessions) {
 
     RegisterHandlers(functions);
 
-    semaphore_event = Kernel::Event::Create(Kernel::ResetType::OneShot, "DSP_DSP::semaphore_event");
+    semaphore_event =
+        system.Kernel().CreateEvent(Kernel::ResetType::OneShot, "DSP_DSP::semaphore_event");
 }
 
 DSP_DSP::~DSP_DSP() {
@@ -400,11 +400,11 @@ DSP_DSP::~DSP_DSP() {
     pipes = {};
 }
 
-void InstallInterfaces(SM::ServiceManager& service_manager) {
-    auto dsp = std::make_shared<DSP_DSP>();
+void InstallInterfaces(Core::System& system) {
+    auto& service_manager = system.ServiceManager();
+    auto dsp = std::make_shared<DSP_DSP>(system);
     dsp->InstallAsService(service_manager);
     Core::DSP().SetServiceToInterrupt(std::move(dsp));
 }
 
-} // namespace DSP
-} // namespace Service
+} // namespace Service::DSP

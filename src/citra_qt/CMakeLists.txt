@@ -14,6 +14,8 @@ add_executable(citra-qt
     applets/swkbd.h
     bootmanager.cpp
     bootmanager.h
+    compatibility_list.cpp
+    compatibility_list.h
     camera/camera_util.cpp
     camera/camera_util.h
     camera/still_image_camera.cpp
@@ -43,6 +45,8 @@ add_executable(citra-qt
     configuration/configure_motion_touch.h
     configuration/configure_system.cpp
     configuration/configure_system.h
+    configuration/configure_ui.cpp
+    configuration/configure_ui.h
     configuration/configure_web.cpp
     configuration/configure_web.h
     debugger/console.h
@@ -74,6 +78,8 @@ add_executable(citra-qt
     game_list.cpp
     game_list.h
     game_list_p.h
+    game_list_worker.cpp
+    game_list_worker.h
     hotkeys.cpp
     hotkeys.h
     main.cpp
@@ -119,6 +125,7 @@ set(UIS
     configuration/configure_input.ui
     configuration/configure_motion_touch.ui
     configuration/configure_system.ui
+    configuration/configure_ui.ui
     configuration/configure_web.ui
     debugger/registers.ui
     multiplayer/direct_connect.ui
@@ -133,15 +140,15 @@ set(UIS
 )
 
 file(GLOB COMPAT_LIST
-     ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
-     ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
-file(GLOB_RECURSE ICONS ${CMAKE_SOURCE_DIR}/dist/icons/*)
-file(GLOB_RECURSE THEMES ${CMAKE_SOURCE_DIR}/dist/qt_themes/*)
+     ${PROJECT_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
+     ${PROJECT_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
+file(GLOB_RECURSE ICONS ${PROJECT_SOURCE_DIR}/dist/icons/*)
+file(GLOB_RECURSE THEMES ${PROJECT_SOURCE_DIR}/dist/qt_themes/*)
 
 qt5_wrap_ui(UI_HDRS ${UIS})
 
 if (ENABLE_QT_TRANSLATION)
-    set(CITRA_QT_LANGUAGES "${CMAKE_SOURCE_DIR}/dist/languages" CACHE PATH "Path to the translation bundle for the Qt frontend")
+    set(CITRA_QT_LANGUAGES "${PROJECT_SOURCE_DIR}/dist/languages" CACHE PATH "Path to the translation bundle for the Qt frontend")
     option(GENERATE_QT_TRANSLATION "Generate en.ts as the translation source file" OFF)
 
     # Update source TS file if enabled
@@ -204,6 +211,10 @@ create_target_directory_groups(citra-qt)
 target_link_libraries(citra-qt PRIVATE audio_core common core input_common network video_core)
 target_link_libraries(citra-qt PRIVATE Boost::boost glad nihstro-headers Qt5::OpenGL Qt5::Widgets Qt5::Multimedia)
 target_link_libraries(citra-qt PRIVATE ${PLATFORM_LIBRARIES} Threads::Threads)
+
+if (CITRA_ENABLE_COMPATIBILITY_REPORTING)
+    target_compile_definitions(citra-qt PRIVATE -DCITRA_ENABLE_COMPATIBILITY_REPORTING)
+endif()
 
 if (USE_DISCORD_PRESENCE)
     target_sources(citra-qt PUBLIC

@@ -5,6 +5,7 @@
 #include <vector>
 #include "common/common_types.h"
 #include "common/logging/log.h"
+#include "core/core.h"
 #include "core/hle/ipc.h"
 #include "core/hle/ipc_helpers.h"
 #include "core/hle/kernel/event.h"
@@ -15,8 +16,7 @@
 #include "core/hle/service/ac/ac_u.h"
 #include "core/memory.h"
 
-namespace Service {
-namespace AC {
+namespace Service::AC {
 void Module::Interface::CreateDefaultConfig(Kernel::HLERequestContext& ctx) {
     IPC::RequestParser rp(ctx, 0x1, 0, 0);
 
@@ -172,11 +172,11 @@ void Module::Interface::SetClientVersion(Kernel::HLERequestContext& ctx) {
 Module::Interface::Interface(std::shared_ptr<Module> ac, const char* name, u32 max_session)
     : ServiceFramework(name, max_session), ac(std::move(ac)) {}
 
-void InstallInterfaces(SM::ServiceManager& service_manager) {
+void InstallInterfaces(Core::System& system) {
+    auto& service_manager = system.ServiceManager();
     auto ac = std::make_shared<Module>();
     std::make_shared<AC_I>(ac)->InstallAsService(service_manager);
     std::make_shared<AC_U>(ac)->InstallAsService(service_manager);
 }
 
-} // namespace AC
-} // namespace Service
+} // namespace Service::AC

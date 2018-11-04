@@ -17,11 +17,8 @@
 
 namespace Kernel {
 
-// Lists all processes that exist in the current session.
-static std::vector<SharedPtr<Process>> process_list;
-
-SharedPtr<CodeSet> CodeSet::Create(std::string name, u64 program_id) {
-    SharedPtr<CodeSet> codeset(new CodeSet);
+SharedPtr<CodeSet> KernelSystem::CreateCodeSet(std::string name, u64 program_id) {
+    SharedPtr<CodeSet> codeset(new CodeSet(*this));
 
     codeset->name = std::move(name);
     codeset->program_id = program_id;
@@ -29,18 +26,17 @@ SharedPtr<CodeSet> CodeSet::Create(std::string name, u64 program_id) {
     return codeset;
 }
 
-CodeSet::CodeSet() {}
+CodeSet::CodeSet(KernelSystem& kernel) : Object(kernel) {}
 CodeSet::~CodeSet() {}
 
-u32 Process::next_process_id;
-
-SharedPtr<Process> Process::Create(SharedPtr<CodeSet> code_set) {
-    SharedPtr<Process> process(new Process);
+SharedPtr<Process> KernelSystem::CreateProcess(SharedPtr<CodeSet> code_set) {
+    SharedPtr<Process> process(new Process(*this));
 
     process->codeset = std::move(code_set);
     process->flags.raw = 0;
     process->flags.memory_region.Assign(MemoryRegion::APPLICATION);
     process->status = ProcessStatus::Created;
+    process->process_id = ++next_process_id;
 
     process_list.push_back(process);
     return process;
@@ -119,7 +115,7 @@ void Process::ParseKernelCaps(const u32* kernel_caps, std::size_t len) {
 }
 
 void Process::Run(s32 main_thread_priority, u32 stack_size) {
-    memory_region = GetMemoryRegion(flags.memory_region);
+    memory_region = kernel.GetMemoryRegion(flags.memory_region);
 
     auto MapSegment = [&](CodeSet::Segment& segment, VMAPermission permissions,
                           MemoryState memory_state) {
@@ -147,7 +143,7 @@ void Process::Run(s32 main_thread_priority, u32 stack_size) {
     memory_region->used += stack_size;
 
     // Map special address mappings
-    MapSharedPages(vm_manager);
+    kernel.MapSharedPages(vm_manager);
     for (const auto& mapping : address_mappings) {
         HandleSpecialMapping(vm_manager, mapping);
     }
@@ -155,7 +151,7 @@ void Process::Run(s32 main_thread_priority, u32 stack_size) {
     status = ProcessStatus::Running;
 
     vm_manager.LogLayout(Log::Level::Debug);
-    Kernel::SetupMainThread(codeset->entrypoint, main_thread_priority, this);
+    Kernel::SetupMainThread(kernel, codeset->entrypoint, main_thread_priority, this);
 }
 
 VAddr Process::GetLinearHeapAreaAddress() const {
@@ -304,14 +300,11 @@ ResultCode Process::LinearFree(VAddr target, u32 size) {
     return RESULT_SUCCESS;
 }
 
-Kernel::Process::Process() {}
+Kernel::Process::Process(KernelSystem& kernel)
+    : Object(kernel), handle_table(kernel), kernel(kernel) {}
 Kernel::Process::~Process() {}
 
-void ClearProcessList() {
-    process_list.clear();
-}
-
-SharedPtr<Process> GetProcessById(u32 process_id) {
+SharedPtr<Process> KernelSystem::GetProcessById(u32 process_id) const {
     auto itr = std::find_if(
         process_list.begin(), process_list.end(),
         [&](const SharedPtr<Process>& process) { return process->process_id == process_id; });
@@ -321,6 +314,4 @@ SharedPtr<Process> GetProcessById(u32 process_id) {
 
     return *itr;
 }
-
-SharedPtr<Process> g_current_process;
 } // namespace Kernel

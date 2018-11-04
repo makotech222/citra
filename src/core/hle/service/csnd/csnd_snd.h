@@ -8,12 +8,15 @@
 #include "core/hle/kernel/shared_memory.h"
 #include "core/hle/service/service.h"
 
-namespace Service {
-namespace CSND {
+namespace Core {
+class System;
+}
+
+namespace Service::CSND {
 
 class CSND_SND final : public ServiceFramework<CSND_SND> {
 public:
-    CSND_SND();
+    explicit CSND_SND(Core::System& system);
     ~CSND_SND() = default;
 
 private:
@@ -171,6 +174,8 @@ private:
     };
     static_assert(sizeof(Type0Command) == 0x20, "Type0Command structure size is wrong");
 
+    Core::System& system;
+
     Kernel::SharedPtr<Kernel::Mutex> mutex = nullptr;
     Kernel::SharedPtr<Kernel::SharedMemory> shared_memory = nullptr;
 
@@ -179,7 +184,6 @@ private:
 };
 
 /// Initializes the CSND_SND Service
-void InstallInterfaces(SM::ServiceManager& service_manager);
+void InstallInterfaces(Core::System& system);
 
-} // namespace CSND
-} // namespace Service
+} // namespace Service::CSND

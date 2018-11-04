@@ -2,15 +2,15 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include "core/core.h"
 #include "core/hle/service/mvd/mvd.h"
 #include "core/hle/service/mvd/mvd_std.h"
 
-namespace Service {
-namespace MVD {
+namespace Service::MVD {
 
-void InstallInterfaces(SM::ServiceManager& service_manager) {
+void InstallInterfaces(Core::System& system) {
+    auto& service_manager = system.ServiceManager();
     std::make_shared<MVD_STD>()->InstallAsService(service_manager);
 }
 
-} // namespace MVD
-} // namespace Service
+} // namespace Service::MVD

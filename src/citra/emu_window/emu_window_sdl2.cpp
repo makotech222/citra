@@ -41,6 +41,35 @@ void EmuWindow_SDL2::OnMouseButton(u32 button, u8 state, s32 x, s32 y) {
     }
 }
 
+std::pair<unsigned, unsigned> EmuWindow_SDL2::TouchToPixelPos(float touch_x, float touch_y) const {
+    int w, h;
+    SDL_GetWindowSize(render_window, &w, &h);
+
+    touch_x *= w;
+    touch_y *= h;
+
+    return {static_cast<unsigned>(std::max(std::round(touch_x), 0.0f)),
+            static_cast<unsigned>(std::max(std::round(touch_y), 0.0f))};
+}
+
+void EmuWindow_SDL2::OnFingerDown(float x, float y) {
+    // TODO(NeatNit): keep track of multitouch using the fingerID and a dictionary of some kind
+    // This isn't critical because the best we can do when we have that is to average them, like the
+    // 3DS does
+
+    const auto [px, py] = TouchToPixelPos(x, y);
+    TouchPressed(px, py);
+}
+
+void EmuWindow_SDL2::OnFingerMotion(float x, float y) {
+    const auto [px, py] = TouchToPixelPos(x, y);
+    TouchMoved(px, py);
+}
+
+void EmuWindow_SDL2::OnFingerUp() {
+    TouchReleased();
+}
+
 void EmuWindow_SDL2::OnKeyEvent(int key, u8 state) {
     if (state == SDL_PRESSED) {
         InputCommon::GetKeyboard()->PressKey(key);
@@ -81,16 +110,16 @@ void EmuWindow_SDL2::Fullscreen() {
 }
 
 EmuWindow_SDL2::EmuWindow_SDL2(bool fullscreen) {
-    InputCommon::Init();
-    Network::Init();
-
-    SDL_SetMainReady();
-
     // Initialize the window
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) < 0) {
         LOG_CRITICAL(Frontend, "Failed to initialize SDL2! Exiting...");
         exit(1);
     }
+
+    InputCommon::Init();
+    Network::Init();
+
+    SDL_SetMainReady();
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -143,12 +172,10 @@ EmuWindow_SDL2::EmuWindow_SDL2(bool fullscreen) {
 }
 
 EmuWindow_SDL2::~EmuWindow_SDL2() {
-    InputCommon::SDL::CloseSDLJoysticks();
-    SDL_GL_DeleteContext(gl_context);
-    SDL_Quit();
-
     Network::Shutdown();
     InputCommon::Shutdown();
+    SDL_GL_DeleteContext(gl_context);
+    SDL_Quit();
 }
 
 void EmuWindow_SDL2::SwapBuffers() {
@@ -180,17 +207,31 @@ void EmuWindow_SDL2::PollEvents() {
             OnKeyEvent(static_cast<int>(event.key.keysym.scancode), event.key.state);
             break;
         case SDL_MOUSEMOTION:
-            OnMouseMotion(event.motion.x, event.motion.y);
+            // ignore if it came from touch
+            if (event.button.which != SDL_TOUCH_MOUSEID)
+                OnMouseMotion(event.motion.x, event.motion.y);
             break;
         case SDL_MOUSEBUTTONDOWN:
         case SDL_MOUSEBUTTONUP:
-            OnMouseButton(event.button.button, event.button.state, event.button.x, event.button.y);
+            // ignore if it came from touch
+            if (event.button.which != SDL_TOUCH_MOUSEID) {
+                OnMouseButton(event.button.button, event.button.state, event.button.x,
+                              event.button.y);
+            }
+            break;
+        case SDL_FINGERDOWN:
+            OnFingerDown(event.tfinger.x, event.tfinger.y);
+            break;
+        case SDL_FINGERMOTION:
+            OnFingerMotion(event.tfinger.x, event.tfinger.y);
+            break;
+        case SDL_FINGERUP:
+            OnFingerUp();
             break;
         case SDL_QUIT:
             is_open = false;
             break;
         default:
-            InputCommon::SDL::HandleGameControllerEvent(event);
             break;
         }
     }

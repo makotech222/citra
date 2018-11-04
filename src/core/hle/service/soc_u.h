@@ -7,8 +7,11 @@
 #include <unordered_map>
 #include "core/hle/service/service.h"
 
-namespace Service {
-namespace SOC {
+namespace Core {
+class System;
+}
+
+namespace Service::SOC {
 
 /// Holds information about a particular socket
 struct SocketHolder {
@@ -30,6 +33,7 @@ private:
     void GetHostId(Kernel::HLERequestContext& ctx);
     void Close(Kernel::HLERequestContext& ctx);
     void SendTo(Kernel::HLERequestContext& ctx);
+    void RecvFromOther(Kernel::HLERequestContext& ctx);
     void RecvFrom(Kernel::HLERequestContext& ctx);
     void Poll(Kernel::HLERequestContext& ctx);
     void GetSockName(Kernel::HLERequestContext& ctx);
@@ -48,7 +52,6 @@ private:
     std::unordered_map<u32, SocketHolder> open_sockets;
 };
 
-void InstallInterfaces(SM::ServiceManager& service_manager);
+void InstallInterfaces(Core::System& system);
 
-} // namespace SOC
-} // namespace Service
+} // namespace Service::SOC

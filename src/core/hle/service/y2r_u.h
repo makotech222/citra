@@ -12,12 +12,15 @@
 #include "core/hle/result.h"
 #include "core/hle/service/service.h"
 
+namespace Core {
+class System;
+}
+
 namespace Kernel {
 class Event;
 }
 
-namespace Service {
-namespace Y2R {
+namespace Service::Y2R {
 
 enum class InputFormat : u8 {
     /// 8-bit input, with YUV components in separate planes and 4:2:2 subsampling.
@@ -146,7 +149,7 @@ static_assert(sizeof(ConversionParameters) == 12, "ConversionParameters struct h
 
 class Y2R_U final : public ServiceFramework<Y2R_U> {
 public:
-    Y2R_U();
+    explicit Y2R_U(Core::System& system);
     ~Y2R_U() override;
 
 private:
@@ -299,7 +302,6 @@ private:
     bool spacial_dithering_enabled = false;
 };
 
-void InstallInterfaces(SM::ServiceManager& service_manager);
+void InstallInterfaces(Core::System& system);
 
-} // namespace Y2R
-} // namespace Service
+} // namespace Service::Y2R

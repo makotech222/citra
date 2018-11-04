@@ -22,21 +22,23 @@ option(ENABLE_CUBEB "Enables the cubeb audio backend" ON)
 
 option(USE_DISCORD_PRESENCE "Enables Discord Rich Presence" OFF)
 
-if(NOT EXISTS ${CMAKE_SOURCE_DIR}/.git/hooks/pre-commit)
+option(ENABLE_SCRIPTING "Enables scripting support" OFF)
+
+if(NOT EXISTS ${PROJECT_SOURCE_DIR}/.git/hooks/pre-commit)
     message(STATUS "Copying pre-commit hook")
     file(COPY hooks/pre-commit
-        DESTINATION ${CMAKE_SOURCE_DIR}/.git/hooks)
+        DESTINATION ${PROJECT_SOURCE_DIR}/.git/hooks)
 endif()
 
 # Sanity check : Check that all submodules are present
 # =======================================================================
 
 function(check_submodules_present)
-    file(READ "${CMAKE_SOURCE_DIR}/.gitmodules" gitmodules)
+    file(READ "${PROJECT_SOURCE_DIR}/.gitmodules" gitmodules)
     string(REGEX MATCHALL "path *= *[^ \t\r\n]*" gitmodules ${gitmodules})
     foreach(module ${gitmodules})
         string(REGEX REPLACE "path *= *" "" module ${module})
-        if (NOT EXISTS "${CMAKE_SOURCE_DIR}/${module}/.git")
+        if (NOT EXISTS "${PROJECT_SOURCE_DIR}/${module}/.git")
             message(SEND_ERROR "Git submodule ${module} not found."
                     "Please run: git submodule update --init --recursive")
         endif()
@@ -44,17 +46,17 @@ function(check_submodules_present)
 endfunction()
 check_submodules_present()
 
-configure_file(${CMAKE_SOURCE_DIR}/dist/compatibility_list/compatibility_list.qrc
-               ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
+configure_file(${PROJECT_SOURCE_DIR}/dist/compatibility_list/compatibility_list.qrc
+               ${PROJECT_BINARY_DIR}/dist/compatibility_list/compatibility_list.qrc
                COPYONLY)
-if (ENABLE_COMPATIBILITY_LIST_DOWNLOAD AND NOT EXISTS ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
+if (ENABLE_COMPATIBILITY_LIST_DOWNLOAD AND NOT EXISTS ${PROJECT_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
     message(STATUS "Downloading compatibility list for citra...")
     file(DOWNLOAD
         https://api.citra-emu.org/gamedb/
-        "${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json" SHOW_PROGRESS)
+        "${PROJECT_BINARY_DIR}/dist/compatibility_list/compatibility_list.json" SHOW_PROGRESS)
 endif()
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
-    file(WRITE ${CMAKE_BINARY_DIR}/dist/compatibility_list/compatibility_list.json "")
+if (NOT EXISTS ${PROJECT_BINARY_DIR}/dist/compatibility_list/compatibility_list.json)
+    file(WRITE ${PROJECT_BINARY_DIR}/dist/compatibility_list/compatibility_list.json "")
 endif()
 
 # Detect current compilation architecture and create standard definitions
@@ -104,6 +106,10 @@ message(STATUS "Target architecture: ${ARCHITECTURE}")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# set up output paths for executable binaries
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+
+
 if (NOT MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-attributes")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
@@ -126,8 +132,6 @@ else()
     # Avoid windows.h from including some usually unused libs like winsocks.h, since this might cause some redefinition errors.
     add_definitions(/DWIN32_LEAN_AND_MEAN)
 
-    # set up output paths for executable binaries (.exe-files, and .dll-files on DLL-capable platforms)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
     set(CMAKE_CONFIGURATION_TYPES Debug Release CACHE STRING "" FORCE)
 
     # Tweak optimization settings
@@ -166,7 +170,7 @@ endif()
 # On modern Unixes, this is typically already the case. The lone exception is
 # glibc, which may default to 32 bits. glibc allows this to be configured
 # by setting _FILE_OFFSET_BITS.
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR MINGW)
     add_definitions(-D_FILE_OFFSET_BITS=64)
 endif()
 
@@ -175,9 +179,6 @@ add_definitions(-DSINGLETHREADED)
 set_property(DIRECTORY APPEND PROPERTY
     COMPILE_DEFINITIONS $<$<CONFIG:Debug>:_DEBUG> $<$<NOT:$<CONFIG:Debug>>:NDEBUG>)
 
-math(EXPR EMU_ARCH_BITS ${CMAKE_SIZEOF_VOID_P}*8)
-add_definitions(-DEMU_ARCH_BITS=${EMU_ARCH_BITS})
-
 # System imported libraries
 # ======================
 
@@ -185,7 +186,7 @@ find_package(Boost 1.66.0 QUIET)
 if (NOT Boost_FOUND)
     message(STATUS "Boost 1.66.0 or newer not found, falling back to externals")
 
-    set(BOOST_ROOT "${CMAKE_SOURCE_DIR}/externals/boost")
+    set(BOOST_ROOT "${PROJECT_SOURCE_DIR}/externals/boost")
     set(Boost_NO_SYSTEM_PATHS OFF)
     find_package(Boost QUIET REQUIRED)
 endif()
@@ -251,11 +252,8 @@ if (ENABLE_QT)
     endif()
 endif()
 
-if (ENABLE_WEB_SERVICE)
-    add_definitions(-DENABLE_WEB_SERVICE)
-endif()
-if (CITRA_ENABLE_COMPATIBILITY_REPORTING)
-    add_definitions(-DCITRA_ENABLE_COMPATIBILITY_REPORTING)
+if (ENABLE_SCRIPTING)
+    add_definitions(-DENABLE_SCRIPTING)
 endif()
 
 # Platform-specific library requirements
@@ -281,14 +279,6 @@ ELSEIF (CMAKE_SYSTEM_NAME MATCHES "^(Linux|kFreeBSD|GNU|SunOS)$")
     set(PLATFORM_LIBRARIES rt)
 ENDIF (APPLE)
 
-# MINGW: GCC does not support codecvt, so use iconv instead
-if (UNIX OR MINGW)
-    find_library(ICONV_LIBRARY NAMES iconv)
-    if (ICONV_LIBRARY)
-        list(APPEND PLATFORM_LIBRARIES ${ICONV_LIBRARY})
-    endif()
-endif()
-
 # Setup a custom clang-format target (if clang-format can be found) that will run
 # against all the src files. This should be used before making a pull request.
 # =======================================================================
@@ -297,12 +287,12 @@ set(CLANG_FORMAT_POSTFIX "-6.0")
 find_program(CLANG_FORMAT
     NAMES clang-format${CLANG_FORMAT_POSTFIX}
           clang-format
-    PATHS ${CMAKE_BINARY_DIR}/externals)
+    PATHS ${PROJECT_BINARY_DIR}/externals)
 # if find_program doesn't find it, try to download from externals
 if (NOT CLANG_FORMAT)
     if (WIN32)
         message(STATUS "Clang format not found! Downloading...")
-        set(CLANG_FORMAT "${CMAKE_BINARY_DIR}/externals/clang-format${CLANG_FORMAT_POSTFIX}.exe")
+        set(CLANG_FORMAT "${PROJECT_BINARY_DIR}/externals/clang-format${CLANG_FORMAT_POSTFIX}.exe")
         file(DOWNLOAD
             https://github.com/yuzu-emu/ext-windows-bin/raw/master/clang-format${CLANG_FORMAT_POSTFIX}.exe
             "${CLANG_FORMAT}" SHOW_PROGRESS
@@ -318,7 +308,7 @@ if (NOT CLANG_FORMAT)
 endif()
 
 if (CLANG_FORMAT)
-    set(SRCS ${CMAKE_SOURCE_DIR}/src)
+    set(SRCS ${PROJECT_SOURCE_DIR}/src)
     set(CCOMMENT "Running clang format against all the .h and .cpp files in src/")
     if (WIN32)
         add_custom_target(clang-format
@@ -384,6 +374,13 @@ add_subdirectory(src)
 add_subdirectory(dist/installer)
 
 
+# Set citra-qt project or citra project as default StartUp Project in Visual Studio depending on whether QT is enabled or not
+if(ENABLE_QT)
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT citra-qt)
+else()
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT citra)
+endif()
+
 # Installation instructions
 # =========================
 
@@ -392,22 +389,22 @@ add_subdirectory(dist/installer)
 # http://standards.freedesktop.org/icon-theme-spec/icon-theme-spec-latest.html
 # http://standards.freedesktop.org/shared-mime-info-spec/shared-mime-info-spec-latest.html
 if(ENABLE_QT AND UNIX AND NOT APPLE)
-    install(FILES "${CMAKE_SOURCE_DIR}/dist/citra.desktop"
+    install(FILES "${PROJECT_SOURCE_DIR}/dist/citra.desktop"
             DESTINATION "${CMAKE_INSTALL_PREFIX}/share/applications")
-    install(FILES "${CMAKE_SOURCE_DIR}/dist/citra.svg"
+    install(FILES "${PROJECT_SOURCE_DIR}/dist/citra.svg"
             DESTINATION "${CMAKE_INSTALL_PREFIX}/share/icons/hicolor/scalable/apps")
-    install(FILES "${CMAKE_SOURCE_DIR}/dist/citra.xml"
+    install(FILES "${PROJECT_SOURCE_DIR}/dist/citra.xml"
             DESTINATION "${CMAKE_INSTALL_PREFIX}/share/mime/packages")
 endif()
 
 if(UNIX)
     if(ENABLE_SDL2)
-        install(FILES "${CMAKE_SOURCE_DIR}/dist/citra.6"
+        install(FILES "${PROJECT_SOURCE_DIR}/dist/citra.6"
                 DESTINATION "${CMAKE_INSTALL_PREFIX}/share/man/man6")
     endif()
 
     if (ENABLE_QT)
-        install(FILES "${CMAKE_SOURCE_DIR}/dist/citra-qt.6"
+        install(FILES "${PROJECT_SOURCE_DIR}/dist/citra-qt.6"
                 DESTINATION "${CMAKE_INSTALL_PREFIX}/share/man/man6")
     endif()
 endif()

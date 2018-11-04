@@ -18,8 +18,7 @@ namespace CoreTiming {
 struct EventType;
 };
 
-namespace Service {
-namespace IR {
+namespace Service::IR {
 
 class BufferManager;
 class ExtraHID;
@@ -56,7 +55,7 @@ private:
 /// Interface to "ir:USER" service
 class IR_USER final : public ServiceFramework<IR_USER> {
 public:
-    IR_USER();
+    explicit IR_USER(Core::System& system);
     ~IR_USER();
 
     void ReloadInputDevices();
@@ -174,5 +173,4 @@ private:
     std::unique_ptr<ExtraHID> extra_hid;
 };
 
-} // namespace IR
-} // namespace Service
+} // namespace Service::IR

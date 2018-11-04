@@ -4,8 +4,7 @@
 
 #include "core/hle/service/apt/apt_s.h"
 
-namespace Service {
-namespace APT {
+namespace Service::APT {
 
 APT_S::APT_S(std::shared_ptr<Module> apt)
     : Module::Interface(std::move(apt), "APT:S", MaxAPTSessions) {
@@ -48,7 +47,7 @@ APT_S::APT_S(std::shared_ptr<Module> apt)
         {0x00240044, nullptr, "JumpToApplication"},
         {0x002500C0, nullptr, "PrepareToCloseLibraryApplet"},
         {0x00260000, nullptr, "PrepareToCloseSystemApplet"},
-        {0x00270044, nullptr, "CloseApplication"},
+        {0x00270044, &APT_S::CloseApplication, "CloseApplication"},
         {0x00280044, nullptr, "CloseLibraryApplet"},
         {0x00290044, nullptr, "CloseSystemApplet"},
         {0x002A0000, nullptr, "OrderToCloseSystemApplet"},
@@ -58,9 +57,9 @@ APT_S::APT_S(std::shared_ptr<Module> apt)
         {0x002E0044, nullptr, "LeaveHomeMenu"},
         {0x002F0040, nullptr, "PrepareToLeaveResidentApplet"},
         {0x00300044, nullptr, "LeaveResidentApplet"},
-        {0x00310100, nullptr, "PrepareToDoApplicationJump"},
-        {0x00320084, nullptr, "DoApplicationJump"},
-        {0x00330000, nullptr, "GetProgramIdOnApplicationJump"},
+        {0x00310100, &APT_S::PrepareToDoApplicationJump, "PrepareToDoApplicationJump"},
+        {0x00320084, &APT_S::DoApplicationJump, "DoApplicationJump"},
+        {0x00330000, &APT_S::GetProgramIdOnApplicationJump, "GetProgramIdOnApplicationJump"},
         {0x00340084, nullptr, "SendDeliverArg"},
         {0x00350080, nullptr, "ReceiveDeliverArg"},
         {0x00360040, nullptr, "LoadSysMenuArg"},
@@ -105,5 +104,4 @@ APT_S::APT_S(std::shared_ptr<Module> apt)
     RegisterHandlers(functions);
 }
 
-} // namespace APT
-} // namespace Service
+} // namespace Service::APT

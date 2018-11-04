@@ -5,6 +5,7 @@
 #include <tuple>
 #include "common/common_types.h"
 #include "common/logging/log.h"
+#include "core/core.h"
 #include "core/hle/ipc.h"
 #include "core/hle/ipc_helpers.h"
 #include "core/hle/kernel/client_port.h"
@@ -19,8 +20,7 @@
 #include "core/hle/service/sm/sm.h"
 #include "core/hle/service/sm/srv.h"
 
-namespace Service {
-namespace SM {
+namespace Service::SM {
 
 constexpr int MAX_PENDING_NOTIFICATIONS = 16;
 
@@ -63,7 +63,7 @@ void SRV::EnableNotification(Kernel::HLERequestContext& ctx) {
     IPC::RequestParser rp(ctx, 0x2, 0, 0);
 
     notification_semaphore =
-        Kernel::Semaphore::Create(0, MAX_PENDING_NOTIFICATIONS, "SRV:Notification").Unwrap();
+        system.Kernel().CreateSemaphore(0, MAX_PENDING_NOTIFICATIONS, "SRV:Notification").Unwrap();
 
     IPC::RequestBuilder rb = rp.MakeBuilder(1, 2);
     rb.Push(RESULT_SUCCESS);
@@ -101,9 +101,10 @@ void SRV::GetServiceHandle(Kernel::HLERequestContext& ctx) {
     // TODO(yuriks): Permission checks go here
 
     auto get_handle = [name, this](Kernel::SharedPtr<Kernel::Thread> thread,
-                                   Kernel::HLERequestContext& ctx, ThreadWakeupReason reason) {
+                                   Kernel::HLERequestContext& ctx,
+                                   Kernel::ThreadWakeupReason reason) {
         LOG_ERROR(Service_SRV, "called service={} wakeup", name);
-        auto client_port = service_manager->GetServicePort(name);
+        auto client_port = system.ServiceManager().GetServicePort(name);
 
         auto session = client_port.Unwrap()->Connect();
         if (session.Succeeded()) {
@@ -122,13 +123,13 @@ void SRV::GetServiceHandle(Kernel::HLERequestContext& ctx) {
         }
     };
 
-    auto client_port = service_manager->GetServicePort(name);
+    auto client_port = system.ServiceManager().GetServicePort(name);
     if (client_port.Failed()) {
         if (wait_until_available && client_port.Code() == ERR_SERVICE_NOT_REGISTERED) {
             LOG_INFO(Service_SRV, "called service={} delayed", name);
             Kernel::SharedPtr<Kernel::Event> get_service_handle_event =
-                ctx.SleepClientThread(Kernel::GetCurrentThread(), "GetServiceHandle",
-                                      std::chrono::nanoseconds(-1), get_handle);
+                ctx.SleepClientThread(system.Kernel().GetThreadManager().GetCurrentThread(),
+                                      "GetServiceHandle", std::chrono::nanoseconds(-1), get_handle);
             get_service_handle_delayed_map[name] = std::move(get_service_handle_event);
             return;
         } else {
@@ -223,7 +224,7 @@ void SRV::RegisterService(Kernel::HLERequestContext& ctx) {
 
     std::string name(name_buf.data(), std::min(name_len, name_buf.size()));
 
-    auto port = service_manager->RegisterService(name, max_sessions);
+    auto port = system.ServiceManager().RegisterService(name, max_sessions);
 
     if (port.Failed()) {
         IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
@@ -243,8 +244,7 @@ void SRV::RegisterService(Kernel::HLERequestContext& ctx) {
     rb.PushMoveObjects(port.Unwrap());
 }
 
-SRV::SRV(std::shared_ptr<ServiceManager> service_manager)
-    : ServiceFramework("srv:", 4), service_manager(std::move(service_manager)) {
+SRV::SRV(Core::System& system) : ServiceFramework("srv:", 4), system(system) {
     static const FunctionInfo functions[] = {
         {0x00010002, &SRV::RegisterClient, "RegisterClient"},
         {0x00020000, &SRV::EnableNotification, "EnableNotification"},
@@ -266,5 +266,4 @@ SRV::SRV(std::shared_ptr<ServiceManager> service_manager)
 
 SRV::~SRV() = default;
 
-} // namespace SM
-} // namespace Service
+} // namespace Service::SM

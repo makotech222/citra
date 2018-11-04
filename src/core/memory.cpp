@@ -111,7 +111,7 @@ static u8* GetPointerFromVMA(const Kernel::Process& process, VAddr vaddr) {
  * using a VMA from the current process.
  */
 static u8* GetPointerFromVMA(VAddr vaddr) {
-    return GetPointerFromVMA(*Kernel::g_current_process, vaddr);
+    return GetPointerFromVMA(*Core::System::GetInstance().Kernel().GetCurrentProcess(), vaddr);
 }
 
 /**
@@ -128,7 +128,8 @@ static MMIORegionPointer GetMMIOHandler(const PageTable& page_table, VAddr vaddr
 }
 
 static MMIORegionPointer GetMMIOHandler(VAddr vaddr) {
-    const PageTable& page_table = Kernel::g_current_process->vm_manager.page_table;
+    const PageTable& page_table =
+        Core::System::GetInstance().Kernel().GetCurrentProcess()->vm_manager.page_table;
     return GetMMIOHandler(page_table, vaddr);
 }
 
@@ -229,7 +230,7 @@ bool IsValidVirtualAddress(const Kernel::Process& process, const VAddr vaddr) {
 }
 
 bool IsValidVirtualAddress(const VAddr vaddr) {
-    return IsValidVirtualAddress(*Kernel::g_current_process, vaddr);
+    return IsValidVirtualAddress(*Core::System::GetInstance().Kernel().GetCurrentProcess(), vaddr);
 }
 
 bool IsValidPhysicalAddress(const PAddr paddr) {
@@ -304,7 +305,7 @@ u8* GetPhysicalPointer(PAddr address) {
         target_pointer = Core::DSP().GetDspMemory().data() + offset_into_region;
         break;
     case FCRAM_PADDR:
-        for (const auto& region : Kernel::memory_regions) {
+        for (const auto& region : Core::System::GetInstance().Kernel().memory_regions) {
             if (offset_into_region >= region.base &&
                 offset_into_region < region.base + region.size) {
                 target_pointer =
@@ -333,7 +334,7 @@ void RasterizerMarkRegionCached(PAddr start, u32 size, bool cached) {
     PAddr paddr = start;
 
     for (unsigned i = 0; i < num_pages; ++i, paddr += PAGE_SIZE) {
-        boost::optional<VAddr> maybe_vaddr = PhysicalToVirtualAddress(paddr);
+        std::optional<VAddr> maybe_vaddr = PhysicalToVirtualAddress(paddr);
         // While the physical <-> virtual mapping is 1:1 for the regions supported by the cache,
         // some games (like Pokemon Super Mystery Dungeon) will try to use textures that go beyond
         // the end address of VRAM, causing the Virtual->Physical translation to fail when flushing
@@ -433,7 +434,9 @@ void RasterizerFlushVirtualRegion(VAddr start, u32 size, FlushMode mode) {
         VAddr overlap_start = std::max(start, region_start);
         VAddr overlap_end = std::min(end, region_end);
 
-        PAddr physical_start = TryVirtualToPhysicalAddress(overlap_start).value();
+        auto maybe_paddr = TryVirtualToPhysicalAddress(overlap_start);
+        ASSERT(maybe_paddr);
+        PAddr physical_start = *maybe_paddr;
         u32 overlap_size = overlap_end - overlap_start;
 
         auto* rasterizer = VideoCore::g_renderer->Rasterizer();
@@ -522,7 +525,8 @@ void ReadBlock(const Kernel::Process& process, const VAddr src_addr, void* dest_
 }
 
 void ReadBlock(const VAddr src_addr, void* dest_buffer, const std::size_t size) {
-    ReadBlock(*Kernel::g_current_process, src_addr, dest_buffer, size);
+    ReadBlock(*Core::System::GetInstance().Kernel().GetCurrentProcess(), src_addr, dest_buffer,
+              size);
 }
 
 void Write8(const VAddr addr, const u8 data) {
@@ -590,7 +594,8 @@ void WriteBlock(const Kernel::Process& process, const VAddr dest_addr, const voi
 }
 
 void WriteBlock(const VAddr dest_addr, const void* src_buffer, const std::size_t size) {
-    WriteBlock(*Kernel::g_current_process, dest_addr, src_buffer, size);
+    WriteBlock(*Core::System::GetInstance().Kernel().GetCurrentProcess(), dest_addr, src_buffer,
+               size);
 }
 
 void ZeroBlock(const Kernel::Process& process, const VAddr dest_addr, const std::size_t size) {
@@ -642,7 +647,7 @@ void ZeroBlock(const Kernel::Process& process, const VAddr dest_addr, const std:
 }
 
 void ZeroBlock(const VAddr dest_addr, const std::size_t size) {
-    ZeroBlock(*Kernel::g_current_process, dest_addr, size);
+    ZeroBlock(*Core::System::GetInstance().Kernel().GetCurrentProcess(), dest_addr, size);
 }
 
 void CopyBlock(const Kernel::Process& process, VAddr dest_addr, VAddr src_addr,
@@ -697,7 +702,59 @@ void CopyBlock(const Kernel::Process& process, VAddr dest_addr, VAddr src_addr,
 }
 
 void CopyBlock(VAddr dest_addr, VAddr src_addr, const std::size_t size) {
-    CopyBlock(*Kernel::g_current_process, dest_addr, src_addr, size);
+    CopyBlock(*Core::System::GetInstance().Kernel().GetCurrentProcess(), dest_addr, src_addr, size);
+}
+
+void CopyBlock(const Kernel::Process& src_process, const Kernel::Process& dest_process,
+               VAddr src_addr, VAddr dest_addr, std::size_t size) {
+    auto& page_table = src_process.vm_manager.page_table;
+    std::size_t remaining_size = size;
+    std::size_t page_index = src_addr >> PAGE_BITS;
+    std::size_t page_offset = src_addr & PAGE_MASK;
+
+    while (remaining_size > 0) {
+        const std::size_t copy_amount = std::min(PAGE_SIZE - page_offset, remaining_size);
+        const VAddr current_vaddr = static_cast<VAddr>((page_index << PAGE_BITS) + page_offset);
+
+        switch (page_table.attributes[page_index]) {
+        case PageType::Unmapped: {
+            LOG_ERROR(HW_Memory,
+                      "unmapped CopyBlock @ 0x{:08X} (start address = 0x{:08X}, size = {})",
+                      current_vaddr, src_addr, size);
+            ZeroBlock(dest_process, dest_addr, copy_amount);
+            break;
+        }
+        case PageType::Memory: {
+            DEBUG_ASSERT(page_table.pointers[page_index]);
+            const u8* src_ptr = page_table.pointers[page_index] + page_offset;
+            WriteBlock(dest_process, dest_addr, src_ptr, copy_amount);
+            break;
+        }
+        case PageType::Special: {
+            MMIORegionPointer handler = GetMMIOHandler(page_table, current_vaddr);
+            DEBUG_ASSERT(handler);
+            std::vector<u8> buffer(copy_amount);
+            handler->ReadBlock(current_vaddr, buffer.data(), buffer.size());
+            WriteBlock(dest_process, dest_addr, buffer.data(), buffer.size());
+            break;
+        }
+        case PageType::RasterizerCachedMemory: {
+            RasterizerFlushVirtualRegion(current_vaddr, static_cast<u32>(copy_amount),
+                                         FlushMode::Flush);
+            WriteBlock(dest_process, dest_addr, GetPointerFromVMA(src_process, current_vaddr),
+                       copy_amount);
+            break;
+        }
+        default:
+            UNREACHABLE();
+        }
+
+        page_index++;
+        page_offset = 0;
+        dest_addr += static_cast<VAddr>(copy_amount);
+        src_addr += static_cast<VAddr>(copy_amount);
+        remaining_size -= copy_amount;
+    }
 }
 
 template <>
@@ -740,7 +797,7 @@ void WriteMMIO<u64>(MMIORegionPointer mmio_handler, VAddr addr, const u64 data) 
     mmio_handler->Write64(addr, data);
 }
 
-boost::optional<PAddr> TryVirtualToPhysicalAddress(const VAddr addr) {
+std::optional<PAddr> TryVirtualToPhysicalAddress(const VAddr addr) {
     if (addr == 0) {
         return 0;
     } else if (addr >= VRAM_VADDR && addr < VRAM_VADDR_END) {
@@ -757,7 +814,7 @@ boost::optional<PAddr> TryVirtualToPhysicalAddress(const VAddr addr) {
         return addr - N3DS_EXTRA_RAM_VADDR + N3DS_EXTRA_RAM_PADDR;
     }
 
-    return boost::none;
+    return {};
 }
 
 PAddr VirtualToPhysicalAddress(const VAddr addr) {
@@ -770,13 +827,14 @@ PAddr VirtualToPhysicalAddress(const VAddr addr) {
     return *paddr;
 }
 
-boost::optional<VAddr> PhysicalToVirtualAddress(const PAddr addr) {
+std::optional<VAddr> PhysicalToVirtualAddress(const PAddr addr) {
     if (addr == 0) {
         return 0;
     } else if (addr >= VRAM_PADDR && addr < VRAM_PADDR_END) {
         return addr - VRAM_PADDR + VRAM_VADDR;
     } else if (addr >= FCRAM_PADDR && addr < FCRAM_PADDR_END) {
-        return addr - FCRAM_PADDR + Kernel::g_current_process->GetLinearHeapAreaAddress();
+        return addr - FCRAM_PADDR +
+               Core::System::GetInstance().Kernel().GetCurrentProcess()->GetLinearHeapAreaAddress();
     } else if (addr >= DSP_RAM_PADDR && addr < DSP_RAM_PADDR_END) {
         return addr - DSP_RAM_PADDR + DSP_RAM_VADDR;
     } else if (addr >= IO_AREA_PADDR && addr < IO_AREA_PADDR_END) {
@@ -785,7 +843,7 @@ boost::optional<VAddr> PhysicalToVirtualAddress(const PAddr addr) {
         return addr - N3DS_EXTRA_RAM_PADDR + N3DS_EXTRA_RAM_VADDR;
     }
 
-    return boost::none;
+    return {};
 }
 
 } // namespace Memory

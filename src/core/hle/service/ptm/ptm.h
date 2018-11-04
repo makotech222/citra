@@ -9,8 +9,11 @@
 #include "core/hle/ipc_helpers.h"
 #include "core/hle/service/service.h"
 
-namespace Service {
-namespace PTM {
+namespace Core {
+class System;
+}
+
+namespace Service::PTM {
 
 /// Charge levels used by PTM functions
 enum class ChargeLevels : u32 {
@@ -42,6 +45,8 @@ void CheckNew3DS(IPC::RequestBuilder& rb);
 class Module final {
 public:
     Module();
+    static u16 GetPlayCoins();
+    static void SetPlayCoins(u16 play_coins);
 
     class Interface : public ServiceFramework<Interface> {
     public:
@@ -139,7 +144,6 @@ private:
     bool pedometer_is_counting = false;
 };
 
-void InstallInterfaces(SM::ServiceManager& service_manager);
+void InstallInterfaces(Core::System& system);
 
-} // namespace PTM
-} // namespace Service
+} // namespace Service::PTM

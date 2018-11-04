@@ -19,10 +19,7 @@
 #include "core/movie.h"
 #include "video_core/video_core.h"
 
-namespace Service {
-namespace HID {
-
-static std::weak_ptr<Module> current_module;
+namespace Service::HID {
 
 // Updating period for each HID device. These empirical values are measured from a 11.2 3DS.
 constexpr u64 pad_update_ticks = BASE_CLOCK_RATE_ARM11 / 234;
@@ -220,7 +217,7 @@ void Module::UpdateGyroscopeCallback(u64 userdata, s64 cycles_late) {
 
     Math::Vec3<float> gyro;
     std::tie(std::ignore, gyro) = motion_device->GetStatus();
-    double stretch = Core::System::GetInstance().perf_stats.GetLastFrameTimeScale();
+    double stretch = system.perf_stats.GetLastFrameTimeScale();
     gyro *= gyroscope_coef * static_cast<float>(stretch);
     gyroscope_entry.x = static_cast<s16>(gyro.x);
     gyroscope_entry.y = static_cast<s16>(gyro.y);
@@ -355,19 +352,23 @@ void Module::Interface::GetSoundVolume(Kernel::HLERequestContext& ctx) {
 Module::Interface::Interface(std::shared_ptr<Module> hid, const char* name, u32 max_session)
     : ServiceFramework(name, max_session), hid(std::move(hid)) {}
 
-Module::Module() {
+std::shared_ptr<Module> Module::Interface::GetModule() const {
+    return hid;
+}
+
+Module::Module(Core::System& system) : system(system) {
     using namespace Kernel;
 
-    shared_mem =
-        SharedMemory::Create(nullptr, 0x1000, MemoryPermission::ReadWrite, MemoryPermission::Read,
-                             0, MemoryRegion::BASE, "HID:SharedMemory");
+    shared_mem = system.Kernel().CreateSharedMemory(nullptr, 0x1000, MemoryPermission::ReadWrite,
+                                                    MemoryPermission::Read, 0, MemoryRegion::BASE,
+                                                    "HID:SharedMemory");
 
     // Create event handles
-    event_pad_or_touch_1 = Event::Create(ResetType::OneShot, "HID:EventPadOrTouch1");
-    event_pad_or_touch_2 = Event::Create(ResetType::OneShot, "HID:EventPadOrTouch2");
-    event_accelerometer = Event::Create(ResetType::OneShot, "HID:EventAccelerometer");
-    event_gyroscope = Event::Create(ResetType::OneShot, "HID:EventGyroscope");
-    event_debug_pad = Event::Create(ResetType::OneShot, "HID:EventDebugPad");
+    event_pad_or_touch_1 = system.Kernel().CreateEvent(ResetType::OneShot, "HID:EventPadOrTouch1");
+    event_pad_or_touch_2 = system.Kernel().CreateEvent(ResetType::OneShot, "HID:EventPadOrTouch2");
+    event_accelerometer = system.Kernel().CreateEvent(ResetType::OneShot, "HID:EventAccelerometer");
+    event_gyroscope = system.Kernel().CreateEvent(ResetType::OneShot, "HID:EventGyroscope");
+    event_debug_pad = system.Kernel().CreateEvent(ResetType::OneShot, "HID:EventDebugPad");
 
     // Register update callbacks
     pad_update_event =
@@ -389,18 +390,18 @@ void Module::ReloadInputDevices() {
     is_device_reload_pending.store(true);
 }
 
-void ReloadInputDevices() {
-    if (auto hid = current_module.lock())
-        hid->ReloadInputDevices();
+std::shared_ptr<Module> GetModule(Core::System& system) {
+    auto hid = system.ServiceManager().GetService<Service::HID::Module::Interface>("hid:USER");
+    if (!hid)
+        return nullptr;
+    return hid->GetModule();
 }
 
-void InstallInterfaces(SM::ServiceManager& service_manager) {
-    auto hid = std::make_shared<Module>();
+void InstallInterfaces(Core::System& system) {
+    auto& service_manager = system.ServiceManager();
+    auto hid = std::make_shared<Module>(system);
     std::make_shared<User>(hid)->InstallAsService(service_manager);
     std::make_shared<Spvr>(hid)->InstallAsService(service_manager);
-    current_module = hid;
 }
 
-} // namespace HID
-
-} // namespace Service
+} // namespace Service::HID

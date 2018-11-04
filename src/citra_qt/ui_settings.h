@@ -16,11 +16,8 @@ namespace UISettings {
 using ContextualShortcut = std::pair<QString, int>;
 using Shortcut = std::pair<QString, ContextualShortcut>;
 
-static const std::array<std::pair<QString, QString>, 4> themes = {
-    {std::make_pair(QString("Default"), QString("default")),
-     std::make_pair(QString("Dark"), QString("qdarkstyle")),
-     std::make_pair(QString("Colorful"), QString("colorful")),
-     std::make_pair(QString("Colorful Dark"), QString("colorful_dark"))}};
+using Themes = std::array<std::pair<const char*, const char*>, 4>;
+extern const Themes themes;
 
 struct GameDir {
     QString path;
@@ -32,6 +29,20 @@ struct GameDir {
     bool operator!=(const GameDir& rhs) const {
         return !operator==(rhs);
     };
+};
+
+enum class GameListIconSize {
+    NoIcon,    ///< Do not display icons
+    SmallIcon, ///< Display a small (24x24) icon
+    LargeIcon, ///< Display a large (48x48) icon
+};
+
+enum class GameListText {
+    NoText = -1, ///< No text
+    FileName,    ///< Display the file name of the entry
+    FullPath,    ///< Display the full path of the entry
+    TitleName,   ///< Display the name of the title
+    TitleID,     ///< Display the title ID
 };
 
 struct Values {
@@ -60,6 +71,12 @@ struct Values {
 
     // Discord RPC
     bool enable_discord_presence;
+
+    // Game List
+    GameListIconSize game_list_icon_size;
+    GameListText game_list_row_1;
+    GameListText game_list_row_2;
+    bool game_list_hide_no_icon;
 
     QString roms_path;
     QString symbols_path;

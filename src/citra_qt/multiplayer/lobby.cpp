@@ -21,13 +21,24 @@
 Lobby::Lobby(QWidget* parent, QStandardItemModel* list,
              std::shared_ptr<Core::AnnounceMultiplayerSession> session)
     : QDialog(parent, Qt::WindowTitleHint | Qt::WindowCloseButtonHint | Qt::WindowSystemMenuHint),
-      ui(std::make_unique<Ui::Lobby>()), announce_multiplayer_session(session), game_list(list) {
+      ui(std::make_unique<Ui::Lobby>()), announce_multiplayer_session(session) {
     ui->setupUi(this);
 
     // setup the watcher for background connections
     watcher = new QFutureWatcher<void>;
 
     model = new QStandardItemModel(ui->room_list);
+
+    // Create a proxy to the game list to get the list of games owned
+    game_list = new QStandardItemModel;
+
+    for (int i = 0; i < list->rowCount(); i++) {
+        auto parent = list->item(i, 0);
+        for (int j = 0; j < parent->rowCount(); j++) {
+            game_list->appendRow(parent->child(j)->clone());
+        }
+    }
+
     proxy = new LobbyFilterProxyModel(this, game_list);
     proxy->setSourceModel(model);
     proxy->setDynamicSortFilter(true);
@@ -63,13 +74,18 @@ Lobby::Lobby(QWidget* parent, QStandardItemModel* list,
     connect(ui->room_list, &QTreeView::clicked, this, &Lobby::OnExpandRoom);
 
     // Actions
-    connect(this, &Lobby::LobbyRefreshed, this, &Lobby::OnRefreshLobby);
+    connect(&room_list_watcher, &QFutureWatcher<AnnounceMultiplayerRoom::RoomList>::finished, this,
+            &Lobby::OnRefreshLobby);
 
     // manually start a refresh when the window is opening
     // TODO(jroweboy): if this refresh is slow for people with bad internet, then don't do it as
     // part of the constructor, but offload the refresh until after the window shown. perhaps emit a
     // refreshroomlist signal from places that open the lobby
     RefreshLobby();
+}
+
+void Lobby::RetranslateUi() {
+    ui->retranslateUi(this);
 }
 
 QString Lobby::PasswordPrompt() {
@@ -114,20 +130,21 @@ void Lobby::OnJoinRoom(const QModelIndex& source) {
         return;
     }
 
+    QModelIndex connection_index = proxy->index(index.row(), Column::HOST);
+    const std::string nickname = ui->nickname->text().toStdString();
+    const std::string ip =
+        proxy->data(connection_index, LobbyItemHost::HostIPRole).toString().toStdString();
+    int port = proxy->data(connection_index, LobbyItemHost::HostPortRole).toInt();
+
     // attempt to connect in a different thread
-    QFuture<void> f = QtConcurrent::run([&, password] {
+    QFuture<void> f = QtConcurrent::run([nickname, ip, port, password] {
         if (auto room_member = Network::GetRoomMember().lock()) {
-            QModelIndex connection_index = proxy->index(index.row(), Column::HOST);
-            const std::string nickname = ui->nickname->text().toStdString();
-            const std::string ip =
-                proxy->data(connection_index, LobbyItemHost::HostIPRole).toString().toStdString();
-            int port = proxy->data(connection_index, LobbyItemHost::HostPortRole).toInt();
             room_member->Join(nickname, ip.c_str(), port, 0, Network::NoPreferredMac, password);
         }
     });
     watcher->setFuture(f);
-    // and disable widgets and display a connecting while we wait
-    QModelIndex connection_index = proxy->index(index.row(), Column::HOST);
+
+    // TODO(jroweboy): disable widgets and display a connecting while we wait
 
     // Save settings
     UISettings::values.nickname = ui->nickname->text();
@@ -149,16 +166,17 @@ void Lobby::ResetModel() {
 void Lobby::RefreshLobby() {
     if (auto session = announce_multiplayer_session.lock()) {
         ResetModel();
-        room_list_future = session->GetRoomList([&]() { emit LobbyRefreshed(); });
         ui->refresh_list->setEnabled(false);
         ui->refresh_list->setText(tr("Refreshing"));
+        room_list_watcher.setFuture(
+            QtConcurrent::run([session]() { return session->GetRoomList(); }));
     } else {
         // TODO(jroweboy): Display an error box about announce couldn't be started
     }
 }
 
 void Lobby::OnRefreshLobby() {
-    AnnounceMultiplayerRoom::RoomList new_room_list = room_list_future.get();
+    AnnounceMultiplayerRoom::RoomList new_room_list = room_list_watcher.result();
     for (auto room : new_room_list) {
         // find the icon for the game if this person owns that game.
         QPixmap smdh_icon;

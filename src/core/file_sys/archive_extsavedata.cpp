@@ -176,6 +176,13 @@ std::string GetExtDataContainerPath(const std::string& mount_point, bool shared)
     return fmt::format("{}Nintendo 3DS/{}/{}/extdata/", mount_point, SYSTEM_ID, SDCARD_ID);
 }
 
+std::string GetExtDataPathFromId(const std::string& mount_point, u64 extdata_id) {
+    u32 high = static_cast<u32>(extdata_id >> 32);
+    u32 low = static_cast<u32>(extdata_id & 0xFFFFFFFF);
+
+    return fmt::format("{}{:08x}/{:08x}/", GetExtDataContainerPath(mount_point, false), high, low);
+}
+
 Path ConstructExtDataBinaryPath(u32 media_type, u32 high, u32 low) {
     ExtSaveDataArchivePath path;
     path.media_type = media_type;
@@ -192,15 +199,6 @@ ArchiveFactory_ExtSaveData::ArchiveFactory_ExtSaveData(const std::string& mount_
                                                        bool shared)
     : shared(shared), mount_point(GetExtDataContainerPath(mount_location, shared)) {
     LOG_DEBUG(Service_FS, "Directory {} set as base for ExtSaveData.", mount_point);
-}
-
-bool ArchiveFactory_ExtSaveData::Initialize() {
-    if (!FileUtil::CreateFullPath(mount_point)) {
-        LOG_ERROR(Service_FS, "Unable to create ExtSaveData base path.");
-        return false;
-    }
-
-    return true;
 }
 
 Path ArchiveFactory_ExtSaveData::GetCorrectedPath(const Path& path) {

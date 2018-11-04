@@ -21,14 +21,17 @@
 #include <QToolButton>
 #include <QTreeView>
 #include <fmt/format.h>
+#include "citra_qt/compatibility_list.h"
 #include "citra_qt/game_list.h"
 #include "citra_qt/game_list_p.h"
+#include "citra_qt/game_list_worker.h"
 #include "citra_qt/main.h"
 #include "citra_qt/ui_settings.h"
 #include "common/common_paths.h"
 #include "common/logging/log.h"
+#include "core/file_sys/archive_extsavedata.h"
+#include "core/file_sys/archive_source_sd_savedata.h"
 #include "core/hle/service/fs/archive.h"
-#include "core/loader/loader.h"
 
 GameListSearchField::KeyReleaseEater::KeyReleaseEater(GameList* gamelist) : gamelist{gamelist} {}
 
@@ -265,7 +268,8 @@ void GameList::onFilterCloseClicked() {
 
 GameList::GameList(GMainWindow* parent) : QWidget{parent} {
     watcher = new QFileSystemWatcher(this);
-    connect(watcher, &QFileSystemWatcher::directoryChanged, this, &GameList::RefreshGameDirectory);
+    connect(watcher, &QFileSystemWatcher::directoryChanged, this, &GameList::RefreshGameDirectory,
+            Qt::UniqueConnection);
 
     this->main_window = parent;
     layout = new QVBoxLayout;
@@ -285,11 +289,11 @@ GameList::GameList(GMainWindow* parent) : QWidget{parent} {
     tree_view->setContextMenuPolicy(Qt::CustomContextMenu);
 
     item_model->insertColumns(0, COLUMN_COUNT);
-    item_model->setHeaderData(COLUMN_NAME, Qt::Horizontal, "Name");
-    item_model->setHeaderData(COLUMN_COMPATIBILITY, Qt::Horizontal, "Compatibility");
-    item_model->setHeaderData(COLUMN_REGION, Qt::Horizontal, "Region");
-    item_model->setHeaderData(COLUMN_FILE_TYPE, Qt::Horizontal, "File type");
-    item_model->setHeaderData(COLUMN_SIZE, Qt::Horizontal, "Size");
+    item_model->setHeaderData(COLUMN_NAME, Qt::Horizontal, tr("Name"));
+    item_model->setHeaderData(COLUMN_COMPATIBILITY, Qt::Horizontal, tr("Compatibility"));
+    item_model->setHeaderData(COLUMN_REGION, Qt::Horizontal, tr("Region"));
+    item_model->setHeaderData(COLUMN_FILE_TYPE, Qt::Horizontal, tr("File type"));
+    item_model->setHeaderData(COLUMN_SIZE, Qt::Horizontal, tr("Size"));
     item_model->setSortRole(GameListItemPath::TitleRole);
 
     connect(main_window, &GMainWindow::UpdateThemedIcons, this, &GameList::onUpdateThemedIcons);
@@ -321,6 +325,16 @@ void GameList::setFilterFocus() {
 
 void GameList::setFilterVisible(bool visibility) {
     search_field->setVisible(visibility);
+}
+
+void GameList::setDirectoryWatcherEnabled(bool enabled) {
+    if (enabled) {
+        connect(watcher, &QFileSystemWatcher::directoryChanged, this,
+                &GameList::RefreshGameDirectory, Qt::UniqueConnection);
+    } else {
+        disconnect(watcher, &QFileSystemWatcher::directoryChanged, this,
+                   &GameList::RefreshGameDirectory);
+    }
 }
 
 void GameList::clearFilter() {
@@ -417,7 +431,9 @@ void GameList::PopupContextMenu(const QPoint& menu_location) {
     QMenu context_menu;
     switch (selected.data(GameListItem::TypeRole).value<GameListItemType>()) {
     case GameListItemType::Game:
-        AddGamePopup(context_menu, selected.data(GameListItemPath::ProgramIdRole).toULongLong());
+        AddGamePopup(context_menu, selected.data(GameListItemPath::FullPathRole).toString(),
+                     selected.data(GameListItemPath::ProgramIdRole).toULongLong(),
+                     selected.data(GameListItemPath::ExtdataIdRole).toULongLong());
         break;
     case GameListItemType::CustomDir:
         AddPermDirPopup(context_menu, selected);
@@ -431,22 +447,45 @@ void GameList::PopupContextMenu(const QPoint& menu_location) {
     context_menu.exec(tree_view->viewport()->mapToGlobal(menu_location));
 }
 
-void GameList::AddGamePopup(QMenu& context_menu, u64 program_id) {
+void GameList::AddGamePopup(QMenu& context_menu, const QString& path, u64 program_id,
+                            u64 extdata_id) {
     QAction* open_save_location = context_menu.addAction(tr("Open Save Data Location"));
+    QAction* open_extdata_location = context_menu.addAction(tr("Open Extra Data Location"));
     QAction* open_application_location = context_menu.addAction(tr("Open Application Location"));
     QAction* open_update_location = context_menu.addAction(tr("Open Update Data Location"));
     QAction* navigate_to_gamedb_entry = context_menu.addAction(tr("Navigate to GameDB entry"));
 
-    open_save_location->setEnabled(program_id != 0);
-    open_application_location->setVisible(FileUtil::Exists(
-        Service::AM::GetTitleContentPath(Service::FS::MediaType::SDMC, program_id)));
-    open_update_location->setEnabled(0x0004000000000000 <= program_id &&
-                                     program_id <= 0x00040000FFFFFFFF);
+    const bool is_application =
+        0x0004000000000000 <= program_id && program_id <= 0x00040000FFFFFFFF;
+
+    std::string sdmc_dir = FileUtil::GetUserPath(FileUtil::UserPath::SDMCDir);
+    open_save_location->setVisible(
+        is_application && FileUtil::Exists(FileSys::ArchiveSource_SDSaveData::GetSaveDataPathFor(
+                              sdmc_dir, program_id)));
+
+    if (extdata_id) {
+        open_extdata_location->setVisible(
+            is_application &&
+            FileUtil::Exists(FileSys::GetExtDataPathFromId(sdmc_dir, extdata_id)));
+    } else {
+        open_extdata_location->setVisible(false);
+    }
+
+    auto media_type = Service::AM::GetTitleMediaType(program_id);
+    open_application_location->setVisible(path.toStdString() ==
+                                          Service::AM::GetTitleContentPath(media_type, program_id));
+    open_update_location->setVisible(
+        is_application && FileUtil::Exists(Service::AM::GetTitlePath(Service::FS::MediaType::SDMC,
+                                                                     program_id + 0xe00000000) +
+                                           "content/"));
     auto it = FindMatchingCompatibilityEntry(compatibility_list, program_id);
     navigate_to_gamedb_entry->setVisible(it != compatibility_list.end());
 
     connect(open_save_location, &QAction::triggered, [this, program_id] {
         emit OpenFolderRequested(program_id, GameListOpenTarget::SAVE_DATA);
+    });
+    connect(open_extdata_location, &QAction::triggered, [this, extdata_id] {
+        emit OpenFolderRequested(extdata_id, GameListOpenTarget::EXT_DATA);
     });
     connect(open_application_location, &QAction::triggered, [this, program_id] {
         emit OpenFolderRequested(program_id, GameListOpenTarget::APPLICATION);
@@ -545,7 +584,7 @@ void GameList::LoadCompatibilityList() {
     QJsonDocument json = QJsonDocument::fromJson(string_content.toUtf8());
     QJsonArray arr = json.array();
 
-    for (const QJsonValue& value : arr) {
+    for (const QJsonValueRef& value : arr) {
         QJsonObject game = value.toObject();
 
         if (game.contains("compatibility") && game["compatibility"].isDouble()) {
@@ -553,9 +592,9 @@ void GameList::LoadCompatibilityList() {
             QString directory = game["directory"].toString();
             QJsonArray ids = game["releases"].toArray();
 
-            for (const QJsonValue& value : ids) {
-                QJsonObject object = value.toObject();
-                QString id = object["id"].toString();
+            for (const QJsonValueRef& id_ref : ids) {
+                QJsonObject id_object = id_ref.toObject();
+                QString id = id_object["id"].toString();
                 compatibility_list.emplace(
                     id.toUpper().toStdString(),
                     std::make_pair(QString::number(compatibility), directory));
@@ -610,11 +649,6 @@ void GameList::LoadInterfaceLayout() {
 const QStringList GameList::supported_file_extensions = {"3ds", "3dsx", "elf", "axf",
                                                          "cci", "cxi",  "app"};
 
-static bool HasSupportedFileExtension(const std::string& file_name) {
-    QFileInfo file = QFileInfo(QString::fromStdString(file_name));
-    return GameList::supported_file_extensions.contains(file.suffix(), Qt::CaseInsensitive);
-}
-
 void GameList::RefreshGameDirectory() {
     if (!UISettings::values.game_dirs.isEmpty() && current_worker != nullptr) {
         LOG_INFO(Frontend, "Change detected in the games directory. Reloading game list.");
@@ -638,112 +672,6 @@ QString GameList::FindGameByProgramID(QStandardItem* current_item, u64 program_i
         }
     }
     return "";
-}
-
-void GameListWorker::AddFstEntriesToGameList(const std::string& dir_path, unsigned int recursion,
-                                             GameListDir* parent_dir) {
-    const auto callback = [this, recursion, parent_dir](u64* num_entries_out,
-                                                        const std::string& directory,
-                                                        const std::string& virtual_name) -> bool {
-        std::string physical_name = directory + DIR_SEP + virtual_name;
-
-        if (stop_processing)
-            return false; // Breaks the callback loop.
-
-        bool is_dir = FileUtil::IsDirectory(physical_name);
-        if (!is_dir && HasSupportedFileExtension(physical_name)) {
-            std::unique_ptr<Loader::AppLoader> loader = Loader::GetLoader(physical_name);
-            if (!loader)
-                return true;
-
-            u64 program_id = 0;
-            loader->ReadProgramId(program_id);
-
-            std::vector<u8> smdh = [program_id, &loader]() -> std::vector<u8> {
-                std::vector<u8> original_smdh;
-                loader->ReadIcon(original_smdh);
-
-                if (program_id < 0x0004000000000000 || program_id > 0x00040000FFFFFFFF)
-                    return original_smdh;
-
-                std::string update_path = Service::AM::GetTitleContentPath(
-                    Service::FS::MediaType::SDMC, program_id + 0x0000000E00000000);
-
-                if (!FileUtil::Exists(update_path))
-                    return original_smdh;
-
-                std::unique_ptr<Loader::AppLoader> update_loader = Loader::GetLoader(update_path);
-
-                if (!update_loader)
-                    return original_smdh;
-
-                std::vector<u8> update_smdh;
-                update_loader->ReadIcon(update_smdh);
-                return update_smdh;
-            }();
-
-            auto it = FindMatchingCompatibilityEntry(compatibility_list, program_id);
-
-            // The game list uses this as compatibility number for untested games
-            QString compatibility("99");
-            if (it != compatibility_list.end())
-                compatibility = it->second.first;
-
-            emit EntryReady(
-                {
-                    new GameListItemPath(QString::fromStdString(physical_name), smdh, program_id),
-                    new GameListItemCompat(compatibility),
-                    new GameListItemRegion(smdh),
-                    new GameListItem(
-                        QString::fromStdString(Loader::GetFileTypeString(loader->GetFileType()))),
-                    new GameListItemSize(FileUtil::GetSize(physical_name)),
-                },
-                parent_dir);
-
-        } else if (is_dir && recursion > 0) {
-            watch_list.append(QString::fromStdString(physical_name));
-            AddFstEntriesToGameList(physical_name, recursion - 1, parent_dir);
-        }
-
-        return true;
-    };
-
-    FileUtil::ForeachDirectoryEntry(nullptr, dir_path, callback);
-}
-
-void GameListWorker::run() {
-    stop_processing = false;
-    for (UISettings::GameDir& game_dir : game_dirs) {
-        if (game_dir.path == "INSTALLED") {
-            QString path = QString::fromStdString(FileUtil::GetUserPath(D_SDMC_IDX)) +
-                           "Nintendo "
-                           "3DS/00000000000000000000000000000000/"
-                           "00000000000000000000000000000000/title/00040000";
-            watch_list.append(path);
-            GameListDir* game_list_dir = new GameListDir(game_dir, GameListItemType::InstalledDir);
-            emit DirEntryReady({game_list_dir});
-            AddFstEntriesToGameList(path.toStdString(), 2, game_list_dir);
-        } else if (game_dir.path == "SYSTEM") {
-            QString path = QString::fromStdString(FileUtil::GetUserPath(D_NAND_IDX)) +
-                           "00000000000000000000000000000000/title/00040010";
-            watch_list.append(path);
-            GameListDir* game_list_dir = new GameListDir(game_dir, GameListItemType::SystemDir);
-            emit DirEntryReady({game_list_dir});
-            AddFstEntriesToGameList(path.toStdString(), 2, game_list_dir);
-        } else {
-            watch_list.append(game_dir.path);
-            GameListDir* game_list_dir = new GameListDir(game_dir);
-            emit DirEntryReady({game_list_dir});
-            AddFstEntriesToGameList(game_dir.path.toStdString(), game_dir.deep_scan ? 256 : 0,
-                                    game_list_dir);
-        }
-    };
-    emit Finished(watch_list);
-}
-
-void GameListWorker::Cancel() {
-    this->disconnect();
-    stop_processing = true;
 }
 
 GameListPlaceholder::GameListPlaceholder(GMainWindow* parent) : QWidget{parent} {
