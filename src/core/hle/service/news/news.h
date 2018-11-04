@@ -4,10 +4,12 @@
 
 #pragma once
 
-namespace Service {
-namespace NEWS {
+namespace Core {
+class System;
+}
 
-void InstallInterfaces(SM::ServiceManager& service_manager);
+namespace Service::NEWS {
 
-} // namespace NEWS
-} // namespace Service
+void InstallInterfaces(Core::System& system);
+
+} // namespace Service::NEWS

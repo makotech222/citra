@@ -6,17 +6,20 @@
 
 #include "core/hle/service/service.h"
 
+namespace Core {
+class System;
+}
+
 namespace Kernel {
 class HLERequestContext;
 }
 
-namespace Service {
-namespace ERR {
+namespace Service::ERR {
 
 /// Interface to "err:f" service
 class ERR_F final : public ServiceFramework<ERR_F> {
 public:
-    ERR_F();
+    explicit ERR_F(Core::System& system);
     ~ERR_F();
 
 private:
@@ -29,9 +32,10 @@ private:
      *       1 : Result code
      */
     void ThrowFatalError(Kernel::HLERequestContext& ctx);
+
+    Core::System& system;
 };
 
-void InstallInterfaces();
+void InstallInterfaces(Core::System& system);
 
-} // namespace ERR
-} // namespace Service
+} // namespace Service::ERR

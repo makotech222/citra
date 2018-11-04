@@ -7,6 +7,7 @@
 #include "common/common_types.h"
 #include "common/logging/log.h"
 #include "common/swap.h"
+#include "core/core.h"
 #include "core/file_sys/archive_selfncch.h"
 #include "core/file_sys/errors.h"
 #include "core/file_sys/ivfc_archive.h"
@@ -25,7 +26,7 @@ enum class SelfNCCHFilePathType : u32 {
 };
 
 struct SelfNCCHFilePath {
-    u32_le type;
+    enum_le<SelfNCCHFilePathType> type;
     std::array<char, 8> exefs_filename;
 };
 static_assert(sizeof(SelfNCCHFilePath) == 12, "NCCHFilePath has wrong size!");
@@ -102,7 +103,7 @@ public:
         SelfNCCHFilePath file_path;
         std::memcpy(&file_path, binary.data(), sizeof(SelfNCCHFilePath));
 
-        switch (static_cast<SelfNCCHFilePathType>(file_path.type)) {
+        switch (file_path.type) {
         case SelfNCCHFilePathType::UpdateRomFS:
             return OpenUpdateRomFS();
 
@@ -279,7 +280,7 @@ void ArchiveFactory_SelfNCCH::Register(Loader::AppLoader& app_loader) {
 
 ResultVal<std::unique_ptr<ArchiveBackend>> ArchiveFactory_SelfNCCH::Open(const Path& path) {
     auto archive = std::make_unique<SelfNCCHArchive>(
-        ncch_data[Kernel::g_current_process->codeset->program_id]);
+        ncch_data[Core::System::GetInstance().Kernel().GetCurrentProcess()->codeset->program_id]);
     return MakeResult<std::unique_ptr<ArchiveBackend>>(std::move(archive));
 }
 

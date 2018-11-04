@@ -7,8 +7,11 @@
 #include <random>
 #include "core/hle/service/service.h"
 
-namespace Service {
-namespace SSL {
+namespace Core {
+class System;
+}
+
+namespace Service::SSL {
 
 class SSL_C final : public ServiceFramework<SSL_C> {
 public:
@@ -22,7 +25,6 @@ private:
     std::mt19937 rand_gen;
 };
 
-void InstallInterfaces(SM::ServiceManager& service_manager);
+void InstallInterfaces(Core::System& system);
 
-} // namespace SSL
-} // namespace Service
+} // namespace Service::SSL

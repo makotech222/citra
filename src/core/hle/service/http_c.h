@@ -5,15 +5,18 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <boost/optional.hpp>
 #include "core/hle/kernel/shared_memory.h"
 #include "core/hle/service/service.h"
 
-namespace Service {
-namespace HTTP {
+namespace Core {
+class System;
+}
+
+namespace Service::HTTP {
 
 enum class RequestMethod : u8 {
     None = 0x0,
@@ -43,6 +46,8 @@ enum class RequestState : u8 {
 struct ClientCertContext {
     using Handle = u32;
     Handle handle;
+    u32 session_id;
+    u8 cert_id;
     std::vector<u8> certificate;
     std::vector<u8> private_key;
 };
@@ -54,11 +59,13 @@ struct RootCertChain {
     struct RootCACert {
         using Handle = u32;
         Handle handle;
+        u32 session_id;
         std::vector<u8> certificate;
     };
 
     using Handle = u32;
     Handle handle;
+    u32 session_id;
     std::vector<RootCACert> certificates;
 };
 
@@ -105,11 +112,12 @@ public:
     };
 
     Handle handle;
+    u32 session_id;
     std::string url;
     RequestMethod method;
     RequestState state = RequestState::NotStarted;
-    boost::optional<Proxy> proxy;
-    boost::optional<BasicAuth> basic_auth;
+    std::optional<Proxy> proxy;
+    std::optional<BasicAuth> basic_auth;
     SSLConfig ssl_config{};
     u32 socket_buffer_size;
     std::vector<RequestHeader> headers;
@@ -119,7 +127,9 @@ public:
 struct SessionData : public Kernel::SessionRequestHandler::SessionDataBase {
     /// The HTTP context that is currently bound to this session, this can be empty if no context
     /// has been bound. Certain commands can only be called on a session with a bound context.
-    boost::optional<Context::Handle> current_http_context;
+    std::optional<Context::Handle> current_http_context;
+
+    u32 session_id;
 
     /// Number of HTTP contexts that are currently opened in this session.
     u32 num_http_contexts = 0;
@@ -197,9 +207,45 @@ private:
      */
     void AddRequestHeader(Kernel::HLERequestContext& ctx);
 
+    /**
+     * HTTP_C::OpenClientCertContext service function
+     *  Inputs:
+     *      1 :  Cert size
+     *      2 :  Key size
+     *      3 :  (CertSize<<4) | 10
+     *      4 :  Pointer to input cert
+     *      5 :  (KeySize<<4) | 10
+     *      6 :  Pointer to input key
+     *  Outputs:
+     *      1 : Result of function, 0 on success, otherwise error code
+     */
+    void OpenClientCertContext(Kernel::HLERequestContext& ctx);
+
+    /**
+     * HTTP_C::OpenDefaultClientCertContext service function
+     *  Inputs:
+     * 1 : CertID
+     *  Outputs:
+     *      1 : Result of function, 0 on success, otherwise error code
+     *      2 : Client Cert context handle
+     */
+    void OpenDefaultClientCertContext(Kernel::HLERequestContext& ctx);
+
+    /**
+     * HTTP_C::CloseClientCertContext service function
+     *  Inputs:
+     * 1 : ClientCert Handle
+     *  Outputs:
+     *      1 : Result of function, 0 on success, otherwise error code
+     */
+    void CloseClientCertContext(Kernel::HLERequestContext& ctx);
+
     void DecryptClCertA();
 
     Kernel::SharedPtr<Kernel::SharedMemory> shared_memory = nullptr;
+
+    /// The next number to use when a new HTTP session is initalized.
+    u32 session_counter = 0;
 
     /// The next handle number to use when a new HTTP context is created.
     Context::Handle context_counter = 0;
@@ -220,7 +266,6 @@ private:
     } ClCertA;
 };
 
-void InstallInterfaces(SM::ServiceManager& service_manager);
+void InstallInterfaces(Core::System& system);
 
-} // namespace HTTP
-} // namespace Service
+} // namespace Service::HTTP

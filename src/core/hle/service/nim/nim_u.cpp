@@ -2,14 +2,14 @@
 // Licensed under GPLv2 or any later version
 // Refer to the license.txt file included.
 
+#include "core/core.h"
 #include "core/hle/ipc_helpers.h"
 #include "core/hle/kernel/event.h"
 #include "core/hle/service/nim/nim_u.h"
 
-namespace Service {
-namespace NIM {
+namespace Service::NIM {
 
-NIM_U::NIM_U() : ServiceFramework("nim:u", 2) {
+NIM_U::NIM_U(Core::System& system) : ServiceFramework("nim:u", 2) {
     const FunctionInfo functions[] = {
         {0x00010000, nullptr, "StartSysUpdate"},
         {0x00020000, nullptr, "GetUpdateDownloadProgress"},
@@ -21,7 +21,7 @@ NIM_U::NIM_U() : ServiceFramework("nim:u", 2) {
     };
     RegisterHandlers(functions);
     nim_system_update_event =
-        Kernel::Event::Create(Kernel::ResetType::OneShot, "NIM System Update Event");
+        system.Kernel().CreateEvent(Kernel::ResetType::OneShot, "NIM System Update Event");
 }
 
 NIM_U::~NIM_U() = default;
@@ -44,5 +44,4 @@ void NIM_U::CheckSysUpdateAvailable(Kernel::HLERequestContext& ctx) {
     LOG_WARNING(Service_NIM, "(STUBBED) called");
 }
 
-} // namespace NIM
-} // namespace Service
+} // namespace Service::NIM

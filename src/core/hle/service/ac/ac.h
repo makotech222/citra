@@ -9,12 +9,15 @@
 #include "core/hle/kernel/kernel.h"
 #include "core/hle/service/service.h"
 
+namespace Core {
+class System;
+}
+
 namespace Kernel {
 class Event;
 }
 
-namespace Service {
-namespace AC {
+namespace Service::AC {
 class Module final {
 public:
     class Interface : public ServiceFramework<Interface> {
@@ -153,7 +156,6 @@ protected:
     Kernel::SharedPtr<Kernel::Event> disconnect_event;
 };
 
-void InstallInterfaces(SM::ServiceManager& service_manager);
+void InstallInterfaces(Core::System& system);
 
-} // namespace AC
-} // namespace Service
+} // namespace Service::AC

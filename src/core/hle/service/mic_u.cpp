@@ -3,6 +3,7 @@
 // Refer to the license.txt file included.
 
 #include "common/logging/log.h"
+#include "core/core.h"
 #include "core/hle/ipc.h"
 #include "core/hle/ipc_helpers.h"
 #include "core/hle/kernel/event.h"
@@ -11,8 +12,7 @@
 #include "core/hle/kernel/shared_memory.h"
 #include "core/hle/service/mic_u.h"
 
-namespace Service {
-namespace MIC {
+namespace Service::MIC {
 
 enum class Encoding : u8 {
     PCM8 = 0,
@@ -29,6 +29,11 @@ enum class SampleRate : u8 {
 };
 
 struct MIC_U::Impl {
+    explicit Impl(Core::System& system) {
+        buffer_full_event =
+            system.Kernel().CreateEvent(Kernel::ResetType::OneShot, "MIC_U::buffer_full_event");
+    }
+
     void MapSharedMem(Kernel::HLERequestContext& ctx) {
         IPC::RequestParser rp{ctx, 0x01, 1, 2};
         const u32 size = rp.Pop<u32>();
@@ -187,8 +192,7 @@ struct MIC_U::Impl {
     }
 
     u32 client_version = 0;
-    Kernel::SharedPtr<Kernel::Event> buffer_full_event =
-        Kernel::Event::Create(Kernel::ResetType::OneShot, "MIC_U::buffer_full_event");
+    Kernel::SharedPtr<Kernel::Event> buffer_full_event;
     Kernel::SharedPtr<Kernel::SharedMemory> shared_memory;
     u8 mic_gain = 0;
     bool mic_power = false;
@@ -266,7 +270,8 @@ void MIC_U::SetClientVersion(Kernel::HLERequestContext& ctx) {
     impl->SetClientVersion(ctx);
 }
 
-MIC_U::MIC_U() : ServiceFramework{"mic:u", 1}, impl{std::make_unique<Impl>()} {
+MIC_U::MIC_U(Core::System& system)
+    : ServiceFramework{"mic:u", 1}, impl{std::make_unique<Impl>(system)} {
     static const FunctionInfo functions[] = {
         {0x00010042, &MIC_U::MapSharedMem, "MapSharedMem"},
         {0x00020000, &MIC_U::UnmapSharedMem, "UnmapSharedMem"},
@@ -291,9 +296,9 @@ MIC_U::MIC_U() : ServiceFramework{"mic:u", 1}, impl{std::make_unique<Impl>()} {
 
 MIC_U::~MIC_U() = default;
 
-void InstallInterfaces(SM::ServiceManager& service_manager) {
-    std::make_shared<MIC_U>()->InstallAsService(service_manager);
+void InstallInterfaces(Core::System& system) {
+    auto& service_manager = system.ServiceManager();
+    std::make_shared<MIC_U>(system)->InstallAsService(service_manager);
 }
 
-} // namespace MIC
-} // namespace Service
+} // namespace Service::MIC

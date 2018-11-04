@@ -7,11 +7,19 @@
 #include <array>
 #include <memory>
 #include <string>
+#include <vector>
 #include "common/common_types.h"
-#include "core/hle/service/fs/archive.h"
+#include "core/hle/service/service.h"
 
-namespace Service {
-namespace CFG {
+namespace FileSys {
+class ArchiveBackend;
+}
+
+namespace Core {
+class System;
+}
+
+namespace Service::CFG {
 
 enum SystemModel {
     NINTENDO_3DS = 0,
@@ -89,6 +97,8 @@ public:
         Interface(std::shared_ptr<Module> cfg, const char* name, u32 max_session);
         ~Interface();
 
+        std::shared_ptr<Module> GetModule() const;
+
         /**
          * CFG::GetCountryCodeString service function
          *  Inputs:
@@ -108,8 +118,6 @@ public:
          *      2 : Country Code ID
          */
         void GetCountryCodeID(Kernel::HLERequestContext& ctx);
-
-        u32 GetRegionValue();
 
         /**
          * CFG::SecureInfoGetRegion service function
@@ -298,12 +306,11 @@ public:
     u32 GetRegionValue();
 
     /**
-     * Set the region code preferred by the game so that CFG will adjust to it when the region
-     * setting
-     * is auto.
-     * @param region_code the preferred region code to set
+     * Set the region codes preferred by the game so that CFG will adjust to it when the region
+     * setting is auto.
+     * @param region_codes the preferred region codes to set
      */
-    void SetPreferredRegionCode(u32 region_code);
+    void SetPreferredRegionCodes(const std::vector<u32>& region_codes);
 
     // Utilities for frontend to set config data.
     // Note: UpdateConfigNANDSavegame should be called after making changes to config data.
@@ -400,12 +407,12 @@ public:
 private:
     static constexpr u32 CONFIG_SAVEFILE_SIZE = 0x8000;
     std::array<u8, CONFIG_SAVEFILE_SIZE> cfg_config_file_buffer;
-    Service::FS::ArchiveHandle cfg_system_save_data_archive;
+    std::unique_ptr<FileSys::ArchiveBackend> cfg_system_save_data_archive;
     u32 preferred_region_code = 0;
 };
 
-void InstallInterfaces(SM::ServiceManager& service_manager);
-std::shared_ptr<Module> GetCurrentModule();
+std::shared_ptr<Module> GetModule(Core::System& system);
 
-} // namespace CFG
-} // namespace Service
+void InstallInterfaces(Core::System& system);
+
+} // namespace Service::CFG

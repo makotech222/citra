@@ -5,7 +5,6 @@
 #include <algorithm>
 #include "common/assert.h"
 #include "common/logging/log.h"
-#include "core/hle/config_mem.h"
 #include "core/hle/kernel/errors.h"
 #include "core/hle/kernel/kernel.h"
 #include "core/hle/kernel/memory.h"
@@ -13,7 +12,6 @@
 #include "core/hle/kernel/resource_limit.h"
 #include "core/hle/kernel/thread.h"
 #include "core/hle/kernel/timer.h"
-#include "core/hle/shared_page.h"
 
 namespace Kernel {
 
@@ -34,13 +32,13 @@ void WaitObject::RemoveWaitingThread(Thread* thread) {
 
 SharedPtr<Thread> WaitObject::GetHighestPriorityReadyThread() {
     Thread* candidate = nullptr;
-    u32 candidate_priority = THREADPRIO_LOWEST + 1;
+    u32 candidate_priority = ThreadPrioLowest + 1;
 
     for (const auto& thread : waiting_threads) {
         // The list of waiting threads must not contain threads that are not waiting to be awakened.
-        ASSERT_MSG(thread->status == THREADSTATUS_WAIT_SYNCH_ANY ||
-                       thread->status == THREADSTATUS_WAIT_SYNCH_ALL ||
-                       thread->status == THREADSTATUS_WAIT_HLE_EVENT,
+        ASSERT_MSG(thread->status == ThreadStatus::WaitSynchAny ||
+                       thread->status == ThreadStatus::WaitSynchAll ||
+                       thread->status == ThreadStatus::WaitHleEvent,
                    "Inconsistent thread statuses in waiting_threads");
 
         if (thread->current_priority >= candidate_priority)
@@ -49,10 +47,10 @@ SharedPtr<Thread> WaitObject::GetHighestPriorityReadyThread() {
         if (ShouldWait(thread.get()))
             continue;
 
-        // A thread is ready to run if it's either in THREADSTATUS_WAIT_SYNCH_ANY or
-        // in THREADSTATUS_WAIT_SYNCH_ALL and the rest of the objects it is waiting on are ready.
+        // A thread is ready to run if it's either in ThreadStatus::WaitSynchAny or
+        // in ThreadStatus::WaitSynchAll and the rest of the objects it is waiting on are ready.
         bool ready_to_run = true;
-        if (thread->status == THREADSTATUS_WAIT_SYNCH_ALL) {
+        if (thread->status == ThreadStatus::WaitSynchAll) {
             ready_to_run = std::none_of(thread->wait_objects.begin(), thread->wait_objects.end(),
                                         [&thread](const SharedPtr<WaitObject>& object) {
                                             return object->ShouldWait(thread.get());

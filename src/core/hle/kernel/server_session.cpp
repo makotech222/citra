@@ -13,7 +13,7 @@
 
 namespace Kernel {
 
-ServerSession::ServerSession() = default;
+ServerSession::ServerSession(KernelSystem& kernel) : WaitObject(kernel) {}
 ServerSession::~ServerSession() {
     // This destructor will be called automatically when the last ServerSession handle is closed by
     // the emulated application.
@@ -28,8 +28,8 @@ ServerSession::~ServerSession() {
     parent->server = nullptr;
 }
 
-ResultVal<SharedPtr<ServerSession>> ServerSession::Create(std::string name) {
-    SharedPtr<ServerSession> server_session(new ServerSession);
+ResultVal<SharedPtr<ServerSession>> ServerSession::Create(KernelSystem& kernel, std::string name) {
+    SharedPtr<ServerSession> server_session(new ServerSession(kernel));
 
     server_session->name = std::move(name);
     server_session->parent = nullptr;
@@ -69,10 +69,10 @@ ResultCode ServerSession::HandleSyncRequest(SharedPtr<Thread> thread) {
         hle_handler->HandleSyncRequest(SharedPtr<ServerSession>(this));
     }
 
-    if (thread->status == THREADSTATUS_RUNNING) {
+    if (thread->status == ThreadStatus::Running) {
         // Put the thread to sleep until the server replies, it will be awoken in
         // svcReplyAndReceive for LLE servers.
-        thread->status = THREADSTATUS_WAIT_IPC;
+        thread->status = ThreadStatus::WaitIPC;
 
         if (hle_handler != nullptr) {
             // For HLE services, we put the request threads to sleep for a short duration to
@@ -100,10 +100,10 @@ ResultCode ServerSession::HandleSyncRequest(SharedPtr<Thread> thread) {
     return RESULT_SUCCESS;
 }
 
-ServerSession::SessionPair ServerSession::CreateSessionPair(const std::string& name,
-                                                            SharedPtr<ClientPort> port) {
-    auto server_session = ServerSession::Create(name + "_Server").Unwrap();
-    SharedPtr<ClientSession> client_session(new ClientSession);
+std::tuple<SharedPtr<ServerSession>, SharedPtr<ClientSession>> KernelSystem::CreateSessionPair(
+    const std::string& name, SharedPtr<ClientPort> port) {
+    auto server_session = ServerSession::Create(*this, name + "_Server").Unwrap();
+    SharedPtr<ClientSession> client_session(new ClientSession(*this));
     client_session->name = name + "_Client";
 
     std::shared_ptr<Session> parent(new Session);

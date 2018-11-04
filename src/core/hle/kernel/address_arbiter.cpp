@@ -7,6 +7,7 @@
 #include "common/logging/log.h"
 #include "core/hle/kernel/address_arbiter.h"
 #include "core/hle/kernel/errors.h"
+#include "core/hle/kernel/kernel.h"
 #include "core/hle/kernel/thread.h"
 #include "core/memory.h"
 
@@ -17,7 +18,7 @@ namespace Kernel {
 
 void AddressArbiter::WaitThread(SharedPtr<Thread> thread, VAddr wait_address) {
     thread->wait_address = wait_address;
-    thread->status = THREADSTATUS_WAIT_ARB;
+    thread->status = ThreadStatus::WaitArb;
     waiting_threads.emplace_back(std::move(thread));
 }
 
@@ -25,7 +26,7 @@ void AddressArbiter::ResumeAllThreads(VAddr address) {
     // Determine which threads are waiting on this address, those should be woken up.
     auto itr = std::stable_partition(waiting_threads.begin(), waiting_threads.end(),
                                      [address](const auto& thread) {
-                                         ASSERT_MSG(thread->status == THREADSTATUS_WAIT_ARB,
+                                         ASSERT_MSG(thread->status == ThreadStatus::WaitArb,
                                                     "Inconsistent AddressArbiter state");
                                          return thread->wait_address != address;
                                      });
@@ -41,7 +42,7 @@ SharedPtr<Thread> AddressArbiter::ResumeHighestPriorityThread(VAddr address) {
     // Determine which threads are waiting on this address, those should be considered for wakeup.
     auto matches_start = std::stable_partition(
         waiting_threads.begin(), waiting_threads.end(), [address](const auto& thread) {
-            ASSERT_MSG(thread->status == THREADSTATUS_WAIT_ARB,
+            ASSERT_MSG(thread->status == ThreadStatus::WaitArb,
                        "Inconsistent AddressArbiter state");
             return thread->wait_address != address;
         });
@@ -64,11 +65,11 @@ SharedPtr<Thread> AddressArbiter::ResumeHighestPriorityThread(VAddr address) {
     return thread;
 }
 
-AddressArbiter::AddressArbiter() {}
+AddressArbiter::AddressArbiter(KernelSystem& kernel) : Object(kernel) {}
 AddressArbiter::~AddressArbiter() {}
 
-SharedPtr<AddressArbiter> AddressArbiter::Create(std::string name) {
-    SharedPtr<AddressArbiter> address_arbiter(new AddressArbiter);
+SharedPtr<AddressArbiter> KernelSystem::CreateAddressArbiter(std::string name) {
+    SharedPtr<AddressArbiter> address_arbiter(new AddressArbiter(*this));
 
     address_arbiter->name = std::move(name);
 

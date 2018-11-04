@@ -26,6 +26,7 @@
 #include "citra/config.h"
 #include "citra/emu_window/emu_window_sdl2.h"
 #include "common/common_paths.h"
+#include "common/detached_tasks.h"
 #include "common/file_util.h"
 #include "common/logging/backend.h"
 #include "common/logging/filter.h"
@@ -89,11 +90,11 @@ static void OnStateChanged(const Network::RoomMember::State& state) {
     case Network::RoomMember::State::NameCollision:
         LOG_ERROR(
             Network,
-            "You tried to use the same nickname then another user that is connected to the Room");
+            "You tried to use the same nickname as another user that is connected to the Room");
         exit(1);
         break;
     case Network::RoomMember::State::MacCollision:
-        LOG_ERROR(Network, "You tried to use the same MAC-Address then another user that is "
+        LOG_ERROR(Network, "You tried to use the same MAC-Address as another user that is "
                            "connected to the Room");
         exit(1);
         break;
@@ -103,7 +104,7 @@ static void OnStateChanged(const Network::RoomMember::State& state) {
         break;
     case Network::RoomMember::State::WrongVersion:
         LOG_ERROR(Network,
-                  "You are using a different version then the room you are trying to connect to");
+                  "You are using a different version than the room you are trying to connect to");
         exit(1);
         break;
     default:
@@ -115,8 +116,21 @@ static void OnMessageReceived(const Network::ChatEntry& msg) {
     std::cout << std::endl << msg.nickname << ": " << msg.message << std::endl << std::endl;
 }
 
+static void InitializeLogging() {
+    Log::Filter log_filter(Log::Level::Debug);
+    log_filter.ParseFilterString(Settings::values.log_filter);
+    Log::SetGlobalFilter(log_filter);
+
+    Log::AddBackend(std::make_unique<Log::ColorConsoleBackend>());
+
+    const std::string& log_dir = FileUtil::GetUserPath(FileUtil::UserPath::LogDir);
+    FileUtil::CreateFullPath(log_dir);
+    Log::AddBackend(std::make_unique<Log::FileBackend>(log_dir + LOG_FILE));
+}
+
 /// Application entry point
 int main(int argc, char** argv) {
+    Common::DetachedTasks detached_tasks;
     Config config;
     int option_index = 0;
     bool use_gdbstub = Settings::values.use_gdbstub;
@@ -124,14 +138,7 @@ int main(int argc, char** argv) {
     std::string movie_record;
     std::string movie_play;
 
-    Log::Filter log_filter;
-    log_filter.ParseFilterString(Settings::values.log_filter);
-    Log::SetGlobalFilter(log_filter);
-
-    Log::AddBackend(std::make_unique<Log::ColorConsoleBackend>());
-    FileUtil::CreateFullPath(FileUtil::GetUserPath(D_LOGS_IDX));
-    Log::AddBackend(
-        std::make_unique<Log::FileBackend>(FileUtil::GetUserPath(D_LOGS_IDX) + LOG_FILE));
+    InitializeLogging();
 
     char* endarg;
 #ifdef _WIN32
@@ -266,6 +273,13 @@ int main(int argc, char** argv) {
         return -1;
     }
 
+    if (!movie_record.empty()) {
+        Core::Movie::GetInstance().PrepareForRecording();
+    }
+    if (!movie_play.empty()) {
+        Core::Movie::GetInstance().PrepareForPlayback(movie_play);
+    }
+
     // Apply the command line arguments
     Settings::values.gdbstub_port = gdb_port;
     Settings::values.use_gdbstub = use_gdbstub;
@@ -339,5 +353,6 @@ int main(int argc, char** argv) {
 
     Core::Movie::GetInstance().Shutdown();
 
+    detached_tasks.WaitForAllTasks();
     return 0;
 }

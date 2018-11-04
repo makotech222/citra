@@ -15,8 +15,7 @@
 #include "core/hle/service/nwm/uds_data.h"
 #include "core/hw/aes/key.h"
 
-namespace Service {
-namespace NWM {
+namespace Service::NWM {
 
 using MacAddress = std::array<u8, 6>;
 
@@ -26,7 +25,7 @@ using MacAddress = std::array<u8, 6>;
  */
 static std::vector<u8> GenerateLLCHeader(EtherType protocol) {
     LLCHeader header{};
-    header.protocol = static_cast<u16>(protocol);
+    header.protocol = protocol;
 
     std::vector<u8> buffer(sizeof(header));
     memcpy(buffer.data(), &header, sizeof(header));
@@ -313,9 +312,7 @@ std::vector<u8> GenerateEAPoLStartFrame(u16 association_id, const NodeInfo& node
 EtherType GetFrameEtherType(const std::vector<u8>& frame) {
     LLCHeader header;
     std::memcpy(&header, frame.data(), sizeof(header));
-
-    u16 ethertype = header.protocol;
-    return static_cast<EtherType>(ethertype);
+    return header.protocol;
 }
 
 u16 GetEAPoLFrameType(const std::vector<u8>& frame) {
@@ -383,5 +380,4 @@ EAPoLLogoffPacket ParseEAPoLLogoffFrame(const std::vector<u8>& frame) {
     return eapol_logoff;
 }
 
-} // namespace NWM
-} // namespace Service
+} // namespace Service::NWM

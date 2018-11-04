@@ -6,11 +6,13 @@
 
 #include "core/hle/service/service.h"
 
-namespace Service {
-namespace NWM {
+namespace Core {
+class System;
+}
+
+namespace Service::NWM {
 
 /// Initialize all NWM services
-void InstallInterfaces(SM::ServiceManager& service_manager);
+void InstallInterfaces(Core::System& system);
 
-} // namespace NWM
-} // namespace Service
+} // namespace Service::NWM

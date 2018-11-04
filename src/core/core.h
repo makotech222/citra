@@ -8,7 +8,6 @@
 #include <string>
 #include "common/common_types.h"
 #include "core/frontend/applets/swkbd.h"
-#include "core/hle/shared_page.h"
 #include "core/loader/loader.h"
 #include "core/memory.h"
 #include "core/perf_stats.h"
@@ -21,15 +20,24 @@ namespace AudioCore {
 class DspInterface;
 }
 
+#ifdef ENABLE_SCRIPTING
 namespace RPC {
 class RPCServer;
 }
+#endif
 
 namespace Service {
 namespace SM {
 class ServiceManager;
 }
+namespace FS {
+class ArchiveManager;
+}
 } // namespace Service
+
+namespace Kernel {
+class KernelSystem;
+}
 
 namespace Core {
 
@@ -59,6 +67,7 @@ public:
                                             /// generic drivers installed
         ErrorVideoCore_ErrorBelowGL33,      ///< Error in the video core due to the user not having
                                             /// OpenGL 3.3 or higher
+        ShutdownRequested,                  ///< Emulated program requested a system shutdown
         ErrorUnknown                        ///< Any other error
     };
 
@@ -82,6 +91,19 @@ public:
 
     /// Shutdown the emulated system.
     void Shutdown();
+
+    /// Shutdown and then load again
+    void Reset();
+
+    /// Request reset of the system
+    void RequestReset() {
+        reset_requested = true;
+    }
+
+    /// Request shutdown of the system
+    void RequestShutdown() {
+        shutdown_requested = true;
+    }
 
     /**
      * Load an executable application.
@@ -142,6 +164,18 @@ public:
      */
     const Service::SM::ServiceManager& ServiceManager() const;
 
+    /// Gets a reference to the archive manager
+    Service::FS::ArchiveManager& ArchiveManager();
+
+    /// Gets a const reference to the archive manager
+    const Service::FS::ArchiveManager& ArchiveManager() const;
+
+    /// Gets a reference to the kernel
+    Kernel::KernelSystem& Kernel();
+
+    /// Gets a const reference to the kernel
+    const Kernel::KernelSystem& Kernel() const;
+
     PerfStats perf_stats;
     FrameLimiter frame_limiter;
 
@@ -166,10 +200,6 @@ public:
 
     std::shared_ptr<Frontend::SoftwareKeyboard> GetSoftwareKeyboard() const {
         return registered_swkbd;
-    }
-
-    std::shared_ptr<SharedPage::Handler> GetSharedPageHandler() const {
-        return shared_page_handler;
     }
 
 private:
@@ -206,16 +236,28 @@ private:
     /// Frontend applets
     std::shared_ptr<Frontend::SoftwareKeyboard> registered_swkbd;
 
+#ifdef ENABLE_SCRIPTING
     /// RPC Server for scripting support
     std::unique_ptr<RPC::RPCServer> rpc_server;
+#endif
 
-    /// Shared Page
-    std::shared_ptr<SharedPage::Handler> shared_page_handler;
+    std::unique_ptr<Service::FS::ArchiveManager> archive_manager;
 
+public: // HACK: this is temporary exposed for tests,
+        // due to WIP kernel refactor causing desync state in memory
+    std::unique_ptr<Kernel::KernelSystem> kernel;
+
+private:
     static System s_instance;
 
     ResultStatus status = ResultStatus::Success;
     std::string status_details = "";
+    /// Saved variables for reset
+    EmuWindow* m_emu_window;
+    std::string m_filepath;
+
+    std::atomic<bool> reset_requested;
+    std::atomic<bool> shutdown_requested;
 };
 
 inline ARM_Interface& CPU() {

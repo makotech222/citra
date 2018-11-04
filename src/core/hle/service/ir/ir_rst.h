@@ -22,8 +22,7 @@ namespace CoreTiming {
 struct EventType;
 };
 
-namespace Service {
-namespace IR {
+namespace Service::IR {
 
 union PadState {
     u32_le hex{};
@@ -40,7 +39,7 @@ union PadState {
 /// Interface to "ir:rst" service
 class IR_RST final : public ServiceFramework<IR_RST> {
 public:
-    IR_RST();
+    explicit IR_RST(Core::System& system);
     ~IR_RST();
     void ReloadInputDevices();
 
@@ -90,5 +89,4 @@ private:
     int update_period{0};
 };
 
-} // namespace IR
-} // namespace Service
+} // namespace Service::IR

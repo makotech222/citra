@@ -5,6 +5,7 @@
 #include <algorithm>
 #include "common/bit_set.h"
 #include "common/logging/log.h"
+#include "core/core.h"
 #include "core/core_timing.h"
 #include "core/frontend/camera/factory.h"
 #include "core/hle/ipc.h"
@@ -19,10 +20,7 @@
 #include "core/memory.h"
 #include "core/settings.h"
 
-namespace Service {
-namespace CAM {
-
-static std::weak_ptr<Module> current_cam;
+namespace Service::CAM {
 
 // built-in resolution parameters
 constexpr std::array<Resolution, 8> PRESET_RESOLUTION{{
@@ -199,6 +197,10 @@ Module::Interface::Interface(std::shared_ptr<Module> cam, const char* name, u32 
     : ServiceFramework(name, max_session), cam(std::move(cam)) {}
 
 Module::Interface::~Interface() = default;
+
+std::shared_ptr<Module> Module::Interface::GetModule() const {
+    return cam;
+}
 
 void Module::Interface::StartCapture(Kernel::HLERequestContext& ctx) {
     IPC::RequestParser rp(ctx, 0x01, 1, 0);
@@ -1017,14 +1019,15 @@ void Module::Interface::DriverFinalize(Kernel::HLERequestContext& ctx) {
     LOG_DEBUG(Service_CAM, "called");
 }
 
-Module::Module() {
+Module::Module(Core::System& system) {
     using namespace Kernel;
     for (PortConfig& port : ports) {
-        port.completion_event = Event::Create(ResetType::Sticky, "CAM::completion_event");
+        port.completion_event =
+            system.Kernel().CreateEvent(ResetType::Sticky, "CAM::completion_event");
         port.buffer_error_interrupt_event =
-            Event::Create(ResetType::OneShot, "CAM::buffer_error_interrupt_event");
+            system.Kernel().CreateEvent(ResetType::OneShot, "CAM::buffer_error_interrupt_event");
         port.vsync_interrupt_event =
-            Event::Create(ResetType::OneShot, "CAM::vsync_interrupt_event");
+            system.Kernel().CreateEvent(ResetType::OneShot, "CAM::vsync_interrupt_event");
     }
     completion_event_callback = CoreTiming::RegisterEvent(
         "CAM::CompletionEventCallBack",
@@ -1050,14 +1053,16 @@ void Module::LoadCameraImplementation(CameraConfig& camera, int camera_id) {
     camera.impl->SetResolution(camera.contexts[0].resolution);
 }
 
-void ReloadCameraDevices() {
-    if (auto cam = current_cam.lock())
-        cam->ReloadCameraDevices();
+std::shared_ptr<Module> GetModule(Core::System& system) {
+    auto cam = system.ServiceManager().GetService<Service::CAM::Module::Interface>("cam:u");
+    if (!cam)
+        return nullptr;
+    return cam->GetModule();
 }
 
-void InstallInterfaces(SM::ServiceManager& service_manager) {
-    auto cam = std::make_shared<Module>();
-    current_cam = cam;
+void InstallInterfaces(Core::System& system) {
+    auto& service_manager = system.ServiceManager();
+    auto cam = std::make_shared<Module>(system);
 
     std::make_shared<CAM_U>(cam)->InstallAsService(service_manager);
     std::make_shared<CAM_S>(cam)->InstallAsService(service_manager);
@@ -1065,6 +1070,4 @@ void InstallInterfaces(SM::ServiceManager& service_manager) {
     std::make_shared<CAM_Q>()->InstallAsService(service_manager);
 }
 
-} // namespace CAM
-
-} // namespace Service
+} // namespace Service::CAM

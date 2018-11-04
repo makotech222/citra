@@ -15,8 +15,7 @@
 #include "core/hle/result.h"
 #include "core/hle/service/err_f.h"
 
-namespace Service {
-namespace ERR {
+namespace Service::ERR {
 
 enum class FatalErrType : u32 {
     Generic = 0,
@@ -155,7 +154,7 @@ void ERR_F::ThrowFatalError(Kernel::HLERequestContext& ctx) {
     LOG_CRITICAL(Service_ERR, "Fatal error");
     const ErrInfo errinfo = rp.PopRaw<ErrInfo>();
     LOG_CRITICAL(Service_ERR, "Fatal error type: {}", GetErrType(errinfo.errinfo_common.specifier));
-    Core::System::GetInstance().SetStatus(Core::System::ResultStatus::ErrorUnknown);
+    system.SetStatus(Core::System::ResultStatus::ErrorUnknown);
 
     // Generic Info
     LogGenericInfo(errinfo.errinfo_common);
@@ -233,7 +232,7 @@ void ERR_F::ThrowFatalError(Kernel::HLERequestContext& ctx) {
     rb.Push(RESULT_SUCCESS);
 }
 
-ERR_F::ERR_F() : ServiceFramework("err:f", 1) {
+ERR_F::ERR_F(Core::System& system) : ServiceFramework("err:f", 1), system(system) {
     static const FunctionInfo functions[] = {
         {0x00010800, &ERR_F::ThrowFatalError, "ThrowFatalError"},
         {0x00020042, nullptr, "SetUserString"},
@@ -243,10 +242,9 @@ ERR_F::ERR_F() : ServiceFramework("err:f", 1) {
 
 ERR_F::~ERR_F() = default;
 
-void InstallInterfaces() {
-    auto errf = std::make_shared<ERR_F>();
-    errf->InstallAsNamedPort();
+void InstallInterfaces(Core::System& system) {
+    auto errf = std::make_shared<ERR_F>(system);
+    errf->InstallAsNamedPort(system.Kernel());
 }
 
-} // namespace ERR
-} // namespace Service
+} // namespace Service::ERR

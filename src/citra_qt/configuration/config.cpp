@@ -14,11 +14,16 @@
 
 Config::Config() {
     // TODO: Don't hardcode the path; let the frontend decide where to put the config files.
-    qt_config_loc = FileUtil::GetUserPath(D_CONFIG_IDX) + "qt-config.ini";
+    qt_config_loc = FileUtil::GetUserPath(FileUtil::UserPath::ConfigDir) + "qt-config.ini";
     FileUtil::CreateFullPath(qt_config_loc);
-    qt_config = new QSettings(QString::fromStdString(qt_config_loc), QSettings::IniFormat);
+    qt_config =
+        std::make_unique<QSettings>(QString::fromStdString(qt_config_loc), QSettings::IniFormat);
 
     Reload();
+}
+
+Config::~Config() {
+    Save();
 }
 
 const std::array<int, Settings::NativeButton::NumButtons> Config::default_buttons = {
@@ -217,6 +222,28 @@ void Config::ReadValues() {
         ReadSetting("microProfileDialogGeometry").toByteArray();
     UISettings::values.microprofile_visible =
         ReadSetting("microProfileDialogVisible", false).toBool();
+    qt_config->endGroup();
+
+    qt_config->beginGroup("GameList");
+    int icon_size = ReadSetting("iconSize", 2).toInt();
+    if (icon_size < 0 || icon_size > 2) {
+        icon_size = 2;
+    }
+    UISettings::values.game_list_icon_size = UISettings::GameListIconSize{icon_size};
+
+    int row_1 = ReadSetting("row1", 2).toInt();
+    if (row_1 < 0 || row_1 > 3) {
+        row_1 = 2;
+    }
+    UISettings::values.game_list_row_1 = UISettings::GameListText{row_1};
+
+    int row_2 = ReadSetting("row2", 0).toInt();
+    if (row_2 < -1 || row_2 > 3) {
+        row_2 = 0;
+    }
+    UISettings::values.game_list_row_2 = UISettings::GameListText{row_2};
+
+    UISettings::values.game_list_hide_no_icon = ReadSetting("hideNoIcon", false).toBool();
     qt_config->endGroup();
 
     qt_config->beginGroup("Paths");
@@ -448,6 +475,13 @@ void Config::SaveValues() {
     WriteSetting("microProfileDialogVisible", UISettings::values.microprofile_visible, false);
     qt_config->endGroup();
 
+    qt_config->beginGroup("GameList");
+    WriteSetting("iconSize", static_cast<int>(UISettings::values.game_list_icon_size), 2);
+    WriteSetting("row1", static_cast<int>(UISettings::values.game_list_row_1), 2);
+    WriteSetting("row2", static_cast<int>(UISettings::values.game_list_row_2), 0);
+    WriteSetting("hideNoIcon", UISettings::values.game_list_hide_no_icon, false);
+    qt_config->endGroup();
+
     qt_config->beginGroup("Paths");
     WriteSetting("romsPath", UISettings::values.roms_path);
     WriteSetting("symbolsPath", UISettings::values.symbols_path);
@@ -531,10 +565,4 @@ void Config::Reload() {
 
 void Config::Save() {
     SaveValues();
-}
-
-Config::~Config() {
-    Save();
-
-    delete qt_config;
 }

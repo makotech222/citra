@@ -7,12 +7,17 @@
 #include "common/common_types.h"
 #include "core/hle/service/service.h"
 
-namespace Service {
-namespace FS {
+namespace Core {
+class System;
+}
+
+namespace Service::FS {
+
+class ArchiveManager;
 
 class FS_USER final : public ServiceFramework<FS_USER> {
 public:
-    FS_USER();
+    explicit FS_USER(Core::System& system);
 
 private:
     void Initialize(Kernel::HLERequestContext& ctx);
@@ -487,6 +492,18 @@ private:
     void GetNumSeeds(Kernel::HLERequestContext& ctx);
 
     /**
+     * FS_User::AddSeed service function.
+     *  Inputs:
+     *      0 : 0x087A0180
+     *    1-2 : u64, Title ID
+     *    3-6 : Seed
+     *  Outputs:
+     *      0 : 0x087A0040
+     *      1 : Result of function, 0 on success, otherwise error code
+     */
+    void AddSeed(Kernel::HLERequestContext& ctx);
+
+    /**
      * FS_User::SetSaveDataSecureValue service function.
      *  Inputs:
      *      0 : 0x08650140
@@ -516,9 +533,11 @@ private:
     void GetSaveDataSecureValue(Kernel::HLERequestContext& ctx);
 
     u32 priority = -1; ///< For SetPriority and GetPriority service functions
+
+    Core::System& system;
+    ArchiveManager& archives;
 };
 
-void InstallInterfaces(SM::ServiceManager& service_manager);
+void InstallInterfaces(Core::System& system);
 
-} // namespace FS
-} // namespace Service
+} // namespace Service::FS

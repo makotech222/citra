@@ -6,6 +6,7 @@
 #include "citra_qt/cheat_gui.h"
 #include "core/hle/kernel/process.h"
 #include "ui_cheat_gui.h"
+#include "core/core.h"
 
 CheatDialog::CheatDialog(QWidget* parent)
     : QDialog(parent), ui(std::make_unique<Ui::CheatDialog>()) {
@@ -23,8 +24,8 @@ CheatDialog::CheatDialog(QWidget* parent)
     ui->tableCheats->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Fixed);
     ui->textDetails->setEnabled(false);
     ui->textNotes->setEnabled(false);
-    const auto game_id =
-        fmt::format("{:016x}", Kernel::g_current_process->codeset->program_id);
+    const auto game_id = fmt::format(
+        "{:016x}", Core::System::GetInstance().Kernel().GetCurrentProcess()->codeset->program_id);
     ui->labelTitle->setText(tr("Title ID: %1").arg(QString::fromStdString(game_id)));
 
     connect(ui->buttonClose, &QPushButton::released, this, &CheatDialog::OnCancel);

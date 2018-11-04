@@ -12,8 +12,7 @@
 #include "core/hle/service/ldr_ro/cro_helper.h"
 #include "core/hle/service/ldr_ro/ldr_ro.h"
 
-namespace Service {
-namespace LDR {
+namespace Service::LDR {
 
 static const ResultCode ERROR_ALREADY_INITIALIZED = // 0xD9612FF9
     ResultCode(ErrorDescription::AlreadyInitialized, ErrorModule::RO, ErrorSummary::Internal,
@@ -587,9 +586,9 @@ RO::RO() : ServiceFramework("ldr:ro", 2) {
     RegisterHandlers(functions);
 }
 
-void InstallInterfaces(SM::ServiceManager& service_manager) {
+void InstallInterfaces(Core::System& system) {
+    auto& service_manager = system.ServiceManager();
     std::make_shared<RO>()->InstallAsService(service_manager);
 }
 
-} // namespace LDR
-} // namespace Service
+} // namespace Service::LDR

@@ -10,6 +10,7 @@
 #include "common/common_types.h"
 #include "common/logging/log.h"
 #include "common/scope_exit.h"
+#include "core/core.h"
 #include "core/hle/ipc_helpers.h"
 #include "core/hle/kernel/shared_memory.h"
 #include "core/hle/result.h"
@@ -50,8 +51,7 @@
 #define closesocket(x) close(x)
 #endif
 
-namespace Service {
-namespace SOC {
+namespace Service::SOC {
 
 const s32 SOCKET_ERROR_VALUE = -1;
 
@@ -545,11 +545,10 @@ void SOC_U::SendTo(Kernel::HLERequestContext& ctx) {
     auto input_buff = rp.PopStaticBuffer();
     auto dest_addr_buff = rp.PopStaticBuffer();
 
-    CTRSockAddr ctr_dest_addr;
-    std::memcpy(&ctr_dest_addr, dest_addr_buff.data(), sizeof(ctr_dest_addr));
-
     s32 ret = -1;
     if (addr_len > 0) {
+        CTRSockAddr ctr_dest_addr;
+        std::memcpy(&ctr_dest_addr, dest_addr_buff.data(), sizeof(ctr_dest_addr));
         sockaddr dest_addr = CTRSockAddr::ToPlatform(ctr_dest_addr);
         ret = ::sendto(socket_handle, reinterpret_cast<const char*>(input_buff.data()), len, flags,
                        &dest_addr, sizeof(dest_addr));
@@ -564,6 +563,48 @@ void SOC_U::SendTo(Kernel::HLERequestContext& ctx) {
     IPC::RequestBuilder rb = rp.MakeBuilder(2, 0);
     rb.Push(RESULT_SUCCESS);
     rb.Push(ret);
+}
+
+void SOC_U::RecvFromOther(Kernel::HLERequestContext& ctx) {
+    IPC::RequestParser rp(ctx, 0x7, 4, 4);
+    u32 socket_handle = rp.Pop<u32>();
+    u32 len = rp.Pop<u32>();
+    u32 flags = rp.Pop<u32>();
+    u32 addr_len = rp.Pop<u32>();
+    rp.PopPID();
+    auto& buffer = rp.PopMappedBuffer();
+
+    CTRSockAddr ctr_src_addr;
+    std::vector<u8> output_buff(len);
+    std::vector<u8> addr_buff(sizeof(ctr_src_addr));
+    sockaddr src_addr;
+    socklen_t src_addr_len = sizeof(src_addr);
+
+    s32 ret = -1;
+    if (addr_len > 0) {
+        ret = ::recvfrom(socket_handle, reinterpret_cast<char*>(output_buff.data()), len, flags,
+                         &src_addr, &src_addr_len);
+        if (ret >= 0 && src_addr_len > 0) {
+            ctr_src_addr = CTRSockAddr::FromPlatform(src_addr);
+            std::memcpy(addr_buff.data(), &ctr_src_addr, sizeof(ctr_src_addr));
+        }
+    } else {
+        ret = ::recvfrom(socket_handle, reinterpret_cast<char*>(output_buff.data()), len, flags,
+                         NULL, 0);
+        addr_buff.resize(0);
+    }
+
+    if (ret == SOCKET_ERROR_VALUE) {
+        ret = TranslateError(GET_ERRNO);
+    } else {
+        buffer.Write(output_buff.data(), 0, ret);
+    }
+
+    IPC::RequestBuilder rb = rp.MakeBuilder(2, 4);
+    rb.Push(RESULT_SUCCESS);
+    rb.Push(ret);
+    rb.PushStaticBuffer(addr_buff, 0);
+    rb.PushMappedBuffer(buffer);
 }
 
 void SOC_U::RecvFrom(Kernel::HLERequestContext& ctx) {
@@ -582,12 +623,20 @@ void SOC_U::RecvFrom(Kernel::HLERequestContext& ctx) {
     std::vector<u8> addr_buff(sizeof(ctr_src_addr));
     sockaddr src_addr;
     socklen_t src_addr_len = sizeof(src_addr);
-    s32 ret = ::recvfrom(socket_handle, reinterpret_cast<char*>(output_buff.data()), len, flags,
-                         &src_addr, &src_addr_len);
 
-    if (ret >= 0 && src_addr_len > 0) {
-        ctr_src_addr = CTRSockAddr::FromPlatform(src_addr);
-        std::memcpy(addr_buff.data(), &ctr_src_addr, sizeof(ctr_src_addr));
+    s32 ret = -1;
+    if (addr_len > 0) {
+        // Only get src adr if input adr available
+        ret = ::recvfrom(socket_handle, reinterpret_cast<char*>(output_buff.data()), len, flags,
+                         &src_addr, &src_addr_len);
+        if (ret >= 0 && src_addr_len > 0) {
+            ctr_src_addr = CTRSockAddr::FromPlatform(src_addr);
+            std::memcpy(addr_buff.data(), &ctr_src_addr, sizeof(ctr_src_addr));
+        }
+    } else {
+        ret = ::recvfrom(socket_handle, reinterpret_cast<char*>(output_buff.data()), len, flags,
+                         NULL, 0);
+        addr_buff.resize(0);
     }
 
     s32 total_received = ret;
@@ -817,7 +866,7 @@ SOC_U::SOC_U() : ServiceFramework("soc:U") {
         {0x00040082, &SOC_U::Accept, "Accept"},
         {0x00050084, &SOC_U::Bind, "Bind"},
         {0x00060084, &SOC_U::Connect, "Connect"},
-        {0x00070104, nullptr, "recvfrom_other"},
+        {0x00070104, &SOC_U::RecvFromOther, "recvfrom_other"},
         {0x00080102, &SOC_U::RecvFrom, "RecvFrom"},
         {0x00090106, nullptr, "sendto_other"},
         {0x000A0106, &SOC_U::SendTo, "SendTo"},
@@ -861,9 +910,9 @@ SOC_U::~SOC_U() {
 #endif
 }
 
-void InstallInterfaces(SM::ServiceManager& service_manager) {
+void InstallInterfaces(Core::System& system) {
+    auto& service_manager = system.ServiceManager();
     std::make_shared<SOC_U>()->InstallAsService(service_manager);
 }
 
-} // namespace SOC
-} // namespace Service
+} // namespace Service::SOC

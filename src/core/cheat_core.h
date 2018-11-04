@@ -7,6 +7,7 @@
 #include <vector>
 #include "common/string_util.h"
 #include "core/core_timing.h"
+#include "core/core.h"
 
 namespace CheatCore {
 /*
@@ -15,7 +16,7 @@ namespace CheatCore {
 void Init();
 void Shutdown();
 void RefreshCheats();
-}
+} // namespace CheatCore
 namespace CheatEngine {
 
 enum class CheatType {
@@ -165,4 +166,4 @@ public:
 private:
     std::vector<std::shared_ptr<CheatBase>> cheats_list;
 };
-}
+} // namespace CheatEngine
